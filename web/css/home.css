@@ -3,11 +3,17 @@
  */
 
 /* ---------- hero: one line, one button, then the app ---------- */
-.hero { padding-top: calc(var(--nav-h) + clamp(40px, 5.5vw, 80px)); text-align: center; }
+/* Measured off screen.studio at 1440 (2026-10-30): mark 76px at y108, headline
+   72px at y256, sub-line 21px/500 grey 780px wide with bold white spans, pill
+   button, 12px requirement line, then a 1250px rounded plate with the window
+   on it. The same rhythm here, scaled by the viewport below 1440. */
+.hero { padding-top: calc(var(--nav-h) + clamp(28px, 3vw, 44px)); text-align: center; }
 .hero__copy { display: flex; flex-direction: column; align-items: center; }
+.hero__mark { width: clamp(52px, 5.3vw, 76px); height: auto; margin-bottom: clamp(40px, 5vw, 72px); }
 .hero .h1 { max-width: 14ch; }
 @media (min-width: 1280px) { .hero .h1 { max-width: none; white-space: nowrap; } }
-.hero .lede { margin-top: var(--s-5); max-width: 34rem; }
+.hero .lede { margin-top: clamp(20px, 2vw, 28px); max-width: 780px; font-size: clamp(1.0625rem, 0.9rem + 0.6vw, 1.3125rem); line-height: 1.38; }
+.hero .lede b { font-weight: 500; color: var(--text); }
 .hero .btn { margin-top: var(--s-6); }
 .hero__req { margin-top: var(--s-4); }
 /* the one page-load moment: copy, then the window, rise into place once */
@@ -16,16 +22,18 @@
 .hero__copy > :nth-child(2) { animation-delay: 70ms; }
 .hero__copy > :nth-child(3) { animation-delay: 140ms; }
 .hero__copy > :nth-child(4) { animation-delay: 210ms; }
-.stage__window { animation: rise 900ms var(--ease-out) 240ms both; }
+.hero__copy > :nth-child(5) { animation-delay: 280ms; }
+.stage__window { animation: rise 900ms var(--ease-out) 320ms both; }
 
-/* ---------- the stage: the app, on one of its own photographs, edge to edge ---------- */
-.stage { position: relative; margin-top: clamp(var(--s-6), 4vw, 56px); padding-block: clamp(40px, 6.5vw, 96px); }
-.stage__back { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 45%; filter: brightness(0.62) saturate(1.15); }
-.stage::after {   /* the photograph fades in from the ground above and back out below; ::after, so it paints over the image */
+/* ---------- the plate: one of Orion's own photographs, rounded, the window on it ---------- */
+.stage { position: relative; width: min(1250px, 100% - 2 * var(--gutter)); margin: clamp(40px, 4vw, 56px) auto 0; padding: clamp(24px, 4.5vw, 56px) 0; border-radius: clamp(16px, 1.7vw, 24px); overflow: hidden; background: var(--panel); box-shadow: var(--ring); }
+.stage__back { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 45%; filter: brightness(0.9) saturate(1.1); }
+.stage::after {   /* a little weight at the foot of the plate, so the window's shadow has something to fall on */
   content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(to bottom, var(--ground) 0%, transparent 32%, transparent 68%, var(--ground) 100%);
+  background: linear-gradient(to bottom, rgba(11, 11, 12, 0) 55%, rgba(11, 11, 12, 0.45) 100%);
 }
-.stage__in { position: relative; z-index: 1; width: min(1200px, 100% - 2 * var(--gutter)); margin-inline: auto; }
+.stage__in { position: relative; z-index: 1; width: min(76%, 100% - 2 * var(--s-5)); margin-inline: auto; }
+@media (max-width: 760px) { .stage__in { width: calc(100% - 2 * var(--s-4)); } }
 .stage__window { position: relative; aspect-ratio: 8 / 5; border-radius: var(--r); overflow: hidden; background: var(--panel); box-shadow: var(--shadow-window), var(--ring); }
 .stage__window img { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
 .stage__window img:nth-child(4) { opacity: 1; }   /* 0 EV, until the slider moves */
