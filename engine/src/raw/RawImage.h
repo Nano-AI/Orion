@@ -114,6 +114,7 @@ struct LinearImage {
 struct RawInfo {
     std::uint32_t width = 0, height = 0;
     std::string   camera;
+    std::string   make, model;   // `camera` is "make model"; these are its halves
     std::string   lens;
     float         isoSpeed = 0;
     float         shutter = 0;

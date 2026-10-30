@@ -109,8 +109,14 @@ set(OPENCV_LIBRARIES ${OPENCV_LIBRARIES} PARENT_SCOPE)
 set_source_files_properties(src/merge/Align.cpp
     PROPERTIES INCLUDE_DIRECTORIES ${OPENCV_INCLUDE_DIR})
 
+# libxml2, for Adobe lens profiles (src/pipe/LensLcp.cpp). macOS ships it in
+# the SDK; Linux and Windows get it from their package managers. MIT licence.
+find_package(LibXml2 REQUIRED)
+set_source_files_properties(src/pipe/LensLcp.cpp
+    PROPERTIES INCLUDE_DIRECTORIES "${LIBXML2_INCLUDE_DIRS}")
+
 target_link_libraries(orion_engine
     PRIVATE ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK}
             ${COREGRAPHICS_FRAMEWORK} ${IMAGEIO_FRAMEWORK}
-            ${LIBRAW_LIBRARY} ${OPENCV_LIBRARIES}
+            ${LIBRAW_LIBRARY} ${OPENCV_LIBRARIES} ${LIBXML2_LIBRARIES}
 )

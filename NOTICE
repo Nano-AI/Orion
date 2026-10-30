@@ -162,3 +162,6 @@ is bundled or redistributed.** The format is read from its published
 description (the Adobe Camera Model, as documented by Adobe and by the lensfun
 project's manual); no other program's LCP reader was used as a source. See
 `research/lens-corrections.md` and `planning/DECISIONS.md` #361 and #362.
+
+Adobe lens profiles are parsed with libxml2 (MIT licence), the copy the
+operating system provides; Orion does not ship it. See decision #363.

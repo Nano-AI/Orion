@@ -187,9 +187,19 @@ lens note says which source answered (`OrionLensProfile.source`).
 |---|---|
 | `WarpRectilinear` (opcode 1), `FixVignetteRadial` (opcode 3), the opcode list format | Adobe, *Digital Negative (DNG) Specification* 1.6.0.0, December 2021, chapter 7 "Opcode List Processing", pp. 89–95. <https://helpx.adobe.com/camera-raw/digital-negative.html> |
 | Adobe Camera Model, the equations | lensfun manual, `LF_DIST_MODEL_ACM` and `LF_VIGNETTING_MODEL_ACM`: <https://lensfun.github.io/manual/latest/group__Lens.html> — Adobe's own "Adobe Camera Model" technical report ships with Adobe Lens Profile Creator and could not be obtained for this work |
-| LCP field meanings (`ImageXCenter` = u₀/Dmax, `FocalLengthX` = f_x/Dmax, centre defaults 0.5, Dmax = the larger image dimension in pixels; `stCamera:` names) | US 8,368,762 B1, "Methods and apparatus for camera calibration based on multiview image geometry" (the lens-profile calibration patent; its text defines each `stCamera:` descriptor) — read for the format description only, <https://patents.google.com/patent/US8368762B1/en> |
+| Where profiles are installed (either folder "or any of their sub-folders"), and that one LCP holds one camera body and lens | Adobe, *Adobe Lens Profile Creator User Guide*, version 1.0, 14 April 2010, "Placing the LCP File" and "Conclusion": <https://www.adobe.com/special/photoshop/camera_raw/lensprofile_creator/lensprofile_creator_userguide.pdf> |
+| ⚠ **Patent-only:** LCP field meanings (`ImageXCenter` = u₀/Dmax, `ImageYCenter` = v₀/Dmax, `FocalLengthX` = f_x/Dmax, `FocalLengthY` = f_y/Dmax, Dmax = the larger image dimension in pixels, centre defaults 0.5) | US 8,368,762 B1, "Methods and apparatus for camera calibration based on multiview image geometry" (the lens-profile calibration patent; its text defines each `stCamera:` descriptor) — read for the format description only, <https://patents.google.com/patent/US8368762B1/en> |
 | The distortion form itself | Brown–Conrady: D. C. Brown, "Decentering distortion of lenses", *Photogrammetric Engineering* 32(3), 1966. DNG's `kt0, kt1` and Adobe's `k4, k5` are the same two terms; the tests check that by writing each in its own spelling |
 | Prior art, **not a source** | RawTherapee reads `.lcp` files. It is GPL-3 and was **not read**. darktable was not consulted either |
+
+⚠ **Searched for and not found (2026-10-29):** Adobe's "Adobe Camera Model"
+technical report and its "Adobe Camera Model Lens Design Data Conversion
+Guide", both named in the user guide above as companions, are not online at
+any address found. The user guide itself states no field semantics. So the
+four normalization fields above (centre and focal, X and Y, as fractions of
+Dmax, and the 0.5 centre default) rest **only** on US 8,368,762 B1. The
+equations rest on lensfun's manual, a published secondary description. A
+developer question, per `CLAUDE.md`, not a technical one.
 
 Orion implements the published formulas. No code from any other LCP or DNG
 reader was used, and LibRaw supplies only the opcode bytes
@@ -222,6 +232,13 @@ too.
 - **Autoscale applies to every source.** DNG and Adobe warps pin nothing, so a
   barrel correction reaches past the frame like poly3 does. The DNG
   specification itself leaves the out-of-frame area to the DefaultCrop.
+- **OpcodeList1 is skipped.** It runs on the stored raw image, masked borders
+  included, while lists 2 and 3 run after linearization, whose per-pixel black
+  deltas are defined over the ActiveArea (`BlackLevelDeltaH/V`, counts
+  "ActiveArea width/length", DNG 1.6 ch. 4). That is the frame LibRaw hands
+  Orion, so only lists 2 and 3 have optical centres in Orion's frame. Lens
+  opcodes in list 1 are not known to occur. Doubles over 10⁶ in magnitude
+  reject the opcode.
 - **DNG vignette placement** follows processing order: a `FixVignetteRadial`
   before the warp (or in an earlier list) is evaluated at the source position;
   after it, at the output position. The first of each opcode is used.
@@ -236,10 +253,24 @@ too.
   frame; whether Adobe counts from a pixel's centre or its edge is half a pixel
   and is not stated in any source found.
 - **Adobe matching requires the camera body** (`Make` + `Model`), and the lens
-  name too when both the file and the profile record one. The model is
+  name too when both the file and the profile record one. Bodies compare as
+  `brand|model`, where the brand is the make's first word and a model that
+  repeats it loses it: LibRaw's `Nikon`/`D850` and an LCP's `NIKON
+  CORPORATION`/`NIKON D850` are both `nikon|d850`, and the same for Canon's
+  `Canon EOS 5D Mark IV`. A rebranded maker (Pentax under RICOH IMAGING) is not
+  aliased. A photo with **no lens name** takes only a profile with none either,
+  or the body's single file if it has just one. It never takes whichever lens
+  sorts first. The model is
   normalized by the calibration body's Dmax, so a full-frame profile on an APS-C
   body is wrong by the crop factor, and a photo carries nothing to rescale by.
   Lensfun still covers interchangeable lenses on other bodies.
+- **Reading the profiles never holds up an open.** Construction starts a
+  background thread that learns each file's body with libxml2's streaming
+  reader, stopping at the first `Make` and `Model`. Files over 4 MB are
+  skipped. A file is parsed in full (libxml2 DOM, no network, no entity
+  expansion) the first time its body is looked up, then cached. Until the index
+  is complete, a lookup finds nothing: that photo gets lensfun, and the lens
+  note says nothing about Adobe.
 - **Adobe interpolation** is linear in focal length between bracketing
   sub-profiles, each taken at the calibrated aperture nearest in 1/N, focus
   distance fixed at the farthest calibrated — the same simplifications as the
@@ -270,6 +301,12 @@ are Adobe's (`STATUS.md`).
 - a hand-written `.lcp` fixture (attribute and element RDF forms, a JPEG-only
   sub-profile that must be skipped) parses; interpolates between focal lengths;
   refuses another body; is found on disk case-insensitively in a subfolder
+- body keys agree for Canon, Nikon, Sony and DJI spellings and differ across
+  models; a body with two lens files and a photo with no lens name gets no
+  Adobe profile, and naming the lens picks its own file; a broken file does not
+  stop the background index
+- a real Sony ARW (`_PIC8220`, when linked) has no opcode lists and gets
+  exactly the lensfun database's answer
 - on the GPU, the fixture's perspective model matches the Adobe Camera Model
   written lensfun's way, and its vignette is divided out at the source position
 - `outputPoint(fetchPoint(q)) = q` within 0.05 px on a 6000 × 4000 frame for a

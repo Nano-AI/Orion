@@ -219,6 +219,8 @@ add_custom_command(
             ${LIBRAW_LIBRARY}
             # OpenCV, for the HDR-merge aligner (engine/src/merge/Align.cpp).
             ${OPENCV_LIBRARIES}
+            # libxml2, for Adobe lens profiles; the system copy.
+            -lxml2
             # The engine is C++ and throws internally, so the Swift link needs
             # libc++ and its unwinder even though nothing escapes the facade.
             -lc++ -lc++abi

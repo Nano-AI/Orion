@@ -28,10 +28,11 @@ struct DngLensOpcodes {
     LensModel model{};   // identity in whichever half was not found
 };
 
-/// Reads WarpRectilinear and FixVignetteRadial out of OpcodeList1/2/3.
+/// Reads WarpRectilinear and FixVignetteRadial out of OpcodeList2 and 3 —
+/// list 1 is in the uncropped stored frame and is skipped (see the .cpp).
 ///
 /// The first of each is used. The vignette is placed on the output position
-/// only when it follows the warp in processing order (list 1, 2, 3, each in
+/// only when it follows the warp in processing order (list 2, then 3, each in
 /// sequence) — before it, it ran on the unwarped image, the source position. A WarpRectilinear that
 /// directly follows an *optional* WarpRectilinear2 (opcode 14) is still used:
 /// the specification's skip rule binds readers that apply WarpRectilinear2,

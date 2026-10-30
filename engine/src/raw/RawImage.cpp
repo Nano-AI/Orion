@@ -58,6 +58,8 @@ RawInfo readInfo(const std::string& path) {
     info.width       = swaps ? sizes.height : sizes.width;
     info.height      = swaps ? sizes.width  : sizes.height;
     info.camera      = std::string(idata.make) + " " + idata.model;
+    info.make        = idata.make;
+    info.model       = idata.model;
     info.lens        = proc.imgdata.lens.Lens;
     info.isoSpeed    = other.iso_speed;
     info.shutter     = other.shutter;

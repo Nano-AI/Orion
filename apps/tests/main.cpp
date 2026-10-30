@@ -58,6 +58,7 @@ int main() {
     testAdobeLensProfile();
     testLensInverseMap();
     testDngLensOpcodesThroughLibRaw();
+    testLensSourceOnRealSony();
     testLensAutoScale();
     testToneBandsWithoutGuide();
     testHueSatMapGpu();

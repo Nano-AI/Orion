@@ -212,8 +212,8 @@ const char* kLcpFixture = R"(<?xml version="1.0" encoding="UTF-8"?>
           stCamera:TangentialDistortParam1="0.0015"
           stCamera:TangentialDistortParam2="-0.001">
          <stCamera:VignetteModel
-           stCamera:FocalLengthX="0.72"
-           stCamera:FocalLengthY="0.72"
+           stCamera:FocalLengthX="0.74"
+           stCamera:FocalLengthY="0.74"
            stCamera:VignetteModelParam1="-0.3"
            stCamera:VignetteModelParam2="0.05"
            stCamera:VignetteModelParam3="-0.01"/>
@@ -256,6 +256,24 @@ const char* kLcpFixture = R"(<?xml version="1.0" encoding="UTF-8"?>
  </rdf:RDF>
 </x:xmpmeta>
 )";
+
+/// A minimal element-form profile: one sub-profile at 50 mm.
+std::string lcpFile(const char* make, const char* model, const char* lens, double k1) {
+    return std::string(R"(<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF
+ xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about=""
+ xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/"
+ xmlns:stCamera="http://ns.adobe.com/photoshop/1.0/camera-profile">
+<photoshop:CameraProfiles><rdf:Seq><rdf:li rdf:parseType="Resource">
+<stCamera:Make>)") + make + "</stCamera:Make><stCamera:Model>" + model +
+           "</stCamera:Model><stCamera:Lens>" + lens + R"(</stCamera:Lens>
+<stCamera:FocalLength>50</stCamera:FocalLength>
+<stCamera:PerspectiveModel rdf:parseType="Resource">
+<stCamera:FocalLengthX>1.39</stCamera:FocalLengthX>
+<stCamera:RadialDistortParam1>)" + std::to_string(k1) + R"(</stCamera:RadialDistortParam1>
+</stCamera:PerspectiveModel></rdf:li></rdf:Seq></photoshop:CameraProfiles>
+</rdf:Description></rdf:RDF></x:xmpmeta>
+)";
+}
 
 const Acm kFixture672{0.72, 0.72, 0.51, 0.36, -0.08, 0.02, -0.004, 0.0015, -0.001};
 
@@ -360,12 +378,33 @@ void testDngLensOpcodes() {
 void testAdobeLensProfile() {
     section("Lens correction from an Adobe .lcp profile");
 
-    orion::pipe::AdobeLensProfiles lcp({});
-    lcp.addText(kLcpFixture);
-    report(lcp.size() == 2, "both raw sub-profiles parse, attribute and element forms; the JPEG one is skipped",
-           std::to_string(lcp.size()) + " parsed");
+    using orion::pipe::AdobeLensProfiles;
 
-    const auto at = lcp.lookup("DJI FC8482", "", 6.72f, 1.7f);
+    // Bodies as LibRaw spells them against bodies as an LCP spells them.
+    const auto key = &AdobeLensProfiles::bodyKey;
+    report(key("Canon", "EOS 5D Mark IV") == key("Canon", "Canon EOS 5D Mark IV"),
+           "Canon: an LCP model that repeats the make is the same body");
+    report(key("Nikon", "D850") == key("NIKON CORPORATION", "NIKON D850"),
+           "Nikon: a corporate make and a repeated brand are the same body");
+    report(key("Sony", "ILCE-7RM3") == key("SONY", "ILCE-7RM3"), "Sony: case does not matter");
+    report(key("DJI", "FC8482") == key("DJI", "FC8482"), "DJI: identical names match");
+    report(key("Canon", "EOS R5") != key("Canon", "Canon EOS R6") &&
+           key("Nikon", "D850") != key("SONY", "D850"),
+           "different models, or one model name under two makes, do not");
+
+    const auto root = std::filesystem::temp_directory_path() / "orion-lcp-fixture";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "DJI");
+    std::filesystem::create_directories(root / "Canon");
+    { std::ofstream(root / "DJI" / "fixture.LCP") << kLcpFixture; }
+    { std::ofstream(root / "Canon" / "a.lcp") << lcpFile("Canon", "Canon EOS R5", "RF24-70mm F2.8 L IS USM", -0.11); }
+    { std::ofstream(root / "Canon" / "b.lcp") << lcpFile("Canon", "Canon EOS R5", "RF50mm F1.2 L USM", -0.02); }
+    { std::ofstream(root / "Canon" / "broken.lcp") << "<x:xmpmeta><rdf:RDF><rdf:Description"; }
+    AdobeLensProfiles lcp({root.string(), "/nonexistent/orion"});
+    lcp.waitUntilReady();
+    report(lcp.ready(), "the background index finishes over nested, mixed-case and broken files");
+
+    const auto at = lcp.lookup("DJI", "FC8482", "", 6.72f, 1.7f);
     report(at.found && at.source == orion::pipe::LensSource::AdobeLcp,
            "the body matches and the source says Adobe");
     report(at.lens == "Fixture Drone Lens", "the interface is given LensPrettyName", at.lens);
@@ -373,25 +412,23 @@ void testAdobeLensProfile() {
     checkNear(at.model.tangential[0][1], -0.001, 1e-6, "k5 is DNG's kt1");
     checkNear(at.model.center[1], 0.36, 1e-6, "ImageYCenter is a fraction of the larger dimension");
     checkNear(at.model.vig[2], -0.01, 1e-6, "the vignette model's third parameter, from a self-closed element");
+    checkNear(at.model.focal[0], 0.72, 1e-6, "the vignette model's own FocalLengthX is not read as the camera's");
+    checkNear(at.model.vigFocal[0], 0.74, 1e-6, "and the vignette keeps its own");
 
-    const auto mid = lcp.lookup("DJI FC8482", "", 7.36f, 1.7f);
+    const auto mid = lcp.lookup("DJI", "FC8482", "", 7.36f, 1.7f);
     checkNear(mid.model.focal[0], 0.80, 1e-5, "halfway in focal length is halfway between calibrations");
     checkNear(mid.model.vig[0], -0.25, 1e-5, "and so is the vignette, element form included");
 
-    report(!lcp.lookup("SONY ILCE-7RM3", "", 6.72f, 1.7f).found, "another body is not matched");
-    report(lcp.lookup("DJI FC8482", "Some Other Lens 50mm", 6.72f, 1.7f).found,
+    report(!lcp.lookup("Sony", "ILCE-7RM3", "", 6.72f, 1.7f).found, "another body is not matched");
+    report(lcp.lookup("DJI", "FC8482", "Some Other Lens 50mm", 6.72f, 1.7f).found,
            "a profile with no lens name still matches a fixed-lens body that records one");
 
-    {
-        // From disk, through the directory walk the engine uses.
-        const auto dir = std::filesystem::temp_directory_path() / "orion-lcp-fixture" / "DJI";
-        std::filesystem::create_directories(dir);
-        { std::ofstream(dir / "fixture.LCP") << kLcpFixture; }
-        orion::pipe::AdobeLensProfiles disk({(dir.parent_path()).string(), "/nonexistent/orion"});
-        report(disk.size() == 2, "a nested .LCP is found case-insensitively; a missing folder is empty");
-        std::filesystem::remove_all(dir.parent_path());
-    }
-
+    // A body with two lenses in two files, and a photo that names no lens.
+    report(!lcp.lookup("Canon", "EOS R5", "", 50.0f, 1.2f).found,
+           "no lens name and two lenses for the body: no Adobe profile, not the first file");
+    const auto rf50 = lcp.lookup("Canon", "EOS R5", "RF50mm F1.2 L USM", 50.0f, 1.2f);
+    checkNear(rf50.found ? rf50.model.radial[1][2] : 0.0, -0.02, 1e-6,
+              "the named lens picks its own file, the second in sorted order");
     // ── It applies: the kernel's fetch is the Adobe Camera Model ────────
     Gpu g = makeGpu();
     if (!g.ok()) return;
@@ -416,7 +453,7 @@ void testAdobeLensProfile() {
         double us = 0, vs = 0;
         acmWarp(kFixture672, x + 0.5, y + 0.5, us, vs);
         const double d = std::max(kW, kH);
-        const double vx = (us - 0.51 * d) / (0.72 * d), vy = (vs - 0.36 * d) / (0.72 * d);
+        const double vx = (us - 0.51 * d) / (0.74 * d), vy = (vs - 0.36 * d) / (0.74 * d);
         const double r2 = vx * vx + vy * vy;
         const double falloff = 1 - 0.3 * r2 + 0.05 * r2 * r2 - 0.01 * r2 * r2 * r2;
         worstVig = std::max(worstVig,
@@ -424,6 +461,7 @@ void testAdobeLensProfile() {
     }
     report(worstVig < 2e-3, "the LCP vignette is divided out at the source position",
            "worst " + std::to_string(worstVig));
+    std::filesystem::remove_all(root);
 }
 
 void testLensInverseMap() {
@@ -432,13 +470,16 @@ void testLensInverseMap() {
     const double outward[1][6] = {{1.02, 0.05, -0.01, 0.002, 0.001, -0.0007}};
     std::vector<std::uint8_t> lists[3];
     lists[2] = opList({warpOp(1, outward, 0.45, 0.55)});
-    orion::pipe::AdobeLensProfiles lcp({});
-    lcp.addText(kLcpFixture);
+    const auto root = std::filesystem::temp_directory_path() / "orion-lcp-inverse";
+    std::filesystem::create_directories(root);
+    { std::ofstream(root / "fixture.lcp") << kLcpFixture; }
+    orion::pipe::AdobeLensProfiles lcp({root.string()});
+    lcp.waitUntilReady();
 
     struct Case { const char* name; LensModel model; float ca; };
     const Case cases[] = {
         {"DNG", orion::pipe::parseDngLensOpcodes(lists).model, 0.0f},
-        {"Adobe", lcp.lookup("DJI FC8482", "", 6.72f, 1.7f).model, 0.0f},
+        {"Adobe", lcp.lookup("DJI", "FC8482", "", 6.72f, 1.7f).model, 0.0f},
         {"lensfun with manual fringing", lens::ptlens(0.01f, -0.2f, 0.02f), 0.002f},
     };
     for (const auto& c : cases) {
@@ -460,6 +501,7 @@ void testLensInverseMap() {
                std::string(c.name) + ": outputPoint(fetchPoint(q)) is q on a 24 MP frame",
                "worst " + std::to_string(worst) + " px, scale " + std::to_string(p.scale));
     }
+    std::filesystem::remove_all(root);
 }
 
 void testDngLensOpcodesThroughLibRaw() {
@@ -518,4 +560,39 @@ void testDngLensOpcodesThroughLibRaw() {
         report(false, "the engine opens the lens-opcode DNG", e.what());
     }
     std::filesystem::remove(path);
+}
+
+void testLensSourceOnRealSony() {
+    section("A real Sony raw still gets the lensfun answer");
+
+    // Skipped where the sample is not linked in (`tools/worktree-setup.sh`).
+    const std::string path = std::string(ORION_DATA_DIR) + "/../samples/_PIC8220.ARW";
+    if (!std::filesystem::is_regular_file(path)) {
+        std::printf("  (skipped: no %s)\n", path.c_str());
+        return;
+    }
+    try {
+        orion::Engine engine;
+        engine.setHeadless(true);
+        engine.openRaw(path);
+        const auto& info = engine.info();
+        report(info.dngOpcodes[0].empty() && info.dngOpcodes[1].empty() && info.dngOpcodes[2].empty(),
+               "an ARW carries no DNG opcode lists");
+        const orion::pipe::LensDatabase db(std::string(ORION_DATA_DIR) + "/lensfun");
+        const auto want = db.lookup(info.lens, info.focalLength, info.aperture);
+        const auto& got = engine.lensProfile();
+        // No Adobe folders on this machine, so the answer is lensfun's, found or not.
+        report(got.found == want.found && got.lens == want.lens &&
+               got.source == (want.found ? orion::pipe::LensSource::Lensfun : orion::pipe::LensSource::None),
+               "the engine's profile is the lensfun database's own answer",
+               "lens '" + info.lens + "' -> '" + got.lens + "'");
+        std::printf("  file lens '%s', profile found %d\n", info.lens.c_str(), got.found ? 1 : 0);
+        const auto names = orion::Engine::lensDatabaseNames();
+        if (!names.empty() && engine.setLensChoice(names.front())) {
+            report(engine.lensProfile().source == orion::pipe::LensSource::Lensfun &&
+                   engine.lensProfile().found, "a hand-picked lens is lensfun's");
+        }
+    } catch (const std::exception& e) {
+        report(false, "the engine opens the Sony sample", e.what());
+    }
 }

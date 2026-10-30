@@ -26,7 +26,9 @@ struct Reader {
         const std::uint64_t bits = (hi << 32) | lo;
         double v = 0.0;
         std::memcpy(&v, &bits, sizeof v);
-        return ok && std::isfinite(v) ? v : (ok = false, 0.0);
+        // No real coefficient or centre is anywhere near a million; a value
+        // that is has been read from bytes that are not an opcode.
+        return ok && std::isfinite(v) && std::abs(v) <= 1e6 ? v : (ok = false, 0.0);
     }
 };
 
@@ -37,14 +39,23 @@ constexpr std::uint32_t kFixVignetteRadial = 3;
 
 DngLensOpcodes parseDngLensOpcodes(const std::vector<std::uint8_t> lists[3]) {
     DngLensOpcodes out;
-    for (int list = 0; list < 3; ++list) {
+    // ⚠ OpcodeList1 is skipped. It runs on the stored raw image, masked
+    // borders included, so its optical centre is in a frame LibRaw has already
+    // cropped to the ActiveArea. Lists 2 and 3 run after linearization, whose
+    // per-pixel black deltas are defined over the ActiveArea (BlackLevelDeltaH
+    // and V have ActiveArea-width and -length entries, DNG 1.6 ch. 4), which is
+    // the frame Orion renders. Lens opcodes in list 1 are not known to occur.
+    for (int list = 1; list < 3; ++list) {
         Reader r{lists[list].data(), lists[list].size()};
         if (r.n == 0) continue;
         const std::uint32_t count = r.u32();
         for (std::uint32_t i = 0; i < count && r.ok; ++i) {
             const std::uint32_t id = r.u32();
             r.u32();   // the DNG version the opcode was defined in
-            r.u32();   // flags: optional, skippable for preview
+            // Flags: bit 0 optional, bit 1 skippable for preview. Neither
+            // changes anything here — these two are applied whenever present,
+            // and an unknown opcode is ignored whatever its flags say.
+            r.u32();
             const std::uint32_t bytes = r.u32();
             if (!r.ok || bytes > r.n - r.at) break;
             Reader param{r.p + r.at, bytes};
