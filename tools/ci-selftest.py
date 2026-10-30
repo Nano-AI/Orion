@@ -42,6 +42,7 @@ NO_GPU = {"linux": "shim_open: no engine"}
 
 def main() -> int:
     system, exe, photo = sys.argv[1:4]
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")   # Windows' console is cp1252
     skip = {**SKIP["all"], **SKIP[system]}
     run = subprocess.run([exe, photo, "--selftest"], capture_output=True, text=True,
                          encoding="utf-8", errors="replace")
