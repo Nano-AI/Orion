@@ -24,6 +24,7 @@ public sealed class StatusPanel : Border {
         Child = new StackPanel { Spacing = 8, Children = { _message, Keys() } };
 
         EngineModel.Shared.PropertyChanged += (_, _) => Refresh();   // Timing, Tool, Current: every render and open
+        Autosave.Shared.Changed += Refresh;                          // a write failed, or landed after failing
         Refresh();
     }
 

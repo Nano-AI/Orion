@@ -20,8 +20,7 @@ static class ChromeStubs {
     public static bool DocumentEditsLocked => false;
     // stub(#315): Engine.swift owns this until the logic moves below the facade
     public static string? FlatFrame => null;
-    // stub(#315): Autosave.swift owns this until the logic moves below the facade
-    public static string? Complaint => null;                     // autosave ?? library lastFailure
+    public static string? Complaint => Autosave.Shared.LastFailure;   // autosave ?? library lastFailure (the library writes no sidecar yet)
     // stub(#315): Viewport.swift owns this until the logic moves below the facade
     public static bool IsFit => true;
     // stub(#315): Viewport.swift owns this until the logic moves below the facade

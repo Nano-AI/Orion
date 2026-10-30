@@ -38,7 +38,7 @@ public interface ISessionSource {
 
 /// Before the cache: every photo decodes afresh and closes when it is left.
 public sealed class FreshSessions(PhotoList photos) : ISessionSource {
-    public Session? Acquire(int index) => Session.Open(photos.Paths[index]);
+    public Session? Acquire(int index) => Session.OpenEdited(photos.Paths[index]);
     public void Request(int index, Action<Session?> ready) => ready(Acquire(index));
     public Bitmap? Picture(int index) => null;
     public void Release(Session session) => session.Dispose();

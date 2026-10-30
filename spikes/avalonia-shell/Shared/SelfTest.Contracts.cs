@@ -16,6 +16,8 @@ static partial class SelfTest {
     static partial void ToolsChecks();
     static partial void MaskUxChecks();
     static partial void MotionChecks();
+    // GitHub issue 23: sidecars and autosave.
+    static partial void SidecarChecks();
 
     static void CommandChecks() {
         // Every name a control binds to (Commands.Run/CanRun("…") in this tree) is registered.

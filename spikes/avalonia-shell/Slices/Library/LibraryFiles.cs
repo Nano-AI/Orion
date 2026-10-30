@@ -81,6 +81,9 @@ static class LibraryFiles {
         }
         string? current = E.Current >= 0 ? E.Photos[E.Current] : null;
         string? canvasSurvivor = Survivor(current), focusSurvivor = Survivor(GalleryMode.Focus?.Path);
+        // Written before anything moves: a coalesced write landing after the trash would
+        // leave a sidecar beside a raw that is gone (runTrash's autosave.stop()).
+        Autosave.Shared.Flush();
 
         var trashed = new List<string>();
         var failures = new List<string>();
