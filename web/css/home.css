@@ -31,7 +31,7 @@
 @media (min-width: 1280px) { .hero .h1 { max-width: none; white-space: nowrap; } }
 .hero .lede { margin-top: clamp(20px, 2vw, 28px); max-width: 780px; font-size: clamp(1.0625rem, 0.9rem + 0.6vw, 1.3125rem); line-height: 1.38; }
 .hero .lede b { font-weight: 500; color: var(--text); }
-.hero .btn { margin-top: var(--s-6); }
+.hero__cta { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-3); margin-top: var(--s-6); }
 .hero__req { margin-top: var(--s-4); }
 /* the one page-load moment: copy, then the window, rise into place once */
 @keyframes rise { from { opacity: 0; transform: translateY(14px); } }

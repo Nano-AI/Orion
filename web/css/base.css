@@ -113,6 +113,9 @@ code { font-family: var(--mono); font-size: 0.86em; }
 .btn:active { transform: scale(0.97); }
 .btn--ghost { background: transparent; color: var(--text); border-color: var(--line-2); }
 .btn--lg { min-height: 52px; padding: 0 var(--s-6); border-radius: var(--r); font-size: var(--fs-base); }
+.btn--xl { min-height: 56px; padding: 0 28px; border-radius: 999px; font-size: var(--fs-base); gap: 10px; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset, 0 10px 30px -8px color-mix(in srgb, var(--accent) 55%, transparent); }
+.btn--xl.btn--ghost { box-shadow: none; }
+.ico { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .btn--pill { min-height: 44px; padding: 0 var(--s-5); border-radius: 999px; font-size: var(--fs-md); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset, 0 8px 24px -8px color-mix(in srgb, var(--accent) 60%, transparent); }
 
 /* ---------- nav: one flat bar, the ground see-through ---------- */
