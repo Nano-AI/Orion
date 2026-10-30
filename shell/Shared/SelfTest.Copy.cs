@@ -14,6 +14,9 @@ static partial class SelfTest {
         bool onGpu = shown.OnGpu;
         float start = engine.Get("exposure_ev");
         double Whole() => MeanLuma(shown.Bitmap);   // the render on screen, read whole and waited for
+        // A reduced copy's mean, sampled every 16th pixel, drifts a few levels from the whole
+        // render's on a busy picture (3.4 on CI's generated photo); a stale one is off by tens.
+        static bool Same(double copy, double whole) => Math.Abs(copy - whole) < Math.Max(3, whole * 0.05);
         try {
             // A surface attached after a copy, edits made through it, then it failed.
             using (var copied = new CopiedPicture()) {
@@ -24,7 +27,7 @@ static partial class SelfTest {
                 for (int i = 1; i <= 4; i++) engine.Set("exposure_ev", -2 + i);
                 shown.OnGpu = false;
                 double after = MeanLuma(copied.For(shown, 400, interacting: true)), want = Whole();
-                Check(after > before + 10 && Math.Abs(after - want) < 3,
+                Check(after > before + 10 && Same(after, want),
                       $"after the shared surface fails the canvas copies the latest edit, not the one before it ({before:0.0} → {after:0.0}, the render {want:0.0})");
             }
 
@@ -55,7 +58,7 @@ static partial class SelfTest {
                       $"a copy that fails holds no stale picture and does not look again ({looks} looks)");
                 lost.TakeCopy = take;
                 double back = MeanLuma(lost.For(shown, 400, interacting: false)), want = Whole();
-                Check(Math.Abs(back - want) < 3, $"and the next copy is the render on screen ({back:0.0}, the render {want:0.0})");
+                Check(Same(back, want), $"and the next copy is the render on screen ({back:0.0}, the render {want:0.0})");
             }
         } finally {
             shown.OnGpu = onGpu;
