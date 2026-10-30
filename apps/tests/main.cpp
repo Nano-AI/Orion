@@ -12,6 +12,9 @@
 #include "harness.h"
 
 int main() {
+    // Unbuffered: piped (CI), a crash would otherwise take the last few
+    // kilobytes of output with it, and with them where it happened (#376).
+    std::setvbuf(stdout, nullptr, _IONBF, 0);
     std::printf("orion-tests\n\n");
 
     // First, because it is the one that catches a shader and a binary that
