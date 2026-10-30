@@ -12,6 +12,10 @@
  *  keeps the app accent's one job: it marks a value Orion changed or is
  *  changing, and focus. It is never a fill and never decoration. Buttons
  *  are off-white.
+ *
+ *  Every value below the tokens comes from them. What keeps its own numbers
+ *  is a drawn replica of something real: the app's slider, the terminal, a
+ *  printed page. Those say so where they are.
  */
 
 @font-face {
@@ -30,10 +34,16 @@
 }
 
 :root {
-  --ground:  #0b0b0c;
-  --panel:   #131315;
+  /* colour roles. A tinted grey is a colour cast, so every neutral is neutral */
+  --ground:  #0b0b0c;   /* the page, and a window's canvas */
+  --well:    #0f0f10;   /* sunk below the ground: a slider's groove, a value's well */
+  --panel:   #131315;   /* a note, a command, glass without blur */
+  --raised:  #1c1c1e;   /* a tool panel or a title bar standing on the page */
   --line:    #242427;
+  --line-2:  #3a3a3e;   /* a rule that has to read on --raised */
   --text:    #ececee;
+  --text-2:  color-mix(in srgb, var(--text) 80%, transparent);   /* secondary copy over a photograph or glass */
+  --white:   #f9f9fa;   /* a primary button under the pointer, and nothing else; never pure white */
   --dim:     #8d8d93;   /* 5.9:1 on ground: the floor for any readable text */
   --faint:   #55555b;   /* hairline glyphs only, never copy */
   --accent:  #ff6fb0;   /* a value Orion changed, and focus. never a fill. 7.6:1 on ground, 7.2:1 on panel */
@@ -42,12 +52,40 @@
   --sans: "Archivo", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   --mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-  --r: 6px;                                 /* one radius on the page, */
-  --r-glass: 18px;                          /* but glass panels, which are softer */
+  /* type: a major second (1.125) stepping down and up from the 17px body.
+   * The page has two registers, very large and small, so the small one gets
+   * the steps and display and h2 stay fluid. */
+  --fs-2xs:  0.6875rem;  /* 11: tracked capitals only (the 11px floor wins over the ratio's 10.6) */
+  --fs-xs:   0.75rem;    /* 12: mono captions, file facts, a value in a well */
+  --fs-sm:   0.84rem;    /* 13.4: nav, small buttons, fine print */
+  --fs-md:   0.945rem;   /* 15.1: notes, lists, buttons */
+  --fs-base: 1.0625rem;  /* 17: body and h3 */
+  --fs-lg:   1.195rem;   /* 19.1: a lede at its widest */
+  --fs-h2:      clamp(1.9rem, 3.3vw, 3.3rem);
+  --fs-display: clamp(2.5rem, 5.6vw, 5.6rem);
+
+  /* space: a 4px unit. Tight inside a group, generous between groups */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px; --s-5: 24px;
+  --s-6: 32px; --s-7: 48px; --s-8: 64px; --s-9: 96px;
   --gutter: clamp(20px, 4vw, 56px);
   --max: 1360px;
+  --measure: 36rem;                         /* a lede, a note */
+  --measure-sm: 30rem;                      /* the line under a heading */
   --nav-h: 78px;                            /* the pill, 12px from the top, plus air */
   --section: clamp(80px, 9vw, 144px);
+  --section-tight: clamp(64px, 7vw, 112px);
+
+  /* radii: an instrument's part, the page's one radius, glass, and pills */
+  --r-sm: 4px;
+  --r: 6px;
+  --r-lg: 18px;
+  --r-pill: 999px;
+
+  /* elevation is shadow, never a glow, one step per job */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.6);             /* a thumb; a page's contact */
+  --shadow-md: 0 6px 22px rgba(0, 0, 0, 0.45);           /* a control over a photograph */
+  --shadow-lg: 0 24px 60px -28px rgba(0, 0, 0, 0.85);    /* glass, the phone menu, a paper */
+  --shadow-xl: 0 48px 120px -48px rgba(0, 0, 0, 0.92);   /* a window */
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -63,7 +101,7 @@ body {
   background: var(--ground);
   color: var(--text);
   font-family: var(--sans);
-  font-size: 17px;
+  font-size: var(--fs-base);
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -85,15 +123,25 @@ html.lenis, html.lenis body { height: auto; }
 .lenis.lenis-stopped { overflow: clip; }
 
 .skip {
-  position: absolute; left: 12px; top: -60px; z-index: 100;
-  padding: 10px 14px; border-radius: var(--r);
+  position: absolute; left: var(--s-3); top: -60px; z-index: 100;
+  padding: var(--s-2) var(--s-3); border-radius: var(--r);
   background: var(--text); color: var(--ground); text-decoration: none;
 }
-.skip:focus { top: 12px; }
+.skip:focus { top: var(--s-3); }
+
+/* the star field motion.js draws sits behind the page, never over a photograph */
+.stars { position: fixed; inset: 0; z-index: 0; width: 100%; height: 100%; pointer-events: none; }
+main, .footer { position: relative; z-index: 1; }
+
+/* one icon set: Phosphor Light's 256 grid and 12-unit stroke, in a sprite on
+ * each page. Icons are 16, 20 or 24px. */
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.ico { width: 1em; height: 1em; flex: none; fill: currentColor; vertical-align: -0.14em; }
 
 /* ---------- layout ---------- */
 .wrap { width: min(var(--max), 100% - 2 * var(--gutter)); margin-inline: auto; }
 .section { padding-block: var(--section); scroll-margin-top: var(--nav-h); }
+.section--tight { padding-block: var(--section-tight); }
 
 /* ---------- type ---------- */
 /* Two registers and nothing between them: very large wide display, and small
@@ -105,47 +153,53 @@ html.lenis, html.lenis body { height: auto; }
   text-wrap: balance;
 }
 .display {
-  font-size: clamp(2.5rem, 5.6vw, 5.6rem);
+  font-size: var(--fs-display);
   letter-spacing: -0.035em;
   line-height: 0.96;
 }
 .h2 {
-  font-size: clamp(1.9rem, 3.3vw, 3.3rem);
+  font-size: var(--fs-h2);
   letter-spacing: -0.03em;
   line-height: 1.02;
   max-width: 21ch;
 }
 .h3 {
-  font-size: 1rem;
+  font-size: var(--fs-base);
   font-weight: 600;
   font-stretch: 105%;
   letter-spacing: -0.005em;
   line-height: 1.3;
 }
-.lede { font-size: clamp(1.05rem, 0.95rem + 0.4vw, 1.3rem); line-height: 1.5; color: var(--dim); max-width: 36rem; }
-.small { font-size: 0.9rem; line-height: 1.5; color: var(--dim); }
+.lede { font-size: clamp(var(--fs-base), 0.95rem + 0.4vw, var(--fs-lg)); line-height: 1.5; color: var(--dim); max-width: var(--measure); }
+.small { font-size: var(--fs-md); line-height: 1.5; color: var(--dim); }
 .mono, .caption { font-family: var(--mono); font-stretch: 100%; }
 .small .mono { font-size: 0.86em; }
-.caption { font-size: 11.5px; line-height: 1.7; letter-spacing: 0.01em; color: var(--dim); }
+.caption { font-size: var(--fs-xs); line-height: 1.7; letter-spacing: 0.01em; color: var(--dim); }
 .caption b, .val { font-weight: 400; color: var(--accent); }
 .link { text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 0.22em; transition: text-decoration-color .2s; }
 .link:hover { text-decoration-color: currentColor; }
 
 /* ---------- buttons ---------- */
+/* Ranked, not coloured: off-white is the one thing to do, ghost is the other. */
 .btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-  min-height: 44px; padding: 0 20px;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2);
+  min-height: 44px; padding: 0 var(--s-5);
   border: 1px solid var(--text); border-radius: var(--r);
   background: var(--text); color: var(--ground);
-  font-size: 0.95rem; font-weight: 600; font-stretch: 108%; letter-spacing: -0.005em;
+  font-size: var(--fs-md); font-weight: 600; font-stretch: 108%; letter-spacing: -0.005em;
   white-space: nowrap; text-decoration: none; cursor: pointer;
-  transition: transform .25s var(--ease), background-color .2s, color .2s, border-color .2s;
+  transition: transform .16s var(--ease), background-color .2s, color .2s, border-color .2s;
 }
-.btn:hover { transform: translateY(-1px); background: #ffffff; }
-.btn:active { transform: translateY(0) scale(0.98); }
+/* the press is the app's (scale .97, design/DESIGN.md); the lift waits for a real pointer,
+ * so a tap on a phone does not leave a button raised */
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover { transform: translateY(-1px); background: var(--white); }
+  .btn--ghost:hover { background: var(--panel); border-color: var(--faint); }
+}
+.btn:active { transform: translateY(0) scale(0.97); }
 .btn--ghost { background: transparent; color: var(--text); border-color: var(--line); }
-.btn--ghost:hover { background: var(--panel); border-color: var(--faint); }
-.btn--lg { min-height: 52px; padding: 0 26px; font-size: 1.02rem; }
+.btn--lg { min-height: 52px; padding: 0 var(--s-6); font-size: var(--fs-base); }
+.btn .ico { font-size: 20px; }
 
 /* ---------- glass ---------- */
 /* What floats over the sky or a photograph: the nav, the panels, the compare
@@ -158,7 +212,7 @@ html.lenis, html.lenis body { height: auto; }
   background-image:
     radial-gradient(120% 140% at 0% 0%, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0) 46%),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0) 30% 72%, rgba(255, 255, 255, 0.035));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), inset 0 -1px 0 rgba(255, 255, 255, 0.05), 0 24px 60px -28px rgba(0, 0, 0, 0.85);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), inset 0 -1px 0 rgba(255, 255, 255, 0.05), var(--shadow-lg);
   -webkit-backdrop-filter: blur(7px) saturate(1.9) brightness(1.12); backdrop-filter: blur(7px) saturate(1.9) brightness(1.12);
   transition: background-color .35s;
 }
@@ -178,27 +232,28 @@ html.lenis, html.lenis body { height: auto; }
 /* The one exception to the page's single radius: the bar, its links and its
  * button are pills. Three columns, so the links sit on the pill's centre
  * whatever the widths of the mark and the button. The section in view gets a
- * lit pill that slides between links. */
-.nav { position: fixed; top: 12px; left: 0; right: 0; z-index: 50; pointer-events: none; }
+ * lit pill that slides between links. The bar's 7px inset is (54 - 40) / 2,
+ * so the button's pill is concentric with the bar's. */
+.nav { position: fixed; top: var(--s-3); left: 0; right: 0; z-index: 50; pointer-events: none; }
 .nav__in {
   position: relative; pointer-events: auto;
   width: min(1080px, 100% - 2 * var(--gutter)); height: 54px; margin-inline: auto;
-  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; column-gap: 12px;
-  padding: 0 7px; border-radius: 999px;
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; column-gap: var(--s-3);
+  padding: 0 7px; border-radius: var(--r-pill);
 }
 .nav.is-solid .nav__in, .nav.is-open .nav__in { --glass-tint: rgba(16, 16, 19, 0.6); }
 .nav__mark {
-  justify-self: start; display: inline-flex; align-items: center; gap: 8px; padding-left: 9px;
-  font-size: 0.9rem; font-weight: 700; font-stretch: 125%; letter-spacing: 0.14em; text-transform: uppercase;
+  justify-self: start; display: inline-flex; align-items: center; gap: var(--s-2); padding-left: 9px;
+  min-height: 44px;
+  font-size: var(--fs-md); font-weight: 700; font-stretch: 125%; letter-spacing: 0.14em; text-transform: uppercase;
   text-decoration: none;
 }
 .nav__mark img { width: 30px; height: auto; }
-.nav__mark { min-height: 44px; }
 .nav__nav { position: relative; }
 .nav__links { display: flex; gap: 2px; list-style: none; margin: 0; padding: 0; }
 .nav__links a {
-  position: relative; display: flex; align-items: center; gap: 7px; padding: 8px 13px; border-radius: 999px;
-  font-size: 0.86rem; color: rgba(236, 236, 238, 0.72); text-decoration: none; transition: color .2s, background-color .2s;
+  position: relative; display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-3); border-radius: var(--r-pill);
+  font-size: var(--fs-sm); color: var(--text-2); text-decoration: none; transition: color .2s, background-color .2s;
 }
 .nav__links .ico { font-size: 16px; transition: color .3s; }
 .nav__links a:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
@@ -206,17 +261,17 @@ html.lenis, html.lenis body { height: auto; }
 .nav__links a[aria-current] .ico { color: var(--accent); }
 .nav__glow {
   position: absolute; top: 0; left: 0; height: 100%; width: var(--iw, 0px); translate: var(--ix, 0px) 0;
-  border-radius: 999px; background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border-radius: var(--r-pill); background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   opacity: 0; pointer-events: none;
   transition: translate .55s var(--ease), width .55s var(--ease), opacity .3s;
 }
 .nav__nav.has-current .nav__glow { opacity: 1; }
-.nav__cta { justify-self: end; min-height: 40px; padding: 0 16px; border-radius: 999px; font-size: 0.85rem; }
+.nav__cta { justify-self: end; min-height: 40px; padding: 0 var(--s-4); border-radius: var(--r-pill); font-size: var(--fs-sm); }
 .nav__toggle { display: none; }
 @media (min-width: 761px) and (max-width: 920px) { .nav__links .ico { display: none; } .nav__links a { padding-inline: 10px; } }
 
 @media (max-width: 760px) {
-  .nav__in { grid-template-columns: auto 1fr auto auto; column-gap: 6px; }
+  .nav__in { grid-template-columns: auto 1fr auto auto; column-gap: var(--s-2); }
   .nav__mark { padding-left: 7px; }
   .nav__nav { position: static; }
   .nav__glow { display: none; }
@@ -232,34 +287,34 @@ html.lenis, html.lenis body { height: auto; }
   .nav__toggle span::before { position: absolute; top: 6px; }
   .nav.is-open .nav__toggle span { transform: rotate(45deg); }
   .nav.is-open .nav__toggle span::before { transform: translateY(-6px) rotate(-90deg); }
-  /* scripts on: a rounded sheet under the pill. scripts off: the row scrolls sideways. */
+  /* scripts on: a rounded sheet under the pill, its links concentric with it.
+   * scripts off: the row scrolls sideways. */
   .js .nav__links {
-    position: absolute; top: calc(100% + 8px); left: 0; right: 0;
-    flex-direction: column; gap: 2px; padding: 8px;
-    border-radius: 22px; border: 1px solid rgba(255, 255, 255, 0.09);
+    position: absolute; top: calc(100% + var(--s-2)); left: 0; right: 0;
+    flex-direction: column; gap: 2px; padding: var(--s-2);
+    border-radius: var(--r-lg); border: 1px solid rgba(255, 255, 255, 0.09);
     background: radial-gradient(120% 90% at 0% 0%, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 50%) rgba(16, 16, 19, 0.74);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 24px 60px -28px rgba(0, 0, 0, 0.85);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), var(--shadow-lg);
     -webkit-backdrop-filter: blur(14px) saturate(1.8); backdrop-filter: blur(14px) saturate(1.8);
     visibility: hidden; opacity: 0; transform: translateY(-8px);
     transition: opacity .25s, transform .35s var(--ease), visibility 0s .35s;
   }
   .js .nav.is-open .nav__links { visibility: visible; opacity: 1; transform: none; transition: opacity .25s, transform .35s var(--ease); }
-  .js .nav__links a { padding: 13px 14px; font-size: 1rem; border-radius: 14px; }
+  .js .nav__links a { padding: var(--s-3) var(--s-4); font-size: var(--fs-base); border-radius: calc(var(--r-lg) - var(--s-2)); }
   .js .nav__links .ico { display: block; }
-  html:not(.js) .nav__in { height: auto; min-height: 54px; grid-template-columns: 1fr auto; border-radius: 22px; }
-  html:not(.js) .nav__nav { grid-row: 2; grid-column: 1 / -1; overflow-x: auto; padding-block: 4px; }
+  html:not(.js) .nav__in { height: auto; min-height: 54px; grid-template-columns: 1fr auto; border-radius: var(--r-lg); }
+  html:not(.js) .nav__nav { grid-row: 2; grid-column: 1 / -1; overflow-x: auto; padding-block: var(--s-1); }
   html:not(.js) .nav__cta { grid-column: 2; grid-row: 1; }
 }
-@media (max-width: 400px) { .nav__mark { letter-spacing: 0.08em; } .nav__cta { padding-inline: 12px; } }
+@media (max-width: 400px) { .nav__mark { letter-spacing: 0.08em; } .nav__cta { padding-inline: var(--s-3); } }
 
 /* ---------- footer ---------- */
-.footer { padding-block: 40px 48px; }
-.footer__in { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 20px 40px; }
-.footer__mark { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-stretch: 125%; letter-spacing: 0.14em; text-transform: uppercase; font-size: 0.9rem; }
-.footer__links { display: flex; gap: 24px; list-style: none; padding: 0; margin: 0; font-size: 0.9rem; color: var(--dim); }
+.footer { padding-block: var(--s-7); }
+.footer__in { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: var(--s-5) var(--s-7); }
+.footer__mark { display: inline-flex; align-items: center; gap: var(--s-2); font-weight: 700; font-stretch: 125%; letter-spacing: 0.14em; text-transform: uppercase; font-size: var(--fs-md); }
+.footer__links { display: flex; gap: var(--s-5); list-style: none; padding: 0; margin: 0; font-size: var(--fs-md); color: var(--dim); }
 .footer__mark img { width: 24px; height: auto; }
-.footer__credit { margin-top: 6px; font-size: 0.78rem; }
+.footer__credit { margin-top: var(--s-2); font-size: var(--fs-xs); }
 .footer__credit a { text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 0.2em; }
 .footer__links a { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; }
 .footer__links a:hover { color: var(--text); }
-.section--tight { padding-block: clamp(64px, 7vw, 112px); }

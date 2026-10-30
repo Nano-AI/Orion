@@ -106,9 +106,10 @@ vendored unmodified with their license headers.
 MIT License, Copyright (c) 2024 darkroom.engineering. The license text is in the
 file's header.
 
-`web/index.html` inlines thirteen Phosphor icons in the light weight (lightning,
+`web/index.html` inlines fourteen Phosphor icons in the light weight (lightning,
 stack, hard-drives, book-open-text, sparkle, sliders-horizontal, bandaids, crop,
-selection-foreground, images, export, hourglass-medium, file-text;
+selection-foreground, images, export, hourglass-medium, file-text,
+arrows-horizontal), and `web/download/index.html` inlines one (download-simple;
 https://github.com/phosphor-icons/core), MIT License, Copyright (c) 2023 Phosphor Icons.
 
 Self-hosted rather than loaded from a font service, so the page makes no
