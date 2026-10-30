@@ -11,6 +11,7 @@
 
 #include <webgpu/webgpu_cpp.h>
 
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -24,6 +25,12 @@ struct Context {
     wgpu::Queue    queue;
     void*          metalDevice = nullptr;   // id<MTLDevice>, bridged, non-owning
     DeviceInfo     info;
+
+    /// Every prepared shader loaded on this device, by path, with the
+    /// pipelines made from it (DawnKernel.cpp). After the device so it goes
+    /// first. Type-erased to keep this header small.
+    std::mutex shaderLock;
+    std::map<std::string, std::shared_ptr<void>> shaders;
 
     /// Blocks until `future` completes. Throws if the wait itself fails.
     void wait(const wgpu::Future& future) const;

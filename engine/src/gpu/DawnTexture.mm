@@ -89,7 +89,8 @@ wgpu::TextureUsage usageFor(PixelFormat) {
     // Every format the engine uses is storage-capable once TextureFormatsTier1
     // is on (DawnDevice.mm refuses a device without it).
     return wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::StorageBinding |
-           wgpu::TextureUsage::CopySrc | wgpu::TextureUsage::CopyDst;
+           wgpu::TextureUsage::CopySrc | wgpu::TextureUsage::CopyDst |
+           wgpu::TextureUsage::RenderAttachment;
 }
 
 /// An RGBA8 texture in an IOSurface, as spikes/dawn-avalonia/ does it, held

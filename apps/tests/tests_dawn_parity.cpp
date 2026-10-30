@@ -221,15 +221,17 @@ void testDawnParityGpu() {
     report(dawn->backend() == gpu::Backend::Dawn, "the second device is Dawn", dawn->info().name);
 
     // ⚠ The bar: one fp16 step at 1.0 is 0.000977, and four of them is what a
-    // kernel may differ by. Measured, the worst is one step (colorGrade,
-    // developLinear, llfRemapH, nlmLuma; a few samples in a million each); the
-    // rest are bit-identical. An 8-bit output may move one code (0.0039) where
-    // a value sits on a rounding boundary, which this also admits.
+    // kernel may differ by. Measured: one step in colorGrade and developLinear
+    // (8 and 4 samples of a few million), every other kernel bit-identical, and
+    // the whole graph's output bit-identical on all six. (With Dawn's
+    // robustness on, llfRemapH and nlmLuma also moved one step.) An 8-bit
+    // output may move one code (0.0039) on a rounding boundary; this admits it.
     constexpr double kTolerance = 4.0 / 1024.0;
 
     std::map<std::string, Seen> seen;
     std::map<std::string, std::unique_ptr<gpu::Library>> libs;
     std::map<std::string, std::unique_ptr<gpu::Kernel>>  kernels;
+    double chain = 0.0;   // the whole graph on each backend, output against output
     try {
         const auto input = parityInput();
         pipe::DevelopPipeline probe(*metal, ORION_SHADER_DIR, input);
@@ -239,6 +241,17 @@ void testDawnParityGpu() {
                 d.setWideOutput(wide);
                 d.apply(edit);
                 compareGraph(d, *dawn, seen, libs, kernels);
+
+                // And the whole chain on Dawn, end to end: what a user sees.
+                pipe::DevelopPipeline w(*dawn, ORION_SHADER_DIR, input);
+                w.setWideOutput(wide);
+                w.apply(edit);
+                w.render();
+                const auto a = floats(d.output()), b = floats(w.output());
+                double worst = 0.0;
+                for (std::size_t i = 0; i < a.size() && a.size() == b.size(); ++i)
+                    worst = std::max(worst, double(std::fabs(a[i] - b[i])));
+                chain = std::max(chain, a.size() == b.size() ? worst : 1e9);
             }
         }
         // A linear (demosaiced) source has its own first node.
@@ -259,6 +272,12 @@ void testDawnParityGpu() {
         report(s.worst <= kTolerance, kernel, line);
     }
     std::printf("  %zu kernels compared\n", seen.size());
+    // ⚠ The chain's bar is the same: the single-step differences above could
+    // meet downstream. Measured, they do not reach the output at all.
+    char line[96];
+    std::snprintf(line, sizeof line, "worst %.6f over three edits, screen and wide", chain);
+    std::printf("  whole graph, Dawn against Metal: %s\n", line);
+    report(chain <= kTolerance, "the whole develop graph on Dawn matches Metal's output", line);
 
     // Every kernel the build makes must at least compile on Dawn, including
     // any no graph above reaches (llfRemapDown has no node today).

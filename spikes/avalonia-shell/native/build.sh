@@ -11,13 +11,17 @@ mkdir -p "$out"
 engine=$root/build/engine/liborion_engine.a
 [[ -f $engine ]] || engine=$(git -C "$here" rev-parse --path-format=absolute --git-common-dir)/../build/engine/liborion_engine.a
 [[ -f $engine ]] || { echo "build.sh: no liborion_engine.a — run cmake --build build --target orion_engine in the main checkout" >&2; exit 1; }
+# The engine's Dawn backend (#375), when the engine was built with it.
+dawn=()
+[[ -f $root/third_party/dawn-build/lib/libwebgpu_dawn.a ]] &&
+    dawn=("$root/third_party/dawn-build/lib/libwebgpu_dawn.a" -framework QuartzCore -framework IOKit)
 python3 "$here/gen_fields.py" "$root/engine/include/orion/orion.h" "$out/fields.inc" "$out/mask_fields.inc"
 clang++ -std=c++20 -fobjc-arc -dynamiclib -O2 \
     -I"$root/engine/include" -I"$out" \
     "$here/shim.mm" "$here/present.mm" "$here/matte.mm" -Wl,-force_load,"$engine" \
     /opt/homebrew/opt/libraw/lib/libraw_r.dylib -lxml2 \
     /opt/homebrew/opt/opencv/lib/libopencv_{core,imgproc,features,geometry,video}.dylib \
-    /opt/homebrew/opt/jpeg-xl/lib/libjxl{,_threads}.dylib \
+    /opt/homebrew/opt/jpeg-xl/lib/libjxl{,_threads}.dylib "${dawn[@]}" \
     -framework AppKit -framework Metal -framework Foundation -framework CoreGraphics -framework ImageIO \
     -framework IOSurface -framework Vision -framework CoreVideo -install_name @rpath/liborion_shim.dylib -o "$out/liborion_shim.dylib"
 # The shared surface's headless check (present.mm): bin-native/present_test RAW. No window.

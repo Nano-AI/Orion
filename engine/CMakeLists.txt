@@ -170,6 +170,9 @@ if(ORION_DAWN)
     find_library(COCOA_FRAMEWORK      Cocoa      REQUIRED)
     target_link_libraries(orion_engine PRIVATE ${ORION_DAWN_DIR}/lib/libwebgpu_dawn.a
         ${IOSURFACE_FRAMEWORK} ${QUARTZCORE_FRAMEWORK} ${IOKIT_FRAMEWORK} ${COCOA_FRAMEWORK})
+    # For app/CMakeLists.txt, whose swiftc link names every library itself.
+    set(ORION_DAWN_LINK ${ORION_DAWN_DIR}/lib/libwebgpu_dawn.a
+        -framework IOSurface -framework QuartzCore -framework IOKit PARENT_SCOPE)
 endif()
 
 target_link_libraries(orion_engine

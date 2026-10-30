@@ -223,6 +223,8 @@ add_custom_command(
             -lxml2
             # libjxl, for JPEG XL export (engine/src/util/JxlWriter.cpp).
             ${JXL_LIBRARIES}
+            # Dawn, the engine's second GPU backend (#375); empty without it.
+            ${ORION_DAWN_LINK}
             # The engine is C++ and throws internally, so the Swift link needs
             # libc++ and its unwinder even though nothing escapes the facade.
             -lc++ -lc++abi

@@ -81,16 +81,33 @@ const Shader::Variant& Shader::pipeline(const std::vector<PixelFormat>& formats)
 }
 
 std::unique_ptr<Library::Impl> makeLibrary(std::shared_ptr<Context> ctx, const std::string& path) {
-    auto s = std::make_shared<Shader>();
-    s->ctx  = std::move(ctx);
-    s->path = wgslPath(path);
-    std::ifstream in(s->path, std::ios::binary);
-    if (!in) throw std::runtime_error("could not load WGSL at " + s->path);
+    const std::string file = wgslPath(path);
+    std::ifstream in(file, std::ios::binary);
+    if (!in) throw std::runtime_error("could not load WGSL at " + file);
     std::ostringstream all;
     all << in.rdbuf();
+
+    auto lib = std::make_unique<DawnLibrary>();
+    lib->ctx = ctx;
+    // ⚠ **One Shader per file per device, kept.** Every graph built (a photo
+    // opens two; a pan past the region bucket builds a third) would otherwise
+    // compile each of its ~48 shaders again — measured as a 100% pan at 134 ms
+    // against Metal's 82, whose driver keeps compiled pipelines for us. Keyed
+    // by path, and checked against the text, so a shader rebuilt on disk under
+    // a running process is compiled afresh rather than served stale.
+    std::lock_guard<std::mutex> hold(ctx->shaderLock);
+    auto& slot = ctx->shaders[file];
+    auto cached = std::static_pointer_cast<Shader>(slot);
+    if (cached && cached->source == all.str()) {
+        lib->shader = std::move(cached);
+        return lib;
+    }
+    auto s = std::make_shared<Shader>();
+    s->ctx    = ctx.get();
+    s->path   = file;
     s->source = all.str();
     parseHeader(*s);
-    auto lib = std::make_unique<DawnLibrary>();
+    slot = s;
     lib->shader = std::move(s);
     return lib;
 }
@@ -106,6 +123,7 @@ std::unique_ptr<Kernel::Impl> makeKernel(Library& library, const std::string& en
     }
 
     auto k = std::make_unique<DawnKernel>();
+    k->ctx        = lib->ctx;
     k->shader     = lib->shader;
     k->execWidth  = 32;
     k->maxThreads = 256;   // [numthreads(16,16,1)]; WebGPU's default ceiling

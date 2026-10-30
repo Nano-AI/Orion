@@ -148,7 +148,21 @@ std::shared_ptr<Context> open() {
     wgpu::Limits limits{};
     c.adapter.GetLimits(&limits);
 
+    // ⚠ **Robustness off.** Dawn otherwise clamps every texture load and
+    // store against the texture's size, as WebGPU requires of untrusted code;
+    // that doubled the GPU time of a 24 MP frame (settled at fit 18.8 ms
+    // against Metal's 9.0, the drag frame 1.47 against 0.81). These shaders
+    // are ours, they already clamp what they read (`clampToImage`), and Metal
+    // has never checked them, so this is the behaviour the engine was written
+    // and tested against. `skip_validation` was not needed to match Metal and
+    // stays off: validation is what turns a host mistake into an exception.
+    const char* toggleNames[] = {"disable_robustness"};
+    wgpu::DawnTogglesDescriptor toggles{};
+    toggles.enabledToggleCount = 1;
+    toggles.enabledToggles = toggleNames;
+
     wgpu::DeviceDescriptor dd{};
+    dd.nextInChain = &toggles;
     dd.requiredFeatureCount = features.size();
     dd.requiredFeatures     = features.data();
     dd.requiredLimits       = &limits;

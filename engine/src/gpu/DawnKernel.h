@@ -27,7 +27,7 @@ struct Shader {
         wgpu::BindGroupLayout    layout;
     };
 
-    std::shared_ptr<Context> ctx;
+    Context*    ctx = nullptr;   // owns this, through Context::shaders
     std::string path, source, entry;
     std::vector<Binding> textures;
     std::vector<Storage> storage;
@@ -46,12 +46,14 @@ private:
 };
 
 struct DawnLibrary final : Library::Impl {
-    std::shared_ptr<Shader> shader;
+    std::shared_ptr<Context> ctx;
+    std::shared_ptr<Shader>  shader;
     void* raw() const noexcept override { return shader.get(); }
 };
 
 struct DawnKernel final : Kernel::Impl {
-    std::shared_ptr<Shader> shader;
+    std::shared_ptr<Context> ctx;
+    std::shared_ptr<Shader>  shader;
     void* raw() const noexcept override { return shader.get(); }
 };
 
