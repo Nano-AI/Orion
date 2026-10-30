@@ -134,5 +134,6 @@ int main() {
     testVignetteFollowsTheCrop();
 
     std::printf("\n%d checks, %d failures\n", checks, failures);
+    if (skipped > 0) std::printf("%d skipped: no usable GPU (%s)\n", skipped, gpuProblem().c_str());
     return failures == 0 ? 0 : 1;
 }

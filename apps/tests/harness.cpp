@@ -1,10 +1,24 @@
 #include "harness.h"
 
+#include <cstdlib>
 #include <map>
 #include <utility>
 
 int failures = 0;
 int checks = 0;
+int skipped = 0;
+
+std::string gpuProblem() {
+    static const std::string why = [] {
+        try {
+            orion::gpu::Device::create();
+            return std::string();
+        } catch (const std::exception& e) {
+            return std::string(e.what());
+        }
+    }();
+    return why;
+}
 
 orion::gpu::Texture& scratchAccum(orion::gpu::Device& device, std::uint32_t w,
                                   std::uint32_t h) {
@@ -27,6 +41,16 @@ orion::gpu::Texture& scratchAccum(orion::gpu::Device& device, std::uint32_t w,
 void report(bool ok, const std::string& what, const std::string& detail) {
     ++checks;
     if (ok) return;
+    // ⚠ CI's Linux runner (decision #376): no CPU Vulkan driver offers the
+    // texture formats the engine requires, so Dawn refuses the adapter. With
+    // ORION_TESTS_GPU_OPTIONAL=1, and only then, a check that failed for that
+    // reason is a skip, counted and said; every other failure still fails.
+    static const bool optional = std::getenv("ORION_TESTS_GPU_OPTIONAL") != nullptr;
+    if (optional && detail.find("adapter lacks feature") != std::string::npos) {
+        ++skipped;
+        std::printf("  SKIP  %s (no usable GPU: %s)\n", what.c_str(), detail.c_str());
+        return;
+    }
     ++failures;
     std::printf("  FAIL  %s%s%s\n", what.c_str(),
                 detail.empty() ? "" : " \u2014 ", detail.c_str());

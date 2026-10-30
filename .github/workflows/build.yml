@@ -99,7 +99,12 @@ jobs:
             -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DORION_SHELL_DIR="$SHELL_DIR"
           cmake --build build -- -k 0   # every error in one run, not the first
 
-      - name: orion-tests (Dawn on Vulkan, SwiftShader)
+      # ⚠ No CPU Vulkan driver offers TextureFormatsTier1 (lavapipe and SwiftShader
+      # both lack blendable SNORM/norm16 targets), so Dawn refuses the adapter here
+      # and every GPU check is a stated skip; maths, decode and export still run.
+      # Real Linux GPUs (radv, anv, NVIDIA) offer it. Decision #376.
+      - name: orion-tests (Dawn on Vulkan, SwiftShader; GPU checks skip)
+        env: { ORION_TESTS_GPU_OPTIONAL: '1' }
         run: ./build/apps/tests/orion-tests
 
       - uses: actions/setup-dotnet@v4

@@ -98,7 +98,7 @@ void testHdrMergeFacade() {
 
     OrionEngine* engine = nullptr;
     if (orion_engine_create(&engine) != ORION_OK || engine == nullptr) {
-        report(false, "engine for the merge facade");
+        report(false, "engine for the merge facade", gpuProblem());
         return;
     }
 

@@ -71,6 +71,10 @@
 // same tally and `main` prints one number.
 extern int failures;
 extern int checks;
+extern int skipped;   // only under ORION_TESTS_GPU_OPTIONAL; see report()
+
+/// Why Device::create() fails here, empty when it does not.
+std::string gpuProblem();
 
 void report(bool ok, const std::string& what, const std::string& detail = "");
 void checkNear(double got, double want, double tol, const std::string& what);

@@ -690,7 +690,7 @@ void testFacadeSessionSeams() {
     // ── Through the C facade, as the shim calls it ────────────────────────
     OrionEngine* e = nullptr;
     if (orion_engine_create(&e) != ORION_OK || orion_engine_open_raw(e, path.c_str()) != ORION_OK) {
-        report(false, "facade engine opens the fixture", e ? orion_last_error(e) : "");
+        report(false, "facade engine opens the fixture", e ? orion_last_error(e) : gpuProblem());
         orion_engine_destroy(e);
         std::remove(path.c_str());
         return;
