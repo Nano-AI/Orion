@@ -123,7 +123,7 @@ void testDisplayCopyGpu() {
         int level = 2;
         std::uint32_t sw = 0, sh = 0;
         orion::pipe::DisplayCopy::sizeAt(kW, kH, level, sw, sh);
-        std::vector<std::uint8_t> small(std::size_t(w) * h * 4), box(small.size());
+        std::vector<std::uint8_t> level2(std::size_t(w) * h * 4), box(level2.size());
         for (std::uint32_t y = 0; y < h; ++y)
             for (std::uint32_t x = 0; x < w; ++x)
                 for (int c = 0; c < 4; ++c) {
@@ -134,12 +134,12 @@ void testDisplayCopyGpu() {
                                                std::min(x * 4 + i, kW - 1)) * 4 + c]);
                     box[(std::size_t(y) * w + x) * 4 + c] = to8(sum / 16.0f);
                 }
-        const bool took = copy.readback().newest(true, lw, lh) != 0 && copy.readback().take(small.data(), w * 4);
+        const bool took = copy.readback().newest(true, lw, lh) != 0 && copy.readback().take(level2.data(), w * 4);
         report(w == (kW + 1) / 2 / 2 && h == (kH + 1) / 2 / 2 && sw == w && sh == h,
                "level 2 is present.mm's size: halve rounding up, then down",
                std::to_string(w) + "x" + std::to_string(h));
-        report(took && worst(small, box) <= 1, "and each pixel the mean of its 4x4 block, none from past the picture",
-               "worst " + std::to_string(worst(small, box)));
+        report(took && worst(level2, box) <= 1, "and each pixel the mean of its 4x4 block, none from past the picture",
+               "worst " + std::to_string(worst(level2, box)));
 
         // ── The newest wins; older copies are dropped, never queued ─────────
         auto src8 = gpu::Texture::create(*device, kW, kH, gpu::PixelFormat::RGBA8Unorm);
@@ -172,7 +172,7 @@ void testDisplayCopyGpu() {
             const int first = generation;
             void* again = copy.share(*src16, kW, kH, 2, generation, w, h);   // another size: a new texture
             report(again && generation != first && readShared(again, seen, dw, dh, why) && dw == w && dh == h &&
-                       seen == small,
+                       seen == level2,
                    "and at level 2, a new texture of a new generation, as the readback again", why);
         }
 #else
