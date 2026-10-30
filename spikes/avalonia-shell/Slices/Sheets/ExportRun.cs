@@ -94,7 +94,7 @@ static partial class ExportRun {
             await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
             var (source, destination) = jobs[i];
             bool open = E.Current >= 0 && E.Photos[E.Current] == source && E.Session != null;   // not while it decodes (#318)
-            var session = open ? E.Session : Session.Open(source);
+            var session = open ? E.Session : Session.OpenEdited(source);
             try {
                 if (session == null || Write(session.Handle, destination, ratings.GetValueOrDefault(source)) != null) failed++;
                 else written++;

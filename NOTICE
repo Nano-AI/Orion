@@ -46,6 +46,7 @@ translation unit (`engine/src/merge/Align.cpp`): ORB feature detection,
 Hamming matching, RANSAC homography estimation and ECC refinement.
 
 Copyright the OpenCV team and contributors — <https://opencv.org>.
+The full Apache License 2.0 text travels with Orion as `licenses/Apache-2.0.txt`.
 
 ## Lens correction database
 
@@ -148,6 +149,57 @@ Changes: Jupiter, Mars and Saturn resized from 2048x1024 to 1024x512 and
 recompressed; Saturn's ring map reduced to 48 colour samples inside
 `web/js/motion.js`; the maps also travel base64-encoded in `web/js/planet-maps.js`
 (`tools/build-planet-maps.py`). The page's footer carries the attribution.
+
+## Dawn (WebGPU)
+
+The cross-platform GPU layer (#317) is Dawn, statically linked as
+`libwebgpu_dawn.a`, built from source by `tools/build-dawn.sh` at commit
+`106704a9ac3fc21b1580ea85aea302ac17d416f1` (dawn.googlesource.com/dawn), Metal
+backend only. The library contains code from three projects; nothing else from
+Dawn's `third_party/` is compiled in (checked with `nm` on the built archive).
+
+- **Dawn and Tint**: BSD 3-Clause License. Includes Dawn's own
+  `partition_alloc` pointer shim. Notice from Dawn's `LICENSE` at the pinned commit:
+
+      Copyright 2017-2026 The Dawn & Tint Authors
+
+- **webgpu-headers** (`webgpu.h`, commit `a1dc77409bb2b8bd80540cbf4b8db219e123e909`):
+  BSD 3-Clause License. Notice from its `LICENSE` at that commit:
+
+      Copyright (c) 2019, "WebGPU native" developers
+      All rights reserved.
+
+- **Abseil** (abseil-cpp, commit `3ac1241bcd2b9dd66fe734fe963d583f3f1044a8`):
+  Copyright The Abseil Authors. **Apache License 2.0**; the full text travels
+  with Orion as `licenses/Apache-2.0.txt`. Abseil ships no NOTICE file.
+
+Conditions and disclaimer of the BSD 3-Clause License, identical in both
+projects' `LICENSE` files, following each copyright notice above:
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright notice, this
+       list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright notice,
+       this list of conditions and the following disclaimer in the documentation
+       and/or other materials provided with the distribution.
+
+    3. Neither the name of the copyright holder nor the names of its
+       contributors may be used to endorse or promote products derived from
+       this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+    AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+    DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+    FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+    DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+    CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+    OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ## Lens corrections from DNG opcodes and Adobe lens profiles
 

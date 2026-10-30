@@ -88,10 +88,15 @@ sealed class App : Application {
     /// Interactive: a person at the window.
     public override void OnFrameworkInitializationCompleted() {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) {
+            // Before the first open, so the photo it arrives with is armed too. Interactive only:
+            // the headless modes read sidecars and never write the photographer's.
+            if (Run.Proof == null) Autosave.Install();
             OpenPhotos();   // the first photo arrives from a background decode
             desktop.MainWindow = MakeWindow() ?? throw new ArgumentException($"no panel '{Run.Panel}'");
             if (Run.Proof is { } dir) CanvasSlice.SharedProof.Start(desktop.MainWindow, dir);
-            desktop.Exit += (_, _) => Drain();
+            // Autosave.swift's other triggers: willResignActive, and willTerminate inside the 900 ms.
+            desktop.MainWindow.Deactivated += (_, _) => Autosave.Shared.Flush();
+            desktop.Exit += (_, _) => { Autosave.Shared.Flush(); Drain(); };
         }
         base.OnFrameworkInitializationCompleted();
     }

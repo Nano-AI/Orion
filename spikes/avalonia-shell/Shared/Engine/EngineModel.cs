@@ -82,11 +82,23 @@ public sealed class EngineModel : INotifyPropertyChanged {
     /// Every adjustable C field and its length (1, or N for float[N]).
     public static IReadOnlyList<(string Name, int Length)> Fields { get; } = ReadFields();
 
-    public void Load(IEnumerable<string> photos) {
+    /// False, with the reason on the status line, while the open photo's edit
+    /// is owed to its sidecar and will not write: the list stays as it was.
+    public bool Load(IEnumerable<string> photos) {
+        if (!CanLeave()) return false;
         _list.Load(photos);
         _source.Clear();   // drops an unanswered Request too
         Opening = false;
         Changed(nameof(Photos), nameof(Current));
+        return true;
+    }
+
+    /// Editor.canLeavePhoto: an edit that will not write keeps its photo on
+    /// screen, so the retry stays possible and no later state replaces it.
+    bool CanLeave() {
+        if (Autosave.Shared.FlushBeforeLeaving()) return true;
+        Say(Autosave.Shared.LastFailure ?? "The open photo's edits could not be saved.");
+        return false;
     }
 
     /// Takes photos out of the list (a move to the Trash). The photo on screen,
@@ -122,17 +134,20 @@ public sealed class EngineModel : INotifyPropertyChanged {
         Changed(nameof(Photos), nameof(Current), nameof(CurrentName), nameof(Picture));
     }
 
+    /// False without moving while the open photo cannot be left (CanLeave).
     public bool Open(int index) {
+        if (index < 0 || index >= Photos.Count) throw new ArgumentOutOfRangeException(nameof(index), index, $"{Photos.Count} photos");
+        if (!CanLeave()) return false;
         int from = Current;
-        if (!_list.Go(index)) throw new ArgumentOutOfRangeException(nameof(index), index, $"{Photos.Count} photos");
+        _list.Go(index);
         return Show(from);
     }
 
     /// The arrow keys (Library.neighbor): false at either end, where nothing reopens.
     /// A held key coalesces: each press shows the kept picture, and only the
     /// photo it stops on waits for a session (ISessionSource.Request).
-    public bool Next() { int from = Current; return _list.Next() && Show(from); }
-    public bool Previous() { int from = Current; return _list.Previous() && Show(from); }
+    public bool Next() { int from = Current; return CanLeave() && _list.Next() && Show(from); }
+    public bool Previous() { int from = Current; return CanLeave() && _list.Previous() && Show(from); }
 
     /// Preview-first: the kept picture now, the session when it is ready,
     /// which for a kept session is before this returns. False when the photo

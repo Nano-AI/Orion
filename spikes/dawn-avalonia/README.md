@@ -15,7 +15,8 @@ Asks whether Dawn can write a texture that the Avalonia UI composites with no CP
 ## Run it
 
 ```
-native/build.sh                                  # fetches Dawn (pinned, hash-checked), builds the dylib and the selftest
+../../tools/build-dawn.sh                        # once, through the heavy-job guard: Dawn from source, ~3 min
+native/build.sh                                  # builds the dylib and the selftest against it
 bin-native/dawn_selftest                         # headless: no window
 DOTNET_ROOT=/opt/homebrew/opt/dotnet/libexec dotnet build -c Release DawnAvalonia.csproj
 ./demo.sh            # ⚠ shows ONE window for about 5 s, then exits by itself (hard cap 10 s)
@@ -98,6 +99,7 @@ The shell calls `UsePlatformDetect()` with no options, so on macOS it renders wi
 | Cost | 0.5 s to download, 0.2 s to extract, 57 MB on disk (`third_party/`, git-ignored). Building `libdawn_surface.dylib` (9.4 MB, Dawn linked in) and the selftest takes 1.6 s. No Dawn source build was needed. |
 | ⚠ Deployment target | The prebuilt objects are `minos 26.0` (`otool -l`: all 659 objects). **Orion's floor is macOS 14**, so for shipping Dawn must be built from source with `CMAKE_OSX_DEPLOYMENT_TARGET=14.0`, and for x86_64 too if Intel stays supported (an Intel tarball exists, also built on a current runner). The cost of a source build was not measured. |
 | ⚠ Notices | The tarball has **no LICENSE or NOTICE files**. Dawn is BSD-3 (every header carries the text), but `libwebgpu_dawn.a` also bundles its dependencies (Tint, Abseil, and others). Their notices have to be collected from the source tree at that commit before anything ships. |
+| **Now (#361)** | The spike links the **source build** from `tools/build-dawn.sh` instead: same commit, fetched from dawn.googlesource.com, Metal only, `minos 14.0` (all 653 objects), arm64, `libwebgpu_dawn.a` 21 MB. Fetch 41 s and 1.3 GB, build 174 s, 1.43 GB peak; the notices are in the repository's `NOTICE`. The selftest passes on it. The nightly rows above are kept as the record of what the spike first used. |
 
 ## Windows and Linux: what pairs with what
 
@@ -116,7 +118,7 @@ All lines are cited at Dawn commit `106704a9` and Avalonia tag `12.1.4`. Avaloni
 
 1. **Linux needs Vulkan code or an Avalonia change** (see the table). This is the main thing standing in the way of "Dawn everywhere".
 2. **Windows is unbuilt.** The keyed mutex with key 0 on both sides gives mutual exclusion, not ordering. Ordering would come from awaiting each update before rendering the next frame, as this spike does.
-3. **The prebuilt is `minos 26.0`, arm64 only, unsigned, and has no notices.** It is fine for a spike. Shipping needs a source build, whose time and disk use were not measured.
+3. ~~**The prebuilt is `minos 26.0`, arm64 only, unsigned, and has no notices.**~~ Closed by `tools/build-dawn.sh` (#361): source build, `minos 14.0`, notices in `NOTICE`. Still arm64 only; x86_64 is untested (`ARCHS="arm64;x86_64"`).
 4. **The shell would move to Avalonia's Metal renderer.** Its UI under Skia-Metal is untested.
 5. **Resizing is not handled.** The demo fixes the texture size per phase; a real canvas re-creates the IOSurface when the view changes size.
 6. **The engine is still Metal-only, and Dawn would replace it.** But this spike also shows that the **current Metal engine could feed Avalonia without a copy today** if its output texture were IOSurface-backed. The shim's comment that "C# can't draw that on macOS" (`spikes/avalonia-shell/native/shim.mm:7-9`) no longer holds.
