@@ -255,9 +255,11 @@ static partial class SelfTest {
                   $"a photo whose edit will not save cannot be left, and the status line says why ('{engine.Status}')");
             // The drawn line, not the model: deleting the footer's failure branch was green everywhere (#125).
             var footer = new Chrome.StatusPanel();
+            var host = Show(footer);
             var said = (TextBlock)((StackPanel)footer.Child!).Children[1];
             Check(footer.IsVisible && said.IsVisible && said.Text == Autosave.Shared.LastFailure && said.Foreground == Palette.Star,
                   $"the footer draws the failed write in the warning colour ('{said.Text}')");
+            host.Close();
             // Trash, the departure the Swift probe drove that the switch above does not:
             // the open photo stays, nothing moves, and the failure is the answer.
             var moved = new List<string>();
@@ -275,14 +277,22 @@ static partial class SelfTest {
         }
 
         // A failed render, drawn: the footer names it, and stops when the next render lands.
-        if (engine.Handle != 0) {
+        // Needs an open photo (the footer says nothing of renders without one), so no handle is a failure, not a skip.
+        {
             var footer = new Chrome.StatusPanel();
+            var host = Show(footer);
             var said = (TextBlock)((StackPanel)footer.Child!).Children[1];
             string timing = engine.Timing;
             engine.SetTiming("render failed: probe");
             bool drawn = said.IsVisible && said.Text == "Render failed: probe" && said.Foreground == Palette.Star;
             engine.SetTiming(timing);
-            Check(drawn && said.Text != "Render failed: probe", $"the footer draws a failed render and clears it after ('{said.Text}')");
+            bool cleared = said.Text != "Render failed: probe";
+            host.Close();   // off screen it stops listening to the shared models
+            engine.SetTiming("render failed: after close");
+            bool detached = said.Text != "Render failed: after close";
+            engine.SetTiming(timing);
+            Check(engine.Handle != 0 && drawn && cleared && detached,
+                  $"the footer draws a failed render, clears it after, and stops listening once closed (handle {engine.Handle != 0}, '{said.Text}')");
         }
 
         // The real thing: a rated sidecar with no edit, an edit through Autosave, a reopen.

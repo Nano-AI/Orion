@@ -583,7 +583,7 @@ def denoise_region(s, ctx):
 def high_iso_recipe(s, ctx):
     """The high-ISO recipe from research/high-iso.md section 5 through the
     tools: the three keys this pass added validate with their ranges, and
-    the recipe as a whole leaves a flat patch no noisier than it found it.
+    the recipe as a whole takes a flat patch's noise below 90% of what it found.
     Not asserted: that the sample is noisy enough for any of it to show; the
     before and after are in the note so a reader can tell.
 
@@ -624,8 +624,10 @@ def high_iso_recipe(s, ctx):
                       region=flat).get("region", {}).get("noise")
         if not isinstance(after, (int, float)):
             return f"proposed region noise is {after!r}"
-        if after > before:
-            return f"the recipe raised the flattest patch's noise ({flat}) from {before:.5f} to {after:.5f}"
+        # A real reduction, not "no noisier": a recipe that does nothing passes a <=.
+        # Measured 2026-10-29 on the flattest patch: _PIC8095's sky 0.0063 -> 0.0016.
+        if not after < 0.9 * before:
+            return f"the recipe left the flattest patch's noise ({flat}) at {after:.5f} from {before:.5f}, not under 90%"
         ctx.note = f"ISO {iso}, noise {before:.5f} -> {after:.5f} at {flat}"
     finally:
         s.ask("reject_edit", path=str(raw))

@@ -22,11 +22,25 @@ public sealed class StatusPanel : Border {
         BorderThickness = new Thickness(0, 1, 0, 0);
         Padding = new Thickness(Space.Pad, 8);
         Child = new StackPanel { Spacing = 8, Children = { new ProposalFooter(), _message, Keys() } };
+    }
 
-        EngineModel.Shared.PropertyChanged += (_, _) => Refresh();   // Timing, Tool, Current: every render and open
-        Autosave.Shared.Changed += Refresh;                          // a write failed, or landed after failing
+    // Listening only while on screen: a footer that has left its window (a closed
+    // window, a rebuilt layout) stops refreshing instead of living on in the
+    // shared models' event lists.
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e) {
+        base.OnAttachedToVisualTree(e);
+        EngineModel.Shared.PropertyChanged += OnEngineChanged;   // Timing, Tool, Current: every render and open
+        Autosave.Shared.Changed += Refresh;                      // a write failed, or landed after failing
         Refresh();
     }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e) {
+        EngineModel.Shared.PropertyChanged -= OnEngineChanged;
+        Autosave.Shared.Changed -= Refresh;
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    void OnEngineChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh();
 
     void Refresh() {
         var engine = EngineModel.Shared;
