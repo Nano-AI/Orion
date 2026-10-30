@@ -103,9 +103,10 @@ static partial class SelfTest {
                   "writing the edit keeps the rating and the escaped label, and leaves no temporary file");
             File.WriteAllText(Sidecar.PathFor(photo), new Sidecar { Rejected = true }.Text().Replace("xmp:Rating", "orion:Develop=\"!!\" xmp:Rating"));
             Check(Sidecar.Read(photo) is { Rejected: true, Rating: 0, Unreadable: not null }
-                  && !Sidecar.Merge(photo, s => s.Develop = [1]) && File.ReadAllText(Sidecar.PathFor(photo)).Contains("!!"),
-                  "-1 reads as rejected; an edit that is not base64 is never written over");
+                  && !Sidecar.Merge(photo, s => s.Develop = [1]) && !label.Write(photo) && File.ReadAllText(Sidecar.PathFor(photo)).Contains("!!"),
+                  "-1 reads as rejected; an edit that is not base64 is never written over, by Merge or by Write");
             // Present but unreadable is not absent: a rename would replace it, so Merge must refuse.
+            File.Delete(Sidecar.PathFor(photo));
             label.Write(photo);
             File.SetUnixFileMode(Sidecar.PathFor(photo), UnixFileMode.None);
             bool refused = Sidecar.Read(photo) is { Unreadable: not null } && !Sidecar.Merge(photo, s => s.Develop = [1]);

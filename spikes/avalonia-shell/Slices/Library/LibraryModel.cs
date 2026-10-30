@@ -214,7 +214,9 @@ public sealed class LibraryModel {
         foreach (var p in photos) {
             change(p);
             p.Marked = true;
-            if (Writes && !Sidecar.Merge(p.Path, s => (s.Rating, s.Rejected, s.Label) = (p.Rating, p.Rejected, p.Label))) failed.Add(p);
+            // Only what a mark changes: the label comes from the file at write time,
+            // never from a photo whose marks have not been read yet (decision #370).
+            if (Writes && !Sidecar.Merge(p.Path, s => (s.Rating, s.Rejected) = (p.Rating, p.Rejected))) failed.Add(p);
         }
         if (failed.Count > 0)
             EngineModel.Shared.Say((failed.Count == 1 ? $"Ratings could not be saved for {failed[0].Name}."

@@ -33,15 +33,35 @@ public sealed class Sidecar {
     /// Null only when there is no sidecar. One that exists and will not read
     /// comes back with Unreadable set, never as "none".
     public static Sidecar? Read(string photo) {
-        string text;
+        byte[] bytes;
         try {
-            text = File.ReadAllText(PathFor(photo), Encoding.UTF8);
+            bytes = File.ReadAllBytes(PathFor(photo));
         } catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException) {
             return null;
         } catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException) {
             return new Sidecar { Unreadable = e.Message };
         }
-        return Parse(text);
+        return Decode(bytes, out string why) is { } text ? Parse(text) : new Sidecar { Unreadable = why };
+    }
+
+    static readonly UTF8Encoding StrictUtf8 = new(false, true);
+    const int MaxBytes = 4 << 20;
+
+    /// The text of a sidecar, or null and why. UTF-8 only, strictly: a lenient
+    /// decode would turn a bad byte into U+FFFD, or read UTF-16 by its BOM, and
+    /// the merge would write that back as UTF-8 over another tool's file. A
+    /// UTF-8 BOM is dropped; Swift's `Sidecar.contents` makes the same calls.
+    static string? Decode(byte[] bytes, out string why) {
+        why = bytes.Length > MaxBytes ? "larger than 4 MB, which no sidecar is"
+            : bytes is [0xFE, 0xFF, ..] or [0xFF, 0xFE, ..] ? "it is UTF-16, not UTF-8" : "";
+        if (why != "") return null;
+        int skip = bytes is [0xEF, 0xBB, 0xBF, ..] ? 3 : 0;
+        try {
+            return StrictUtf8.GetString(bytes, skip, bytes.Length - skip);
+        } catch (DecoderFallbackException) {
+            why = "it is not UTF-8";
+            return null;
+        }
     }
 
     /// Orion's three fields out of any XMP packet, by namespace rather than by
@@ -127,7 +147,8 @@ public sealed class Sidecar {
     /// changed (Swift's `Sidecar.merged`, step for step): each is set where it
     /// already is, removed when Orion has no value, and otherwise added as an
     /// attribute of the first rdf:Description, declaring `xmp`/`orion` there if
-    /// its namespace is not in scope. Null and why when it cannot be done safely.
+    /// its namespace is not in scope (a numbered prefix if that one is taken).
+    /// Null and why when the file cannot be parsed or has no place for them.
     public string? MergedInto(string existing, out string why) {
         if (Load(existing, out why) is not { } x) return null;
         foreach (var (name, prefix, value) in new[] {
@@ -141,8 +162,11 @@ public sealed class Sidecar {
             if (value == null || attributes.Count + elements.Count > 0) continue;
             var first = x.Descriptions[0];
             if (string.IsNullOrEmpty(first.GetPrefixOfNamespace(name.Namespace))) {
-                if (first.GetNamespaceOfPrefix(prefix) != null) { why = $"its prefix {prefix} names another namespace"; return null; }
-                first.SetAttributeValue(XNamespace.Xmlns + prefix, name.NamespaceName);
+                // Never rebind a prefix the file already uses, here or on an ancestor:
+                // `orion1`, `orion2`… instead, as Swift does.
+                string fresh = prefix;
+                for (int i = 1; first.GetNamespaceOfPrefix(fresh) != null; i++) fresh = prefix + i;
+                first.SetAttributeValue(XNamespace.Xmlns + fresh, name.NamespaceName);
             }
             first.SetAttributeValue(name, value);
         }
@@ -160,13 +184,19 @@ public sealed class Sidecar {
         string path = PathFor(photo), temp = path + ".orion-tmp";
         try {
             string text = Text();
-            string? existing = null;
-            try { existing = File.ReadAllText(path, Encoding.UTF8); } catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException) { }
-            // Orion's own file is exactly the text of what it reads as: rewrite it whole.
-            if (existing != null && Parse(existing).Text() != existing) {
-                if (MergedInto(existing, out string why) is not { } merged)
-                    return Fail(photo, $"it is not XMP Orion can change safely ({why}), and is left untouched");
-                text = merged;
+            byte[]? bytes = null;
+            try { bytes = File.ReadAllBytes(path); } catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException) { }
+            if (bytes != null) {
+                if (Decode(bytes, out string why) is not { } existing) return Fail(photo, $"{why}, and is left untouched");
+                var old = Parse(existing);
+                if (old.Unreadable != null)
+                    return Fail(photo, $"it is not XMP Orion can change safely ({old.Unreadable}), and is left untouched");
+                // Orion's own file is exactly the text of what it reads as: rewrite it whole.
+                if (old.Text() != existing) {
+                    if (MergedInto(existing, out why) is not { } merged)
+                        return Fail(photo, $"it is not XMP Orion can change safely ({why}), and is left untouched");
+                    text = merged;
+                }
             }
             File.WriteAllText(temp, text, new UTF8Encoding(false));
             File.Move(temp, path, overwrite: true);

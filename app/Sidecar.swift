@@ -52,12 +52,18 @@ struct Sidecar: Sendable {
 
     private enum Contents { case absent, unreadable(String), text(String) }
 
-    /// The file's text, without a leading byte-order mark (the parser and the
-    /// byte-exact comparison both want it gone, and .NET strips it too).
+    /// The file's text, without a leading UTF-8 byte-order mark (the parser and
+    /// the byte-exact comparison both want it gone). UTF-8 only, strictly: a
+    /// repairing decode would write U+FFFD back over another tool's bytes.
+    /// `Sidecar.cs` `Decode` makes the same calls.
     private static func contents(of path: URL) -> Contents {
         guard let data = FileManager.default.contents(atPath: path.path) else {
             return FileManager.default.fileExists(atPath: path.path)
                 ? .unreadable("it could not be read") : .absent
+        }
+        if data.count > 4 << 20 { return .unreadable("larger than 4 MB, which no sidecar is") }
+        if data.starts(with: [0xFE, 0xFF]) || data.starts(with: [0xFF, 0xFE]) {
+            return .unreadable("it is UTF-16, not UTF-8")
         }
         guard let text = String(data: data, encoding: .utf8) else {
             return .unreadable("it is not UTF-8")
@@ -73,7 +79,8 @@ struct Sidecar: Sendable {
         let loaded = load(text)
         guard let descriptions = loaded.descriptions else { return Sidecar(unreadable: loaded.why) }
         var result = Sidecar()
-        if let rating = value(xmpNS, "Rating", in: descriptions).flatMap(Double.init),
+        if let rating = value(xmpNS, "Rating", in: descriptions)
+               .flatMap({ Double($0.trimmingCharacters(in: .whitespacesAndNewlines)) }),
            rating.isFinite {
             // -1 is the convention for rejected, which every editor understands.
             result.rejected = rating < 0
@@ -81,7 +88,10 @@ struct Sidecar: Sendable {
         }
         result.label = value(xmpNS, "Label", in: descriptions)
         if let encoded = value(orionNS, "Develop", in: descriptions) {
+            // Not base64 is unreadable, as in the shell: read as "no edit", the
+            // next rating merge would delete it.
             result.develop = Data(base64Encoded: encoded)
+            if result.develop == nil { result.unreadable = "orion:Develop is not base64" }
         }
         return result
     }
@@ -182,7 +192,8 @@ struct Sidecar: Sendable {
     /// changed: each is set where it already is, removed when Orion has no
     /// value, and otherwise added as an attribute of the first
     /// `rdf:Description`, declaring `xmp`/`orion` there if its namespace is not
-    /// in scope. Nil text, and why, when that cannot be done safely.
+    /// in scope (a numbered prefix if that one is taken). Nil text, and why,
+    /// when the file cannot be parsed or has no place for them.
     func merged(into existing: String) -> (text: String?, why: String) {
         let loaded = Sidecar.load(existing)
         guard let doc = loaded.doc, let descriptions = loaded.descriptions else {
@@ -210,19 +221,24 @@ struct Sidecar: Sendable {
             let first = descriptions[0]
             var prefix = first.resolvePrefix(forNamespaceURI: field.uri) ?? ""
             if prefix.isEmpty {
-                if first.resolveNamespace(forName: "\(field.prefix):x") != nil {
-                    return (nil, "its prefix \(field.prefix) names another namespace")
-                }
-                first.addNamespace(XMLNode.namespace(withName: field.prefix,
-                                                     stringValue: field.uri) as! XMLNode)
+                // Never rebind a prefix the file already uses, here or on an
+                // ancestor (`resolveNamespace` walks them; checked by test):
+                // `orion1`, `orion2`… instead, as the shell does.
                 prefix = field.prefix
+                var n = 1
+                while first.resolveNamespace(forName: "\(prefix):x") != nil {
+                    prefix = "\(field.prefix)\(n)"
+                    n += 1
+                }
+                first.addNamespace(XMLNode.namespace(withName: prefix,
+                                                     stringValue: field.uri) as! XMLNode)
             }
             first.addAttribute(XMLNode.attribute(withName: "\(prefix):\(field.name)",
                                                  uri: field.uri, stringValue: value) as! XMLNode)
         }
         // Top-level nodes one per line; a declaration, if there was one, says
         // UTF-8 because that is what is written. `Sidecar.cs` does the same.
-        let declaration = existing.hasPrefix("<?xml") ? "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" : ""
+        let declaration = existing.hasPrefix("<?xml ") ? "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" : ""
         let nodes = (doc.children ?? []).map {
             $0.xmlString(options: [.nodePreserveWhitespace, .nodePreserveCDATA, .nodePreserveEmptyElements])
         }
@@ -248,8 +264,13 @@ struct Sidecar: Sendable {
         case .unreadable(let why):
             return Sidecar.refuse(photo, "\(why), and is left untouched")
         case .text(let existing):
+            let old = Sidecar.parse(existing)
+            if let why = old.unreadable {
+                return Sidecar.refuse(photo, "it is not XMP Orion can change safely "
+                                           + "(\(why)), and is left untouched")
+            }
             // Orion's own file is exactly the text of what it reads as.
-            if Sidecar.parse(existing).text() != existing {
+            if old.text() != existing {
                 let merged = merged(into: existing)
                 guard let text = merged.text else {
                     return Sidecar.refuse(photo, "it is not XMP Orion can change safely "
