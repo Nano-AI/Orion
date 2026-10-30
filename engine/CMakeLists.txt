@@ -209,6 +209,16 @@ if(ORION_DAWN)
         find_package(Threads REQUIRED GLOBAL)   # DawnTargets names Threads::Threads and finds it not
         find_package(Dawn CONFIG REQUIRED GLOBAL PATHS ${ORION_DAWN_DIR} NO_DEFAULT_PATH)
         target_link_libraries(orion_engine PRIVATE dawn::webgpu_dawn)
+        if(WIN32)
+            # Dawn's D3D12 backend loads the HLSL compiler from beside the module
+            # and will not take System32's (Windows error 87). The Windows SDK's
+            # redistributable copy goes next to every program that links the engine.
+            find_file(ORION_D3DCOMPILER d3dcompiler_47.dll REQUIRED NO_DEFAULT_PATH
+                      PATHS "$ENV{WindowsSdkDir}/Redist/D3D/x64"
+                            "C:/Program Files (x86)/Windows Kits/10/Redist/D3D/x64")
+            file(COPY ${ORION_D3DCOMPILER} DESTINATION ${CMAKE_BINARY_DIR}/apps/tests)
+            file(COPY ${ORION_D3DCOMPILER} DESTINATION ${CMAKE_BINARY_DIR}/shell-native)
+        endif()
     endif()
 endif()
 
