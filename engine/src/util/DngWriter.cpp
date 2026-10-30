@@ -26,6 +26,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <stdexcept>
 #include <vector>
@@ -328,7 +329,11 @@ void writeDngLinear(const std::string& path, const DngLinearImage& image) {
             throw std::runtime_error("DNG write: write failed for " + path);
         }
     }
-    if (std::rename(partial.c_str(), path.c_str()) != 0) {
+    // std::filesystem::rename replaces an existing file on Windows too, where
+    // std::rename refuses one (#376).
+    std::error_code moved;
+    std::filesystem::rename(partial, path, moved);
+    if (moved) {
         std::remove(partial.c_str());
         throw std::runtime_error("DNG write: cannot move into place " + path);
     }

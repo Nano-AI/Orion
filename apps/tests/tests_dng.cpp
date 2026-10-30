@@ -752,8 +752,13 @@ void testFacadeSessionSeams() {
                orion_engine_output_texture(e) == nullptr &&
                orion_engine_preview_texture(e) == nullptr,
            "release drops the output and preview textures");
-    report(histogram() == again && orion_engine_output_texture(e) != nullptr,
-           "the next render brings the same picture back");
+    const auto back = histogram();
+    int moved = 0;
+    for (std::size_t i = 0; i < back.size(); ++i) moved += back[i] != again[i];
+    report(back == again && orion_engine_output_texture(e) != nullptr,
+           "the next render brings the same picture back",
+           std::to_string(moved) + " of " + std::to_string(back.size()) + " histogram bins differ, mean "
+               + std::to_string(mean(again)) + " -> " + std::to_string(mean(back)));
     report(orion_engine_release_render_memory(nullptr) == ORION_ERR_BAD_ARG,
            "release refuses a null engine");
 
