@@ -181,11 +181,12 @@
   // keeps them drifting forever without running away. Positions are in a
   // normalised square (-1..1) stretched to the section, so it scales freely.
   if (!still) document.querySelectorAll('.aurora').forEach(au => {
-    const lights = [...au.children];
+    const lights = [...au.querySelectorAll('span')];
+    const core = au.classList.contains('aurora--core');   // with a sphere, the orbit plane tilts: depth is y, drawn flattened
     if (!lights.length) return;
     au.classList.add('is-sim');
     const host = au.parentElement;
-    const GM = 0.143, SOFT = 0.6, G = 0.006, GSOFT = 0.2, PM = 0.2, PSOFT = 0.3, CRUISE = 0.3, MAXV = 0.9;   // a flat rotation curve: about 0.3 a second at any radius from 0.8 out
+    const TILT = 0.34, GM = 0.143, SOFT = 0.6, G = 0.006, GSOFT = 0.2, PM = 0.2, PSOFT = 0.3, CRUISE = 0.3, MAXV = 0.9;   // a flat rotation curve: about 0.3 a second at any radius from 0.8 out
     const bodies = lights.map((el, i) => {
       const a = (i / lights.length) * Math.PI * 2 + Math.random() * 0.6, r = 0.85 + Math.random() * 0.3;
       const v = Math.sqrt(GM * r * r / Math.pow(r * r + SOFT * SOFT, 1.5)) * (0.9 + Math.random() * 0.2);   // orbital speed, a little off so the orbits are ellipses
@@ -196,7 +197,8 @@
     size(); addEventListener('resize', size);
     host.addEventListener('pointermove', e => {
       const r = au.getBoundingClientRect();
-      pointer = { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: ((e.clientY - r.top) / r.height) * 2 - 1 };
+      const py = ((e.clientY - r.top) / r.height) * 2 - 1;
+      pointer = { x: ((e.clientX - r.left) / r.width) * 2 - 1, y: core ? py / TILT : py };
     });
     host.addEventListener('pointerleave', () => { pointer = null; });
     const pull = (b, x, y, gm, soft) => {   // softened inverse-square, so close passes swing instead of snapping
@@ -218,7 +220,12 @@
         const s = Math.min(k, MAXV / v);
         b.vx *= s; b.vy *= s;
         b.x += b.vx * dt; b.y += b.vy * dt;
-        b.el.style.transform = `translate3d(${(b.x + 1) / 2 * W - b.w / 2}px, ${(b.y + 1) / 2 * H - b.w / 2}px, 0)`;
+        if (core) {   // y is depth: in front of the sphere below the middle, behind it above
+          const d = Math.max(-1, Math.min(1, b.y)), k = 1 + 0.3 * d;
+          b.el.style.transform = `translate3d(${(b.x + 1) / 2 * W - b.w / 2}px, ${H / 2 + b.y * TILT * H / 2 - b.w / 2}px, 0) scale(${k})`;
+          b.el.style.opacity = 0.55 + 0.45 * (d + 1) / 2;
+          b.el.style.zIndex = b.y > 0 ? 2 : 0;
+        } else b.el.style.transform = `translate3d(${(b.x + 1) / 2 * W - b.w / 2}px, ${(b.y + 1) / 2 * H - b.w / 2}px, 0)`;
       }
       raf = requestAnimationFrame(step);
     };
