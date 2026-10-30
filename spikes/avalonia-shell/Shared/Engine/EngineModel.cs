@@ -272,7 +272,7 @@ public sealed class EngineModel : INotifyPropertyChanged {
         // Past fit, only what is on screen, at the screen's resolution, drag or
         // rest (#22); the whole graph when the engine says this edit needs it.
         var view = ZoomedPastFit ? View : null;
-        var graph = view is { } v ? s.RenderRegion(v.Uv, v.Pixels) : Graph.None;
+        var graph = view is { } v ? s.RenderRegion(v.Uv, v.Pixels, Interacting) : Graph.None;
         if (graph == Graph.Region && !Interacting) {
             // The small whole-frame pass: what the histogram reads while the
             // full graph waits, and the picture under a pan until the next region.

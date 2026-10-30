@@ -517,10 +517,14 @@ OrionStatus orion_engine_preview_size(const OrionEngine* engine,
  * Returns ORION_ERR_BAD_ARG when this edit uses something the region graph
  * cannot render exactly (masks, spots, grain, the creative vignette, dehaze,
  * clarity, fusion, highlight recovery, highlights/shadows, the crop tool's
- * canvas) or the photo is not a mosaic: render the whole graph instead. */
+ * canvas) or the photo is not a mosaic: render the whole graph instead.
+ * Nonzero `interacting` (a drag) also refuses a denoised edit zoomed out past
+ * 100%, which renders at step 1 and would cost more than the preview: render
+ * the preview for the drag, and the region again when it ends. */
 OrionStatus orion_engine_render_region(OrionEngine* engine, float x, float y,
                                        float w, float h, unsigned out_w,
-                                       unsigned out_h, double* out_ms);
+                                       unsigned out_h, int interacting,
+                                       double* out_ms);
 
 /* The region graph's output texture (id<MTLTexture>) and the part of it that
  * holds the last region: top-left out_w x out_h, as asked, capped at the

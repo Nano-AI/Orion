@@ -103,7 +103,12 @@ public:
     /// region graph cannot render this edit exactly
     /// (`DevelopPipeline::regionSupports`), the source is not a mosaic, or the
     /// engine is headless: the caller renders the whole graph instead.
-    double renderRegion(const Region& r);
+    ///
+    /// `interacting`: a drag is in progress. An edit that must render at step 1
+    /// (denoise) when the zoom's own step is coarser is then refused too, so
+    /// the drag takes the quarter-scale preview at its old cost and the step-1
+    /// region follows when the hand stops.
+    double renderRegion(const Region& r, bool interacting = false);
 
     /// The region graph, once `renderRegion` has built one.
     [[nodiscard]] bool hasRegion() const noexcept { return region_ != nullptr; }

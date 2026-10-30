@@ -108,6 +108,34 @@ bool roiBench(const std::string& path) {
         pan.push_back(msSince(t));
     }
     row("pan frame at 100% (reload + render)", summarise(pan));
+
+    // What the canvas does per frame, as the shell routes it: at fit the
+    // preview while dragging and the full graph at rest; past fit the region,
+    // except mid-drag on an edit that must render at step 1 when the zoom's
+    // own step is coarser, which takes the preview (fix round 2).
+    std::printf("Canvas per frame, now (median ms; before: drag = preview, settled = full graph)\n");
+    for (bool denoise : {false, true}) {
+        auto b = a;
+        b.denoiseLuma = denoise ? 1.0f : 0.0f;
+        for (double zoom : {0.0, 0.5, 1.0}) {
+            const auto v = view(zoom > 0 ? zoom : 1.0);
+            const auto dragFrame = [&] {
+                if (zoom == 0 || e.renderRegion(v, true) < 0) e.renderPreview();
+            };
+            const auto settled = [&] {
+                if (zoom == 0 || e.renderRegion(v, false) < 0) e.render();
+            };
+            const Stats before = drag(e, b, 20, [&] { e.renderPreview(); });
+            const Stats beforeRest = drag(e, b, 6, [&] { e.render(); });
+            dragFrame();   // warm: build the graph this path uses
+            const Stats now = drag(e, b, 20, dragFrame);
+            settled();
+            const Stats nowRest = drag(e, b, 6, settled);
+            std::printf("  %-4s denoise %-3s  drag %6.2f -> %6.2f   settled %6.2f -> %6.2f\n",
+                        zoom == 0 ? "fit" : zoom == 0.5 ? "50%" : "100%", denoise ? "on" : "off",
+                        before.median, now.median, beforeRest.median, nowRest.median);
+        }
+    }
     return true;
 }
 

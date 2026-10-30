@@ -333,10 +333,11 @@ OrionStatus orion_engine_render_preview(OrionEngine* engine, double* out_ms) {
 
 OrionStatus orion_engine_render_region(OrionEngine* engine, float x, float y,
                                        float w, float h, unsigned out_w,
-                                       unsigned out_h, double* out_ms) {
+                                       unsigned out_h, int interacting,
+                                       double* out_ms) {
     if (engine == nullptr || !engine->impl.hasImage()) return ORION_ERR_BAD_ARG;
     return guard(engine, [&]() -> OrionStatus {
-        const double ms = engine->impl.renderRegion({x, y, w, h, out_w, out_h});
+        const double ms = engine->impl.renderRegion({x, y, w, h, out_w, out_h}, interacting != 0);
         if (ms < 0.0) return ORION_ERR_BAD_ARG;   // not this edit: render the whole graph
         if (out_ms) *out_ms = ms;
         return ORION_OK;

@@ -357,13 +357,13 @@ int shim_render(Shim* s, int preview, double* gpu_ms) {
 // pixels: the canvas's view past fit (#22). 3 on success; 0 when the engine
 // says this edit needs the whole graph, and the caller renders that instead.
 // The overlay is toggled around it as around shim_render.
-int shim_render_region(Shim* s, float x, float y, float w, float h, int out_w, int out_h,
+int shim_render_region(Shim* s, float x, float y, float w, float h, int out_w, int out_h, int interacting,
                        double* gpu_ms) {
     if (out_w <= 0 || out_h <= 0) return 0;
     settle(s);
     const bool overlay = s->overlay && s->adj.mask_count > 0;
     if (overlay) return 0;   // a mask is on: the region graph refuses those anyway
-    return orion_engine_render_region(s->engine, x, y, w, h, unsigned(out_w), unsigned(out_h),
+    return orion_engine_render_region(s->engine, x, y, w, h, unsigned(out_w), unsigned(out_h), interacting,
                                       gpu_ms) == ORION_OK ? 3 : 0;
 }
 

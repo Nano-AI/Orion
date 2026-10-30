@@ -229,7 +229,7 @@ constexpr std::uint32_t kRegionAlign = 16;
 constexpr std::uint32_t kRegionBucket = 256;
 }  // namespace
 
-double Engine::renderRegion(const Region& v) {
+double Engine::renderRegion(const Region& v, bool interacting) {
     if (!develop_ || !mosaic_ || headless_) return -1.0;
     if (!pipe::DevelopPipeline::regionSupports(adj_)) return -1.0;
     if (!(v.w > 0.0f && v.h > 0.0f) || v.outW == 0 || v.outH == 0) return -1.0;
@@ -248,8 +248,13 @@ double Engine::renderRegion(const Region& v) {
     // zoom. Those edits render at step 1: the full render's look, at a cost
     // still bounded by the window — never more than the whole graph.
     if (adj_.denoiseLuma > 0.0f || adj_.denoiseColor > 0.0f || adj_.denoiseNlm > 0.0f ||
-        std::fabs(adj_.texture) > 1e-4f)
+        std::fabs(adj_.texture) > 1e-4f) {
+        // Mid-drag, a step-1 window this far out costs several times the
+        // preview (4.7-6.5 ms a frame at 50% on 24 MP, against 0.8): a latency
+        // regression. The drag takes the preview, as it always did.
+        if (interacting && step > 1) return -1.0;
         step = 1;
+    }
 
     // What the geometry node samples for the region, then what the lens
     // fetches for that: the window must cover both, because the nodes before

@@ -173,6 +173,13 @@ void testRegionMatchesCropGpu() {
         engine.setAdjustments(a);
         engine.renderRegion({float(qx) / pw, float(qy) / ph, float(qw) / pw, float(qh) / ph, qw, qh});
         report(engine.regionStep() == 1, "with denoise on, a quarter view still renders at step 1");
+        // Mid-drag that would cost more than the preview: refused, so the drag
+        // keeps the preview's cost. At 100% the region is no dearer, and stays.
+        report(engine.renderRegion({float(qx) / pw, float(qy) / ph, float(qw) / pw, float(qh) / ph, qw, qh},
+                                   true) < 0.0,
+               "mid-drag, a denoised quarter view is refused: the preview renders the drag");
+        report(engine.renderRegion(view, true) >= 0.0 && engine.regionStep() == 1,
+               "mid-drag at 100%, the denoised region still renders");
         a.denoiseLuma = 0.0f;
 
         // ── What the region graph refuses ───────────────────────────────────

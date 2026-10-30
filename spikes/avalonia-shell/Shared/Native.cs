@@ -39,7 +39,7 @@ public static unsafe partial class Native {
     /// edit needs the whole graph, or failed: render that instead.
     [LibraryImport(Lib)]
     public static partial int shim_render_region(nint shim, float x, float y, float w, float h,
-                                                 int outW, int outH, out double gpuMs);
+                                                 int outW, int outH, int interacting, out double gpuMs);
 
     [LibraryImport(Lib)]
     public static partial int shim_read(nint shim, int which, byte* dst, int capacity, out int w, out int h);
