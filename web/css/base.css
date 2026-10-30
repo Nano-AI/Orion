@@ -6,9 +6,12 @@
  *  values, times. Neutrals stay neutral; a tinted ground reads as a colour
  *  cast next to a photograph.
  *
- *  Teal is the app's accent and keeps the app's one job here: it marks a
- *  value Orion changed or is changing, and focus. It is never a fill and
- *  never decoration. Buttons are off-white.
+ *  The accent is bubblegum pink (decision #381). The app and the mark are
+ *  cyan, so cyan here would be expected; pink sits opposite the greens of
+ *  every photograph on the page and well clear of skin, sky and violet. It
+ *  keeps the app accent's one job: it marks a value Orion changed or is
+ *  changing, and focus. It is never a fill and never decoration. Buttons
+ *  are off-white.
  */
 
 @font-face {
@@ -33,7 +36,8 @@
   --text:    #ececee;
   --dim:     #8d8d93;   /* 5.9:1 on ground: the floor for any readable text */
   --faint:   #55555b;   /* hairline glyphs only, never copy */
-  --accent:  #4db6c4;   /* a value Orion changed, and focus. never a fill */
+  --accent:  #ff6fb0;   /* a value Orion changed, and focus. never a fill. 7.6:1 on ground, 7.2:1 on panel */
+  --accent-ink: #a73e6f;   /* the accent darkened to 4.5:1 on the research pages' paper */
 
   --sans: "Archivo", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   --mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -72,7 +76,7 @@ p, li { text-wrap: pretty; }
 a { color: inherit; }
 a, button, input { touch-action: manipulation; }
 button { font: inherit; color: inherit; }
-::selection { background: rgba(77, 182, 196, 0.35); }
+::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 /* Lenis adds these classes when it runs (vendor CSS, reduced to what applies). */
