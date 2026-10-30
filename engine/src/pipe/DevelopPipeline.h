@@ -255,6 +255,58 @@ public:
     /// previews. See research/film-grain.md and decision #81.
     void setGridStep(float step);
 
+    // ── Region of interest (issue #22, decision #371) ──────────────────────
+    //
+    // A graph built over a *window* of the frame rather than the whole of it:
+    // the canvas's region graph, which renders only what is on screen. The
+    // window is a crop of the mosaic (decimated to the zoom), so every node
+    // runs unchanged on fewer pixels; only the places that know where a pixel
+    // sits in the frame are told the offset — the lens (optical centre), the
+    // perspective (frame shape) and the geometry node (which samples the
+    // window). Anything else that knows its position (masks, spots, grain, the
+    // vignette) or reads the whole frame (dehaze, clarity, fusion, highlight
+    // fill, the guided filter) is not supported here: `regionSupports` says
+    // no, and the engine renders the whole graph instead.
+
+    /// Where this graph's pixels sit in the frame, in this graph's pixels.
+    struct FrameWindow {
+        std::uint32_t x = 0, y = 0;            ///< texel (0, 0) in the frame
+        std::uint32_t frameW = 0, frameH = 0;  ///< the whole frame; 0 is this graph
+    };
+    /// Re-pushes every block at the next `apply`. ⚠ After `reload`, which
+    /// re-measures the noise from the window: set `setNoiseProfile` again.
+    void setFrameWindow(const FrameWindow&);
+
+    /// Which part of the displayed (cropped, turned) picture the geometry node
+    /// writes, normalized, and at what size. `outW == 0` is the whole picture
+    /// at its own size, which is what every graph but the region graph wants.
+    struct OutputRegion {
+        float x = 0.0f, y = 0.0f, w = 1.0f, h = 1.0f;
+        std::uint32_t outW = 0, outH = 0;
+    };
+    void setOutputRegion(const OutputRegion&);
+
+    /// The frame's noise measurement. A window must not measure its own: the
+    /// denoise strength would then depend on what is on screen.
+    [[nodiscard]] const raw::NoiseProfile& noiseProfile() const noexcept { return noise_; }
+    void setNoiseProfile(const raw::NoiseProfile& n) { noise_ = n; primed_ = false; }
+
+    /// The lens block the last `apply` pushed, in whole-frame pixels — what
+    /// the region maps its window back through (`lens::fetchPoint`). Null
+    /// while the lens node is off.
+    [[nodiscard]] const params::Lens* lensParams() const noexcept { return lensOn_ ? &lens_ : nullptr; }
+
+    /// A point on the displayed picture, normalized, to the normalized frame,
+    /// by the geometry node's own map — straightened about the frame centre,
+    /// as `geometry.slang` does. ⚠ Not `displayedToFrame`, which pivots on
+    /// the crop centre (the mask convention); the two differ on a straightened
+    /// off-centre crop, and the region must cover what the kernel samples.
+    [[nodiscard]] std::pair<float, float> sampledFrom(float x, float y) const;
+
+    /// True when these adjustments use only nodes a window renders exactly
+    /// like the same crop of the whole frame. See the note above.
+    [[nodiscard]] static bool regionSupports(const Adjustments&);
+
     /// The multiple of the measured deviation Clarity's noise guard starts at,
     /// `llf::kFloor` unless set. ⚠ A measurement hook, not a control: the
     /// test and the bench set 0 to render the paper's constant guard on the
@@ -718,6 +770,15 @@ private:
     std::string lutTitle_;
     std::uint32_t outW_ = 0, outH_ = 0;
     std::uint32_t frameW_ = 0, frameH_ = 0;
+    FrameWindow   window_{};
+    OutputRegion  region_{};
+    bool          regionMoved_ = false;
+    params::Lens  lens_{};
+    bool          lensOn_ = false;
+    /// The whole frame's size in this graph's pixels: the graph's own size
+    /// unless it renders a window (`setFrameWindow`).
+    [[nodiscard]] std::uint32_t wholeW() const noexcept { return window_.frameW ? window_.frameW : width_; }
+    [[nodiscard]] std::uint32_t wholeH() const noexcept { return window_.frameH ? window_.frameH : height_; }
     int auxCurveLut_ = -1;
     Adjustments  lastAdj_{};
 

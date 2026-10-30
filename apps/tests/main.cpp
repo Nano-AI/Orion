@@ -19,6 +19,7 @@ int main() {
     testBindingCount();
     testDisabledCacheReleaseGpu();
     testReleaseEveryRenderGpu();
+    testDawnParityGpu();
 
     testWhiteBalance();
     testPlanckianLocus();
@@ -54,6 +55,12 @@ int main() {
     testHighlightRecoveryGpu();
     testGradeOffsets();
     testLensGpu();
+    testDngLensOpcodes();
+    testLensInverseMap();
+    testDngLensOpcodesThroughLibRaw();
+    testLensSourceOnRealSony();
+    testRegionMatchesCropGpu();
+    testRegionAtFrameEdgesGpu();
     testLensAutoScale();
     testToneBandsWithoutGuide();
     testHueSatMapGpu();

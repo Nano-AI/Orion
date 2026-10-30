@@ -41,7 +41,7 @@ static partial class SelfTest {
         Dispatcher.UIThread.RunJobs();
         var pick = window.GetVisualDescendants().OfType<StateButton>().FirstOrDefault(b => b.Label?.StartsWith("Sigma 24mm F1.4 DG HSM") == true);
         if (pick != null) Click(window, pick);
-        var (name, _) = DevelopFacade.LensProfile();
+        var (name, _, _) = DevelopFacade.LensProfile();
         Check(pick != null && name.Contains("24mm F1.4 DG HSM") && engine.Get("lens_profile") == 1,
               $"typing in Find a lens… lists the Sigma, and a click applies its profile ({DevelopFacade.LensCatalogue.Value.Length} lenses, " +
               $"chose {pick?.Label ?? "nothing"}, profile \"{name}\")");

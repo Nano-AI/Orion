@@ -1,46 +1,59 @@
 #import <Metal/Metal.h>
 
-#include "gpu/MetalDevice.h"
+#include "gpu/Backend.h"
 
 #include <stdexcept>
 
 namespace orion::gpu {
+namespace {
 
-struct Device::Impl {
+struct MetalDevice final : Device::Impl {
     id<MTLDevice>       device = nil;
     id<MTLCommandQueue> queue  = nil;
+
+    Backend backend() const noexcept override { return Backend::Metal; }
+    void* metalDevice() const noexcept override { return (__bridge void*)device; }
+
+    DeviceInfo info() const override {
+        return DeviceInfo{
+            .name                  = device.name.UTF8String ? device.name.UTF8String : "unknown",
+            .recommendedWorkingSet = device.recommendedMaxWorkingSetSize,
+            .maxBufferLength       = device.maxBufferLength,
+            .unifiedMemory         = static_cast<bool>(device.hasUnifiedMemory),
+            .supportsApple7        = static_cast<bool>([device supportsFamily:MTLGPUFamilyApple7]),
+        };
+    }
+
+    std::unique_ptr<Texture::Impl> texture(std::uint32_t w, std::uint32_t h,
+                                           PixelFormat f, bool linear) override {
+        return makeMetalTexture(metalDevice(), w, h, f, linear);
+    }
+    std::unique_ptr<Library::Impl> library(const std::string& path) override {
+        return makeMetalLibrary(metalDevice(), path);
+    }
+    std::unique_ptr<Kernel::Impl> kernel(Library& lib, const std::string& entry) override {
+        return makeMetalKernel(metalDevice(), lib, entry);
+    }
+    std::unique_ptr<CommandBuffer::Impl> commandBuffer() override {
+        return makeMetalCommandBuffer((__bridge void*)queue);
+    }
 };
 
-Device::Device() : impl_(std::make_unique<Impl>()) {}
+}  // namespace
 
-Device::~Device() = default;
+std::unique_ptr<Device::Impl> makeMetalDevice() {
+    auto dev = std::make_unique<MetalDevice>();
 
-std::unique_ptr<Device> Device::create() {
-    auto dev = std::unique_ptr<Device>(new Device());
-
-    dev->impl_->device = MTLCreateSystemDefaultDevice();
-    if (dev->impl_->device == nil) {
+    dev->device = MTLCreateSystemDefaultDevice();
+    if (dev->device == nil) {
         throw std::runtime_error("no Metal device available");
     }
 
-    dev->impl_->queue = [dev->impl_->device newCommandQueue];
-    if (dev->impl_->queue == nil) {
+    dev->queue = [dev->device newCommandQueue];
+    if (dev->queue == nil) {
         throw std::runtime_error("could not create Metal command queue");
     }
-
-    id<MTLDevice> d = dev->impl_->device;
-    dev->info_ = DeviceInfo{
-        .name                 = d.name.UTF8String ? d.name.UTF8String : "unknown",
-        .recommendedWorkingSet = d.recommendedMaxWorkingSetSize,
-        .maxBufferLength       = d.maxBufferLength,
-        .unifiedMemory         = static_cast<bool>(d.hasUnifiedMemory),
-        .supportsApple7        = static_cast<bool>([d supportsFamily:MTLGPUFamilyApple7]),
-    };
-
     return dev;
 }
-
-void* Device::rawDevice() const noexcept { return (__bridge void*)impl_->device; }
-void* Device::rawQueue()  const noexcept { return (__bridge void*)impl_->queue; }
 
 }  // namespace orion::gpu

@@ -188,6 +188,14 @@ projects' `LICENSE` files, following each copyright notice above:
     OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+## Lens corrections from DNG opcodes
+
+Orion reads the lens correction a DNG file carries in its own opcode lists —
+`WarpRectilinear` (opcode 1) and `FixVignetteRadial` (opcode 3), implemented
+from Adobe's *Digital Negative (DNG) Specification* 1.6.0.0, chapter 7, under
+the DNG notice above. See `research/lens-corrections.md` and
+`planning/DECISIONS.md` #372.
+
 ## JPEG XL
 
 JPEG XL export uses libjxl (0.12), licensed under the **BSD 3-Clause License**,

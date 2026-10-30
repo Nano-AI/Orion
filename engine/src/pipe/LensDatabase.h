@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "pipe/LensGeometry.h"
+
 #include <string>
 #include <vector>
 
@@ -40,7 +42,24 @@ struct LensProfile {
     /// the interface says so rather than implying a measurement of this exact
     /// lens.
     bool approximate = false;
+
+    /// Where it came from, and the correction itself in the form the shader
+    /// takes. `poly` and `vignette` above are lensfun's own numbers and stay
+    /// zero for the other two sources.
+    LensSource source = LensSource::None;
+    LensModel  model{};
+
+    /// lensfun's `poly` and `vignette` as a model, once they are filled in.
+    void fillModel() {
+        source = LensSource::Lensfun;
+        model = lens::ptlens(poly[0], poly[1], poly[2],
+                             vignette[0], vignette[1], vignette[2]);
+    }
 };
+
+/// A lens or camera name lowercased with everything but letters and digits
+/// dropped — the spelling-insensitive key every lens lookup compares.
+[[nodiscard]] std::string normalizeLensName(const std::string& s);
 
 class LensDatabase {
 public:

@@ -21,6 +21,7 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace orion::util {
 
@@ -70,6 +71,11 @@ struct DngLinearImage {
     std::size_t  previewJpegBytes = 0;
     std::uint32_t previewWidth  = 0;
     std::uint32_t previewHeight = 0;
+
+    /// An OpcodeList3 (DNG 1.6 ch. 7), already big-endian, written verbatim on
+    /// the raw image. Empty writes none. Only the lens-opcode tests set it, to
+    /// put a known correction in a real file LibRaw then reads back.
+    std::vector<std::uint8_t> opcodeList3;
 };
 
 /// Writes the DNG. Throws std::runtime_error on failure; on any throw the

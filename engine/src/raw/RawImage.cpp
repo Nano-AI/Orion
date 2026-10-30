@@ -58,12 +58,22 @@ RawInfo readInfo(const std::string& path) {
     info.width       = swaps ? sizes.height : sizes.width;
     info.height      = swaps ? sizes.width  : sizes.height;
     info.camera      = std::string(idata.make) + " " + idata.model;
+    info.make        = idata.make;
+    info.model       = idata.model;
     info.lens        = proc.imgdata.lens.Lens;
     info.isoSpeed    = other.iso_speed;
     info.shutter     = other.shutter;
     info.aperture    = other.aperture;
     info.focalLength = other.focal_len;
     info.timestamp   = static_cast<std::int64_t>(other.timestamp);
+    // LibRaw reads OpcodeList1/2/3 as-is into rawopcodes[0..2] (0.22).
+    for (int i = 0; i < 3; ++i) {
+        const auto& op = proc.imgdata.color.dng_levels.rawopcodes[i];
+        if (op.data != nullptr && op.len > 0) {
+            const auto* bytes = static_cast<const std::uint8_t*>(op.data);
+            info.dngOpcodes[i].assign(bytes, bytes + op.len);
+        }
+    }
 
     proc.recycle();
     return info;
@@ -378,6 +388,35 @@ BayerImage decimate(const BayerImage& image, int scale) {
     // on the same cell boundary as the input and every sample keeps its phase,
     // so the pattern is the same pattern — recomputing it would be inventing a
     // second source of truth for something that did not change.
+    return out;
+}
+
+BayerImage window(const BayerImage& image, std::uint32_t x, std::uint32_t y,
+                  std::uint32_t w, std::uint32_t h) {
+    x = std::min(x & ~1u, image.width & ~1u);
+    y = std::min(y & ~1u, image.height & ~1u);
+    w = std::min(w, image.width - x);
+    h = std::min(h, image.height - y);
+
+    // Everything but the samples, which are the one field worth not copying.
+    // ⚠ Field by field: a field added to BayerImage must be added here, and
+    // the size check is what says so.
+    static_assert(sizeof(BayerImage) == 128, "BayerImage changed: copy the new field in window()");
+    BayerImage out;
+    out.width = w;
+    out.height = h;
+    out.filters = image.filters;
+    out.black = image.black;
+    out.white = image.white;
+    out.camMul = image.camMul;
+    out.camToXyz = image.camToXyz;
+    out.flip = image.flip;
+    out.camera = image.camera;
+    out.samples.resize(std::size_t(w) * h);
+    for (std::uint32_t row = 0; row < h; ++row) {
+        const auto* src = image.samples.data() + std::size_t(y + row) * image.width + x;
+        std::copy(src, src + w, out.samples.data() + std::size_t(row) * w);
+    }
     return out;
 }
 

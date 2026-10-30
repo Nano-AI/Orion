@@ -161,13 +161,7 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
     a.lensDistortion = adj->lens_distortion;
     a.lensVignette   = adj->lens_vignette;
     a.lensProfile    = adj->lens_profile != 0;
-    if (a.lensProfile) {
-        const auto& p = engine->impl.lensProfile();
-        for (int i = 0; i < 3; ++i) {
-            a.lensPoly[i]       = p.poly[i];
-            a.lensVignettePa[i] = p.vignette[i];
-        }
-    }
+    if (a.lensProfile) a.lensModel = engine->impl.lensProfile().model;
     a.lensCaRed      = adj->lens_ca_red;
     a.lensCaBlue     = adj->lens_ca_blue;
     a.highlightRecovery = adj->highlight_recovery;
@@ -333,6 +327,40 @@ OrionStatus orion_engine_render_preview(OrionEngine* engine, double* out_ms) {
     return guard(engine, [&]() -> OrionStatus {
         const double ms = engine->impl.renderPreview();
         if (out_ms) *out_ms = ms;
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_engine_render_region(OrionEngine* engine, float x, float y,
+                                       float w, float h, unsigned out_w,
+                                       unsigned out_h, int interacting,
+                                       double* out_ms) {
+    if (engine == nullptr || !engine->impl.hasImage()) return ORION_ERR_BAD_ARG;
+    return guard(engine, [&]() -> OrionStatus {
+        const double ms = engine->impl.renderRegion({x, y, w, h, out_w, out_h}, interacting != 0);
+        if (ms < 0.0) return ORION_ERR_BAD_ARG;   // not this edit: render the whole graph
+        if (out_ms) *out_ms = ms;
+        return ORION_OK;
+    });
+}
+
+void* orion_engine_region_texture(const OrionEngine* engine) {
+    if (engine == nullptr || !engine->impl.hasRegion()) return nullptr;
+    try {
+        return engine->impl.regionDevelop().output().displayHandle();
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+OrionStatus orion_engine_region_size(const OrionEngine* engine,
+                                     unsigned* out_w, unsigned* out_h) {
+    if (engine == nullptr || out_w == nullptr || out_h == nullptr ||
+        !engine->impl.hasRegion())
+        return ORION_ERR_BAD_ARG;
+    return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
+        *out_w = engine->impl.regionDevelop().outputWidth();
+        *out_h = engine->impl.regionDevelop().outputHeight();
         return ORION_OK;
     });
 }
@@ -568,7 +596,7 @@ OrionStatus orion_engine_frame_size(const OrionEngine* engine,
 void* orion_engine_output_texture(const OrionEngine* engine) {
     if (engine == nullptr || !engine->impl.hasImage()) return nullptr;
     try {
-        return engine->impl.develop().output().raw();
+        return engine->impl.develop().output().displayHandle();
     } catch (...) {
         return nullptr;
     }
@@ -580,7 +608,7 @@ void* orion_engine_preview_texture(const OrionEngine* engine) {
     // pipeline that never compiled, and a throw crossing this file terminates
     // the process — the one thing this file exists to stop.
     try {
-        return engine->impl.previewDevelop().output().raw();
+        return engine->impl.previewDevelop().output().displayHandle();
     } catch (...) {
         return nullptr;
     }
@@ -599,7 +627,7 @@ OrionStatus orion_engine_sample(const OrionEngine* engine, float u, float v,
                                 float* out_display, float* out_scene) {
     if (engine == nullptr) return ORION_ERR_BAD_ARG;
     return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
-        engine->impl.sampleAt(u, v, out_display, out_scene);
+        const_cast<OrionEngine*>(engine)->impl.sampleAt(u, v, out_display, out_scene);
         return ORION_OK;
     });
 }
@@ -608,7 +636,7 @@ OrionStatus orion_engine_histogram(const OrionEngine* engine,
                                    uint32_t* out_bins, uint32_t bins) {
     if (engine == nullptr || out_bins == nullptr || bins == 0) return ORION_ERR_BAD_ARG;
     return guard(const_cast<OrionEngine*>(engine), [&]() -> OrionStatus {
-        engine->impl.histogram(out_bins, bins);
+        const_cast<OrionEngine*>(engine)->impl.histogram(out_bins, bins);
         return ORION_OK;
     });
 }
@@ -841,6 +869,7 @@ OrionStatus orion_engine_lens_profile(const OrionEngine* engine,
     const auto& p = engine->impl.lensProfile();
     out->found = p.found ? 1 : 0;
     out->approximate = p.approximate ? 1 : 0;
+    out->source = p.found ? static_cast<int32_t>(p.source) : 0;
     std::strncpy(out->lens, p.lens.c_str(), sizeof out->lens - 1);
     std::strncpy(out->maker, p.maker.c_str(), sizeof out->maker - 1);
     return ORION_OK;

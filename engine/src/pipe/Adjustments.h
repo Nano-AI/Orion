@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "pipe/LensGeometry.h"
 #include "pipe/ToneCurve.h"
 #include "pipe/WhiteBalance.h"
 
@@ -199,13 +200,11 @@ struct Adjustments {
     float lensCaRed      = 0.0f;   // -1..1
     float lensCaBlue     = 0.0f;   // -1..1
 
-    /// A measured profile from the lens database, in place of the sliders.
-    /// `lensPoly` is ptlens a, b, c; `lensVignettePa` is p_a, p_b, p_c. Both
-    /// are physical coefficients at this frame's focal length and aperture,
-    /// not normalized control positions. See pipe/LensDatabase.h.
-    bool  lensProfile = false;
-    float lensPoly[3]{};
-    float lensVignettePa[3]{};
+    /// A measured profile, in place of the distortion and vignetting sliders:
+    /// from the file's own DNG opcodes or the lensfun database, at this frame's focal length and aperture.
+    /// Resolution-independent — see pipe/LensGeometry.h.
+    bool      lensProfile = false;
+    LensModel lensModel{};
 
     /// Highlight reconstruction, 0..1. Off by default — see the note on
     /// Engine.highlightRecovery in the app.

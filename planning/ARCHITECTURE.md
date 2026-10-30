@@ -14,6 +14,21 @@ Metal wins on macOS: native f16, best-in-class tooling (Xcode GPU capture, Instr
 
 The lock-in objection is solved by **[Slang](https://github.com/shader-slang/slang)** (Khronos-hosted, Apache-2.0): author each kernel once, compile to MSL today and SPIR-V/HLSL when Windows/Linux land. Pair it with a thin C++ GPU abstraction (`Device` / `Texture` / `Kernel` / `CommandQueue`) so a Vulkan backend slots in behind the same interface.
 
+### Two backends during the port to Dawn (issue #24, decisions #317, #375)
+
+Windows and Linux run the engine on **Dawn** (WebGPU in C++, #317, built from source by `tools/build-dawn.sh`, #361). On macOS Dawn runs on Metal, so the port happens on this machine with Metal as the reference.
+
+| Piece | How |
+|---|---|
+| Seam | The existing `gpu::Device / Texture / Library / Kernel / CommandBuffer` *are* the interface; each owns an abstract `Impl` (`gpu/Backend.h`) with a Metal subclass (`Metal*.mm`) and a Dawn subclass (`Dawn*.mm`). No node, graph or call site changes. `Gpu.cpp` holds the neutral half (formats, sizes, forwarding). |
+| Choosing | `Device::create()` reads `ORION_GPU` (`metal` default, `dawn`); `Device::create(Backend)` for a test that wants both. So the whole suite, the bench and the app run on Dawn with no rebuild. Built without `third_party/dawn-build`, Dawn throws and Metal is unaffected. |
+| Shaders | The same Slang source compiles twice: `.metallib` as before, and `.wgsl` (slangc → `wgsl_prep.py` → `build/shaders/<entry>.wgsl`). The prep script reads both targets' reflection and writes a header the backend reads: each texture's Metal slot → WGSL binding; the parameter block's copies from Metal's packed layout to WGSL's uniform layout (arrays of scalars get a 16-byte stride there); storage textures with a format token and `write` access unless read back. The host keeps writing Metal-layout structs. |
+| Formats | WGSL fixes a storage texture's format in the shader, Metal does not. The Dawn kernel keeps one pipeline per combination of bound storage formats, made on first use, so a node that changes format (`setNodeFormat`) just gets a second pipeline. |
+| Display | `Texture::displayHandle()` is what a shell draws: on Metal the texture; on Dawn an RGBA8 texture lives in an IOSurface (`SharedTextureMemory`, as in `spikes/dawn-avalonia/`) and the handle is an `id<MTLTexture>` over the same memory. The facade's texture getters return it, so `present.mm` and the Swift canvas take it unchanged. |
+| Parity | `tests_dawn_parity.cpp` renders the develop graph on both backends with every node pinned and replays every node's kernel alone on Dawn on Metal's inputs (54 of 56 bit-identical, 2 within one fp16 step), then the whole graph on each (bit-identical output); the whole suite also runs with `ORION_GPU=dawn`. |
+| Dawn settings | One device per process (Metal's system default is one). `disable_robustness` (Metal never bounds-checked these shaders; on, it doubled GPU time). `RenderAttachment` on every texture so Dawn's zero-fill is a cheap clear. Prepared shaders and their pipelines cached per device. |
+| Default | **Metal** until Dawn's first render after an open stops costing more (49 ms against 96-507 ms: WebGPU's zero-fill of new textures). Steady state matches: fit drag, fit settled, 100%, pan all within noise. |
+
 ## Engine: compute DAG, vkdt-shaped
 
 The single most important structural decision, taken straight from the research:
@@ -34,6 +49,7 @@ decode → white balance → demosaic → camera matrix → linear working space
 
 ### Hitting <16 ms
 1. **Preview pipe** runs at screen resolution over the visible ROI only. Full-res tiled pipe reserved for export and 100% zoom.
+   - **Built, partly (issue #22, decision #371).** A third graph, the *region graph*, is the unchanged develop graph built over a **window of the mosaic**: the bounding box of the visible rectangle mapped back through crop, straighten, perspective (the geometry node's own map) and then the lens (`lens::fetchPoint`), plus a 192-pixel halo, origin on a 16-pixel grid, size bucketed to 256 so a pan reloads rather than rebuilds. The window is decimated by a power of two `step` (1–8) chosen so one region pixel ≤ one screen pixel: never softer than the screen, and the cost is the screen's, not the sensor's. Region pixel *i* is exactly pixel *i* + origin of the whole frame decimated by `step` (the preview graph at step 4), so only three places learn the offset: the lens shifts its two centres, the perspective and the geometry node use the whole frame's size, and the geometry node subtracts the origin at its one fetch. Radii in frame pixels (sharpening; grain already) divide by `step`. The noise measurement is the frame's, not the window's. Whatever knows where it is (masks, spots, grain, the creative vignette) or reads more than a halo (dehaze's airlight, the clarity and fusion pyramids, the highlight fill, the guided filter) is **refused** by `DevelopPipeline::regionSupports` and the caller renders the whole graph — each is a follow-up. The preview graph is the small whole-frame pass: the histogram and the eyedropper read it while the full graph is older than the edit.
 2. **Per-node output caching** — moving a slider recomputes only its downstream subgraph.
 3. **Degrade-then-refine** during drags: skip expensive nodes mid-gesture, refine on idle.
 4. Async thumbnail workers + LRU cache at app level.

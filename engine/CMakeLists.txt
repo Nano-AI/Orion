@@ -1,3 +1,14 @@
+# Dawn (#317, #375): the second GPU backend, on whenever tools/build-dawn.sh's
+# output is present. Metal stays the default at runtime (ORION_GPU=dawn picks
+# Dawn), and an engine built without it is the Metal engine exactly.
+set(ORION_DAWN_DIR ${CMAKE_SOURCE_DIR}/third_party/dawn-build)
+if(EXISTS ${ORION_DAWN_DIR}/lib/libwebgpu_dawn.a)
+    option(ORION_DAWN "Build the Dawn GPU backend" ON)
+else()
+    option(ORION_DAWN "Build the Dawn GPU backend" OFF)
+endif()
+message(STATUS "Dawn backend: ${ORION_DAWN}")
+
 add_subdirectory(shaders)
 set(ORION_SHADER_DIR ${ORION_SHADER_DIR} PARENT_SCOPE)
 
@@ -5,10 +16,11 @@ add_library(orion_engine STATIC
     src/CApi.cpp
     src/Engine.cpp
     src/ResourcePaths.cpp
+    src/gpu/Gpu.cpp
     src/gpu/MetalDevice.mm
     src/raw/RawImage.cpp
     src/raw/NoiseProfile.cpp
-    src/gpu/Resources.mm
+    src/gpu/MetalResources.mm
     src/gpu/TexturePool.cpp
     src/pipe/Pipeline.cpp
     src/pipe/DevelopPipeline.cpp
@@ -19,6 +31,7 @@ add_library(orion_engine STATIC
     src/pipe/DevelopOutput.cpp
     src/pipe/CubeLut.cpp
     src/pipe/LensDatabase.cpp
+    src/pipe/LensOpcodes.cpp
     src/pipe/ToneCurve.cpp
     src/pipe/WhiteBalance.cpp
     src/util/ImageWriter.mm
@@ -54,7 +67,7 @@ add_dependencies(orion_engine orion_shaders)
 # ARC for the Objective-C++ translation units. The C++ ones never see ObjC.
 set_source_files_properties(
     src/gpu/MetalDevice.mm
-    src/gpu/Resources.mm
+    src/gpu/MetalResources.mm
     src/gpu/TexturePool.cpp
     src/util/ImageWriter.mm
     src/util/JxlMetadata.mm
@@ -110,6 +123,7 @@ set(OPENCV_LIBRARIES ${OPENCV_LIBRARIES} PARENT_SCOPE)
 set_source_files_properties(src/merge/Align.cpp
     PROPERTIES INCLUDE_DIRECTORIES ${OPENCV_INCLUDE_DIR})
 
+
 # libjxl — JPEG XL export ONLY (src/util/JxlWriter.cpp, the one file that
 # includes it). BSD-3-Clause, dynamically linked; listed in NOTICE. ImageIO
 # reads JPEG XL but cannot write it. DECISIONS #363.
@@ -132,6 +146,25 @@ set(JXL_INCLUDE_DIR ${JXL_INCLUDE_DIR} PARENT_SCOPE)
 set(JXL_LIBRARIES ${JXL_LIBRARIES} PARENT_SCOPE)
 set_source_files_properties(src/util/JxlWriter.cpp
     PROPERTIES INCLUDE_DIRECTORIES ${JXL_INCLUDE_DIR})
+
+if(ORION_DAWN)
+    target_sources(orion_engine PRIVATE
+        src/gpu/DawnDevice.mm
+        src/gpu/DawnTexture.mm
+        src/gpu/DawnKernel.cpp
+        src/gpu/DawnCommands.cpp
+    )
+    set_source_files_properties(src/gpu/DawnDevice.mm src/gpu/DawnTexture.mm
+        PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+    target_include_directories(orion_engine PRIVATE ${ORION_DAWN_DIR}/include)
+    target_compile_definitions(orion_engine PRIVATE ORION_HAS_DAWN=1)
+    find_library(IOSURFACE_FRAMEWORK  IOSurface  REQUIRED)
+    find_library(QUARTZCORE_FRAMEWORK QuartzCore REQUIRED)
+    find_library(IOKIT_FRAMEWORK      IOKit      REQUIRED)
+    find_library(COCOA_FRAMEWORK      Cocoa      REQUIRED)
+    target_link_libraries(orion_engine PRIVATE ${ORION_DAWN_DIR}/lib/libwebgpu_dawn.a
+        ${IOSURFACE_FRAMEWORK} ${QUARTZCORE_FRAMEWORK} ${IOKIT_FRAMEWORK} ${COCOA_FRAMEWORK})
+endif()
 
 target_link_libraries(orion_engine
     PRIVATE ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK}

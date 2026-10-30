@@ -230,6 +230,16 @@ copy_license "node-MIT-and-bundled.txt" "$NODE_CACHE/node-$NODE_VERSION-darwin-a
 "$ROOT/tools/mcp-licenses.py" "$SEA/meta.json" "$ROOT/mcp" "$RES/licenses/orion-mcp-npm-packages.txt"
 cp "$ROOT/NOTICE" "$RES/licenses/NOTICE.txt"
 cp "$ROOT/licenses/Apache-2.0.txt" "$RES/licenses/Apache-2.0.txt"   # NOTICE refers to it (Abseil, OpenCV)
+# Dawn (#375) is linked statically into the shim when the engine archive has
+# it (native/build.sh decides the same way), so no file in Frameworks names it
+# and the per-file check below cannot see it: its notices are NOTICE's Dawn
+# section, required here, and Dawn's own LICENSE when the source tree is kept.
+if ar t "$BUILD/engine/liborion_engine.a" | grep -q '^DawnDevice\.mm\.o$'; then
+    grep -q '^## Dawn (WebGPU)$' "$ROOT/NOTICE" || { echo "error: the shim links Dawn and NOTICE has no Dawn section" >&2; exit 1; }
+    DAWN_LICENSE="$ROOT/third_party/dawn-src/LICENSE"
+    [[ -f "$DAWN_LICENSE" ]] && copy_license "dawn-BSD-3-Clause.txt" "$DAWN_LICENSE"
+    echo "  dawn      linked into the shim; notices from NOTICE"
+fi
 echo "  licenses  $(ls "$RES/licenses" | wc -l | tr -d ' ') files"
 
 # ── Dylibs ──────────────────────────────────────────────────────────────────

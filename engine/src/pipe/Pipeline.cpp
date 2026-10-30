@@ -350,17 +350,7 @@ void Pipeline::computeOne(int id, gpu::CommandBuffer* batch) {
     ownedOutputs_[idx] = pool_.acquire(w, h, node.format);
     outputs_[idx] = ownedOutputs_[idx].get();
 
-    std::vector<const gpu::Texture*> textures;
-    textures.reserve(node.inputs.size() + node.aux.size() + 1);
-    for (int in : node.inputs) {
-        const int src = (in == kSource) ? kSource : resolve(in);
-        textures.push_back(src == kSource ? source_.get()
-                                          : outputs_[static_cast<std::size_t>(src)]);
-    }
-    for (int a : node.aux) {
-        textures.push_back(aux_[static_cast<std::size_t>(a)].get());
-    }
-    textures.push_back(outputs_[idx]);
+    const std::vector<const gpu::Texture*> textures = bindings(id);
 
     lastRun_[idx].executed = true;
 
@@ -380,6 +370,22 @@ void Pipeline::computeOne(int id, gpu::CommandBuffer* batch) {
     }
 
     releaseIfDone(id);
+}
+
+std::vector<const gpu::Texture*> Pipeline::bindings(int nodeId) const {
+    const Node& node = nodes_.at(static_cast<std::size_t>(nodeId));
+    std::vector<const gpu::Texture*> textures;
+    textures.reserve(node.inputs.size() + node.aux.size() + 1);
+    for (int in : node.inputs) {
+        const int src = (in == kSource) ? kSource : resolve(in);
+        textures.push_back(src == kSource ? source_.get()
+                                          : outputs_[static_cast<std::size_t>(src)]);
+    }
+    for (int a : node.aux) {
+        textures.push_back(aux_[static_cast<std::size_t>(a)].get());
+    }
+    textures.push_back(outputs_[static_cast<std::size_t>(nodeId)]);
+    return textures;
 }
 
 void Pipeline::releaseIfDone(int reader) {

@@ -114,12 +114,17 @@ struct LinearImage {
 struct RawInfo {
     std::uint32_t width = 0, height = 0;
     std::string   camera;
+    std::string   make, model;   // `camera` is "make model"; these are its halves
     std::string   lens;
     float         isoSpeed = 0;
     float         shutter = 0;
     float         aperture = 0;
     float         focalLength = 0;
     std::int64_t  timestamp = 0;
+    /// A DNG's OpcodeList1, 2 and 3, byte for byte (big-endian, as stored) —
+    /// where a DJI drone or a phone writes its own lens correction. Empty for
+    /// every other format. Parsed by pipe/LensOpcodes.h.
+    std::vector<std::uint8_t> dngOpcodes[3];
 };
 
 /// Metadata only. Orders of magnitude cheaper than decodeBayer — this is what a
@@ -201,5 +206,11 @@ using DecodedImage = std::variant<BayerImage, LinearImage>;
 /// phase to preserve, so this is a plain per-channel box average over
 /// scale x scale blocks. Same contract on `scale` as the mosaic overload.
 [[nodiscard]] LinearImage decimate(const LinearImage& image, int scale);
+
+/// A rectangle of the mosaic, `w` x `h` from (`x`, `y`), clamped to the image.
+/// The region graph's input (#22). ⚠ `x` and `y` are rounded down to even so
+/// the CFA phase, and with it `filters`, is unchanged.
+[[nodiscard]] BayerImage window(const BayerImage& image, std::uint32_t x, std::uint32_t y,
+                                std::uint32_t w, std::uint32_t h);
 
 }  // namespace orion::raw

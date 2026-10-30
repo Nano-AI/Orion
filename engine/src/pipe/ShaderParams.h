@@ -330,19 +330,30 @@ struct alignas(16) HueSat {
 static_assert(sizeof(HueSat) == 112);
 
 /// Lens corrections. Mirrors LensParams in lens.slang.
+///
+/// ⚠ Never filled by hand outside a test: `lens::resolve` (LensGeometry.h)
+/// turns a resolution-independent `LensModel` into this for one frame size,
+/// and `lens::fetchPoint` is the host copy of what the shader does with it.
+/// A zeroed block is *not* an identity — its radial terms are all zero.
 struct Lens {
     std::uint32_t size[2];
-    float centerX, centerY;
-    /// ptlens a, b, c. A manual distortion slider sets b alone, which is poly3.
-    float distA, distB, distC;
-    float caRed, caBlue;
-    float vignetteA, vignetteB, vignetteC;
+    float center[2];          // optical center, pixels (pixel i spans [i, i+1))
+    float norm[2];            // pixels per unit of normalized radius, x and y
+    float caRed, caBlue;      // manual TCA, a fractional radial scale at rDiag
+    /// Per channel R, G, B: f(r) = k0 + k1·r + k2·r² + k3·r³ + k4·r⁴ + k6·r⁶.
+    float radialLo[3][4];     // k0, k1, k2, k3
+    float radialHi[3][4];     // k4, k6, tangential t0, t1 (DNG kt0, kt1)
+    float vig[4];             // vignette polynomial in r²: r², r⁴, r⁶, r⁸ terms
+    float vig10;              // the r¹⁰ term (DNG FixVignetteRadial has five)
+    std::uint32_t vigFlags;   // bit 0: multiply (a gain), else divide. bit 1: at the output position
+    float vigCenter[2];
+    float vigNorm[2];
     /// Autoscale — the zoom that keeps every fetch inside the frame.
     /// Computed in LensGeometry.h; 0 is read by the shader as 1.
     float scale;
-    float _pad[3];
+    float rDiag;              // half the diagonal, the radius the manual TCA is measured in
 };
-static_assert(sizeof(Lens) == 64);
+static_assert(sizeof(Lens) == 176);
 
 // The local operators' blocks (clarity, dehaze, fusion) live in
 // ShaderParamsLocal.h, included at the foot of this file.
@@ -844,8 +855,15 @@ struct Geometry {
     /// resamples a plausible wrong picture. `.w` is unused and is zero.
     /// The matrix begins at offset 64, which is where the alignment wants it.
     float         perspective[3][4];
+
+    /// The texture actually bound, as a window of the frame `inSize` names:
+    /// where its texel (0, 0) sits and how big it is. Zero and `inSize` for
+    /// every graph but the region graph (#22), which keeps the arithmetic
+    /// above in whole-frame pixels and subtracts once at the fetch.
+    float         srcOrigin[2];
+    std::uint32_t srcSize[2];
 };
-static_assert(sizeof(Geometry) == 112);
+static_assert(sizeof(Geometry) == 128);
 static_assert(offsetof(Geometry, perspective) == 64,
               "the homography must start on a sixteen-byte boundary; "
               "geometry.slang's mirror assumes it");

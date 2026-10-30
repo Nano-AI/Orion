@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "gpu/MetalDevice.h"
+#include "gpu/Device.h"
 #include "merge/HdrMerge.h"
 #include "pipe/DevelopPipeline.h"
 #include "pipe/LensDatabase.h"
@@ -14,6 +14,7 @@
 #include <string>
 
 namespace orion {
+
 
 /// The engine proper. C++ with exceptions, RAII, the lot — all of which stops
 /// at the C facade in CApi.cpp.
@@ -59,6 +60,9 @@ public:
     [[nodiscard]] bool headless() const noexcept { return headless_; }
 
     void openRaw(const std::string& path);
+    /// The graphs half of `openRaw`, for an image already in memory: the tests'
+    /// synthetic mosaics. No file, so no metadata and no lens profile.
+    void openDecoded(raw::DecodedImage image);
     void setAdjustments(const pipe::Adjustments&);
     double render();
 
@@ -82,6 +86,34 @@ public:
 
     /// Renders the preview graph. Returns GPU milliseconds.
     double renderPreview();
+
+    // ── Region of interest (issue #22, decision #371) ─────────────────────
+    //
+    // A third graph, over the part of the mosaic the screen shows, decimated
+    // to the zoom: a drag frame and a settled render at 100% cost what the
+    // screen holds, not what the sensor holds, and are never softer than the
+    // screen. Like the preview it is for the canvas only.
+
+    /// Part of the displayed picture, normalized (0..1 of the cropped, turned
+    /// picture), and the screen pixels it will cover.
+    struct Region { float x = 0, y = 0, w = 1, h = 1; std::uint32_t outW = 0, outH = 0; };
+
+    /// Renders `r`. Returns GPU milliseconds, or a negative number when the
+    /// region graph cannot render this edit exactly
+    /// (`DevelopPipeline::regionSupports`), the source is not a mosaic, or the
+    /// engine is headless: the caller renders the whole graph instead.
+    ///
+    /// `interacting`: a drag is in progress. An edit that must render at step 1
+    /// (denoise) when the zoom's own step is coarser is then refused too, so
+    /// the drag takes the quarter-scale preview at its old cost and the step-1
+    /// region follows when the hand stops.
+    double renderRegion(const Region& r, bool interacting = false);
+
+    /// The region graph, once `renderRegion` has built one.
+    [[nodiscard]] bool hasRegion() const noexcept { return region_ != nullptr; }
+    [[nodiscard]] const pipe::DevelopPipeline& regionDevelop() const;
+    /// Frame pixels per region pixel, per axis, that the last region chose.
+    [[nodiscard]] int regionStep() const noexcept { return regionStep_; }
 
     /// Both graphs give their render textures back to Metal and keep the
     /// decoded photo: what a cache does to a photo it holds but is not
@@ -117,12 +149,13 @@ public:
     /// hue band must be derived from — reading the edited result would mean
     /// adjusting a band changes which band you would pick next time.
     /// Either pointer may be null.
-    void sampleAt(float u, float v, float* outDisplay, float* outScene) const;
+    void sampleAt(float u, float v, float* outDisplay, float* outScene);
 
     /// Per-channel histogram of the rendered image, `bins` entries each,
     /// packed R then G then B. Sampled on a stride: this drives a 90-pixel-tall
     /// readout, not a measurement, and 24 million samples would be waste.
-    void histogram(std::uint32_t* out, std::uint32_t bins) const;
+    /// ⚠ Not const: past fit it may render the preview first (`measured`).
+    void histogram(std::uint32_t* out, std::uint32_t bins);
 
     /// Measures the picture and writes the sliders auto-enhance is allowed to
     /// move, in place. Renders several times — it is a one-click action, not
@@ -176,8 +209,7 @@ public:
     ///
     /// ⚠ **Not part of `Adjustments`, deliberately.** A lens choice is not a
     /// per-frame render parameter — it *selects* a profile, and that profile's
-    /// coefficients already reach the shader through `Adjustments::lensPoly`
-    /// and `lensVignettePa`. Putting a string in the POD block would push it
+    /// coefficients already reach the shader through `Adjustments::lensModel`. Putting a string in the POD block would push it
     /// across the facade on every slider tick to say a thing that changes once
     /// a photograph. It belongs beside the profile it picks.
     ///
@@ -223,6 +255,30 @@ private:
     std::unique_ptr<merge::HdrMerge>       hdrMerge_;
     std::unique_ptr<pipe::DevelopPipeline> develop_;
     std::unique_ptr<pipe::DevelopPipeline> preview_;
+    /// The region graph and what it was last loaded with (#22).
+    std::unique_ptr<pipe::DevelopPipeline> region_;
+    // ponytail: the whole mosaic stays on the CPU for the region graph to cut
+    // windows from (2 bytes a pixel, 48 MB at 24 MP); read windows back from
+    // the full graph's source texture if that ever matters.
+    std::shared_ptr<const raw::BayerImage> mosaic_;
+    int                                    regionStep_ = 0;
+    std::uint32_t                          regionX_ = 0, regionY_ = 0;
+    bool                                   regionLoaded_ = false;
+    /// Whether each graph has rendered the current edit. Decides which one
+    /// the histogram and the eyedropper read (`measured`).
+    bool                                   fullCurrent_ = false, previewCurrent_ = false, regionCurrent_ = false;
+    /// The full graph's outputs were given back once a region was shown (#22).
+    bool                                   fullReleased_ = false;
+    /// Never a released graph: renders the preview (or the full graph, with
+    /// no preview) first when it has to.
+    [[nodiscard]] const pipe::DevelopPipeline& measured();
+    /// After an export past fit, the full graph's outputs go back again.
+    void rereleaseFull() noexcept;
+    Region                                 regionView_{};
+    /// What `setAdjustments` last pushed, for the region graph's own apply.
+    pipe::Adjustments                      adj_{};
+    /// The creative LUT, for a region graph built after it was loaded.
+    std::shared_ptr<const pipe::CubeLut>   lut_;
     std::string                            camera_;
     std::string                            lensChoice_;
     /// ⚠ Kept whole so a hand-chosen lens can be re-interpolated at this
@@ -239,6 +295,9 @@ private:
     /// One copy for the process. Five megabytes of XML, parsed once — a
     /// per-photo parse would put a tenth of a second in front of every open.
     static const pipe::LensDatabase& lensDatabase();
+    /// The profile the open file gets without a hand choice: DNG opcodes,
+    /// then lensfun.
+    [[nodiscard]] pipe::LensProfile automaticLensProfile() const;
     pipe::LensProfile                      lensProfile_;
 };
 

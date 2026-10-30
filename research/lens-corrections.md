@@ -1,8 +1,10 @@
 # Lens corrections — the models, and where the numbers come from
 
 **Where:** `shaders/lens.slang` (one sampling pass), `pipe/LensGeometry.h`
-(autoscale), `pipe/LensDatabase.{h,cpp}` (the measured coefficients),
-`data/lensfun/` (the database itself).
+(the model, forward and inverse maps, autoscale), `pipe/LensDatabase.{h,cpp}`
+(lensfun's coefficients), `pipe/LensOpcodes.{h,cpp}` (a DNG's own correction),
+`data/lensfun/` (the database itself). The second source is at the end of
+this file.
 
 ## Source
 
@@ -169,3 +171,99 @@ which has distortion coefficients but **no vignetting data at all** — every
 aperture returned zero and the test passed its own comparison trivially. The
 database is not uniformly populated, and a lens being present is not the same as
 a lens being calibrated for what you are about to ask it.
+
+
+## A second source: the file's own DNG opcodes (#5, 2026-10-29)
+
+Issue #5: a DJI Mini 4 Pro (`FC8482`) has no lensfun entry, upstream or
+bundled. Its DNGs carry the correction themselves. **Precedence: DNG opcodes,
+then lensfun**; a lens picked by hand (lensfun) overrides both, and clearing the pick restores the automatic answer. The interface's
+lens note says which source answered (`OrionLensProfile.source`).
+
+### Sources
+
+| What | Source |
+|---|---|
+| `WarpRectilinear` (opcode 1), `FixVignetteRadial` (opcode 3), the opcode list format | Adobe, *Digital Negative (DNG) Specification* 1.6.0.0, December 2021, chapter 7 "Opcode List Processing", pp. 89–95. <https://helpx.adobe.com/camera-raw/digital-negative.html> |
+| The distortion form itself | Brown–Conrady: D. C. Brown, "Decentering distortion of lenses", *Photogrammetric Engineering* 32(3), 1966 (DNG's `kt0, kt1`) |
+
+⚠ **Adobe `.lcp` profiles were built and withdrawn (2026-10-29).** Reading
+installed `.lcp` files was implemented as a third source, between the opcodes
+and lensfun. Four of its field meanings (centre and focal, X and Y, as
+fractions of the larger image dimension, and the 0.5 centre default) rest
+**only** on US 8,368,762 B1: Adobe's "Adobe Camera Model" report is not online
+anywhere found. Per `CLAUDE.md` a patent-only source is the developer's call,
+not yet made, so the reader, its tests and this section's account of it live
+on branch `lcp-adobe-profiles` (0a54b9c) until that decision (#372).
+
+Orion implements the published formulas. No code from any other DNG
+reader was used, and LibRaw supplies only the opcode bytes
+(`dng_levels.rawopcodes`, 0.22) — Orion does not hand-parse TIFF for them.
+
+### One general warp
+
+Both sources fit one form (`LensGeometry.h`, `lens.slang`):
+
+    d = (q − c) / norm,   source = c + f(r)·(q − c) + norm·t(d)
+    f = k0 + k1·r + k2·r² + k3·r³ + k4·r⁴ + k6·r⁶      per channel
+    t = Brown–Conrady tangential (DNG kt0, kt1)
+    V = 1 + v1·r² + … + v5·r¹⁰                          divided out, or (DNG) multiplied in
+
+| Source | Radial terms | Centre and unit radius |
+|---|---|---|
+| lensfun ptlens/poly3 | k0..k3 | ĉ·size; half the diagonal |
+| DNG | k0, k2, k4, k6 (+ per plane when N = 3) | ĉ·(size − 1) in pixel indices; distance to the farthest pixel |
+
+`LensModel` holds a correction **without pixels**, because the full graph and
+the decimated preview receive the same `Adjustments`; `lens::resolve` places it
+on one frame. `lens::fetchPoint` (output → source) and `lens::outputPoint`
+(source → output, Newton on the forward map) are the only geometry; the
+autoscale and the tests stand on them, and region-of-interest rendering should
+too.
+
+### Decisions and simplifications, stated
+
+- **Autoscale applies to every source.** DNG warps pin nothing, so a
+  barrel correction reaches past the frame like poly3 does. The DNG
+  specification itself leaves the out-of-frame area to the DefaultCrop.
+- **OpcodeList1 is skipped.** It runs on the stored raw image, masked borders
+  included, while lists 2 and 3 run after linearization, whose per-pixel black
+  deltas are defined over the ActiveArea (`BlackLevelDeltaH/V`, counts
+  "ActiveArea width/length", DNG 1.6 ch. 4). That is the frame LibRaw hands
+  Orion, so only lists 2 and 3 have optical centres in Orion's frame. Lens
+  opcodes in list 1 are not known to occur. Doubles over 10⁶ in magnitude
+  reject the opcode.
+- **DNG vignette placement** follows processing order: a `FixVignetteRadial`
+  before the warp (or in an earlier list) is evaluated at the source position;
+  after it, at the output position. The first of each opcode is used.
+- **Not read:** `WarpRectilinear2` (14), `WarpFisheye` (2), `GainMap` (9) and
+  every non-lens opcode. A `WarpRectilinear` after an optional
+  `WarpRectilinear2` is still applied: the skip rule binds readers that apply
+  the latter.
+
+### Freedom to operate — not assessed
+
+Per `CLAUDE.md`, citation is not clearance. Adobe's DNG specification carries a
+royalty-free patent licence for DNG readers (`NOTICE`), which is what covers
+the opcodes. It was not assessed by anyone qualified.
+
+### What is pinned (`tests_lens_sources.cpp`)
+
+- opcode lists parse past an unknown opcode; kr/kt land on the right terms; a
+  vignette before or after the warp is placed accordingly
+- truncated, oversized, N = 2, NaN and four-billion-count lists find nothing
+- on the GPU, a three-plane `WarpRectilinear` fetches where DNG 1.6's formula
+  says, per channel, to fp16 (< 0.15 px); `fetchPoint` agrees to 1e-3 px
+- on the GPU, `FixVignetteRadial` multiplies by the specification's gain
+- a real Sony ARW (`_PIC8220`, when linked) has no opcode lists and gets
+  exactly the lensfun database's answer
+- `outputPoint(fetchPoint(q)) = q` within 0.05 px on a 6000 × 4000 frame for a
+  DNG and a lensfun-plus-fringing model, with autoscale on
+- a DNG written with an OpcodeList3 comes back from LibRaw byte for byte, the
+  engine picks it ahead of any database, a hand pick overrides it and clearing
+  the pick restores it
+
+⚠ **Owed: a real DJI DNG.** None was available; everything above is synthetic.
+The first real `FC8482` file should confirm that LibRaw names the body
+`DJI FC8482`, that the opcodes are where the specification puts them, and that
+the result looks right.

@@ -36,6 +36,11 @@ struct GeometryParams
     // `params::Geometry` in pipe/ShaderParams.h, which static_asserts that this
     // array begins at byte 64.
     float4 perspective[3];
+
+    // The bound texture as a window of the inSize frame (#22): zero (or zero
+    // and inSize) except in the region graph.
+    float2 srcOrigin;
+    uint2  srcSize;
 };
 
 /// Bilinear fetch. Outside the frame returns transparent black rather than
@@ -130,5 +135,8 @@ void geometry(uint3 tid : SV_DispatchThreadID,
         default:  s = r; break;
     }
 
-    dst[tid.xy] = sampleBilinear(src, s, p.inSize);
+    // A zeroed srcSize is the whole frame, so a block built without it (the
+    // geometry tests dispatch this kernel by hand) samples what it always did.
+    const uint2 bound = (p.srcSize.x != 0u) ? p.srcSize : p.inSize;
+    dst[tid.xy] = sampleBilinear(src, s - p.srcOrigin, bound);
 }

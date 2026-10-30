@@ -1,14 +1,18 @@
 // Lens corrections — distortion, transverse chromatic aberration, vignetting.
 //
-// Reference: lensfun's model definitions, as set out in
-// research/deep-research-2026-07-27.md §4. Radii are normalized against
-// R_norm = ½·sqrt(width² + height²), which is lensfun's convention and the one
-// every published coefficient assumes.
+// One general warp that both published sources fit (research/
+// lens-corrections.md):
 //
-//     ptlens: r_d = r_u · ( a·r_u³ + b·r_u² + c·r_u + (1 − a − b − c) )
-//     poly3:  r_d = r_u · ( (1 − k₁) + k₁·r_u² )   — the a = c = 0 case of it
-//     TCA:    r_R = r_G · ( v_R + k_R·r_G² ),  green is the reference
-//     vig:    V(r) = 1 + p_a·r² + p_b·r⁴ + p_c·r⁶,  I_corrected = I_raw / V(r)
+//     lensfun ptlens/poly3   f = (1 − a − b − c) + c·r + b·r² + a·r³
+//     DNG WarpRectilinear    f = kr0 + kr1·r² + kr2·r⁴ + kr3·r⁶, plus tangential
+//                            (Adobe DNG Specification 1.6, chapter 7, opcode 1)
+//
+//     source = c + f·(q − c) + norm·t,  d = (q − c) / norm
+//     vig:   V(r) = 1 + v1·r² + … + v5·r¹⁰, divided out (lensfun) or
+//            multiplied in (DNG FixVignetteRadial, opcode 3)
+//
+// Each source normalizes r its own way; pipe/LensGeometry.h `resolve` turns
+// that into `center` and `norm` in pixels, and is the only place that knows.
 //
 // The three are one sampling pass because they are one coordinate transform per
 // channel. Doing them separately would resample three times and soften three
@@ -26,12 +30,18 @@
 struct LensParams
 {
     uint2 size;
-    float centerX, centerY;   // optical center, normalized
-    float distA, distB, distC;   // ptlens a, b, c. Manual distortion is b alone
-    float caRed, caBlue;      // TCA, as a fractional radial scale
-    float vignetteA, vignetteB, vignetteC;   // p_a, p_b, p_c
+    float2 center;            // optical center, pixels
+    float2 norm;              // pixels per unit of normalized radius
+    float caRed, caBlue;      // manual TCA, a fractional radial scale at rDiag
+    float4 radialLo[3];       // per channel: k0, k1, k2, k3
+    float4 radialHi[3];       // per channel: k4, k6, tangential t0, t1
+    float4 vig;               // vignette terms in r², r⁴, r⁶, r⁸
+    float vig10;              // and r¹⁰
+    uint vigFlags;            // bit 0 multiply (gain) else divide; bit 1 at the output position
+    float2 vigCenter;
+    float2 vigNorm;
     float scale;              // autoscale; see pipe/LensGeometry.h
-    float _pad[3];
+    float rDiag;              // half the diagonal, for the manual TCA
 };
 
 /// Bilinear fetch, in texel coordinates. Outside the frame returns the edge
@@ -52,6 +62,26 @@ float3 sampleClamped(Texture2D<float4> src, float2 p, uint2 size)
     return lerp(a, b, f.y);
 }
 
+/// Output position (pixels, already zoomed) to the source position it reads,
+/// for one channel. pipe/LensGeometry.h `warpSource` is the host copy, line
+/// for line — the autoscale and the inverse map are only as right as that.
+float2 warpSource(LensParams p, uint ch, float2 q)
+{
+    const float2 e = q - p.center;
+    const float2 d = e / p.norm;
+    const float r2 = dot(d, d);
+    const float r = sqrt(r2);
+    const float4 lo = p.radialLo[ch];
+    const float4 hi = p.radialHi[ch];
+    const float f = lo.x + r * (lo.y + r * (lo.z + r * lo.w)) + r2 * r2 * (hi.x + r2 * hi.y);
+    const float2 t = float2(hi.z * 2.0f * d.x * d.y + hi.w * (r2 + 2.0f * d.x * d.x),
+                            hi.w * 2.0f * d.x * d.y + hi.z * (r2 + 2.0f * d.y * d.y));
+    // f·e rather than f·d·norm: a divide undone by a multiply is not exact in
+    // float, and an identity that misses by a rounding error drops a whole
+    // fp16 step wherever a fetch lands a hair short of a texel.
+    return p.center + f * e + t * p.norm;
+}
+
 [shader("compute")]
 [numthreads(16, 16, 1)]
 void lensCorrect(uint3 tid : SV_DispatchThreadID,
@@ -61,58 +91,47 @@ void lensCorrect(uint3 tid : SV_DispatchThreadID,
 {
     if (tid.x >= p.size.x || tid.y >= p.size.y) return;
 
-    const float2 size = float2(p.size);
-    const float2 center = float2(p.centerX, p.centerY) * size;
-
-    // lensfun's normalizing radius: half the diagonal, so r = 1 at the corners.
-    const float rNorm = 0.5f * length(size);
-
-    // Autoscale. poly3 pins the corners, but the edge midpoints sit at r ≈ 0.83
-    // on a 3:2 frame, and a negative k₁ pushes those well past the border — so
-    // "the corners do not move" was never the same as "the picture still fills
-    // the frame". The host works out how far the worst pixel reaches and hands
-    // down the zoom that brings it back to the edge. See pipe/LensGeometry.h.
+    // Autoscale: the zoom that brings the outermost fetch back to the frame
+    // edge, so no output pixel reads past the border. A warp that reaches
+    // outside otherwise turns the clamp into a band of one column smeared
+    // sideways. The host works it out; see pipe/LensGeometry.h.
     const float zoom = p.scale > 0.0f ? p.scale : 1.0f;
-    const float2 d = ((float2(tid.xy) + 0.5f) - center) * zoom;
-    const float ru = length(d) / rNorm;
+    const float2 q = p.center + ((float2(tid.xy) + 0.5f) - p.center) * zoom;
 
-    // ptlens, which is the model most lensfun calibrations are published in.
-    // The constant term is what pins r_d(1) = 1, so the frame corners stay put
-    // and only the interior moves — without it the whole picture scales as the
-    // coefficients change, which reads as a zoom rather than a correction.
-    // A manual distortion slider sets b alone, which is exactly poly3.
-    const float distort = p.distA * ru * ru * ru + p.distB * ru * ru + p.distC * ru
-                        + (1.0f - p.distA - p.distB - p.distC);
+    const float2 sg = warpSource(p, 1, q);
+    float2 sr = warpSource(p, 0, q);
+    float2 sb = warpSource(p, 2, q);
 
-    // Green is the reference for transverse chromatic aberration; red and blue
-    // are rescaled radially about it. The correction is the inverse of the
-    // aberration, hence the sign.
-    const float3 scale = float3(distort * (1.0f - p.caRed * ru * ru),
-                                distort,
-                                distort * (1.0f - p.caBlue * ru * ru));
+    // Manual transverse chromatic aberration: red and blue rescaled about the
+    // optical center against green, the reference. Measured at lensfun's
+    // radius so a slider position means the same whatever the profile source.
+    // The correction is the inverse of the aberration, hence the sign.
+    const float2 e = q - p.center;
+    const float ru2 = dot(e, e) / (p.rDiag * p.rDiag);
+    sr = p.center + (sr - p.center) * (1.0f - p.caRed * ru2);
+    sb = p.center + (sb - p.center) * (1.0f - p.caBlue * ru2);
 
-    // Minus half a texel, because `d` is measured from pixel *centers* and
-    // sampleClamped indexes texels. Without it every fetch landed exactly
+    // Minus half a texel, because positions are measured from pixel *centers*
+    // and sampleClamped indexes texels. Without it every fetch landed exactly
     // between two texels — a half-pixel shift and a bilinear blur applied to
-    // the whole frame the moment any lens slider left zero. It survived the
-    // identity test because that test reads a linear ramp, where the average of
-    // two neighbors is the value in between.
-    const float2 origin = center - 0.5f;
+    // the whole frame the moment any lens slider left zero.
     float3 c;
-    c.r = sampleClamped(src, origin + d * scale.r, p.size).r;
-    c.g = sampleClamped(src, origin + d * scale.g, p.size).g;
-    c.b = sampleClamped(src, origin + d * scale.b, p.size).b;
+    c.r = sampleClamped(src, sr - 0.5f, p.size).r;
+    c.g = sampleClamped(src, sg - 0.5f, p.size).g;
+    c.b = sampleClamped(src, sb - 0.5f, p.size).b;
 
-    // Vignetting is measured at the *corrected* radius, because that is where
-    // the light actually fell on the sensor.
-    if (abs(p.vignetteA) + abs(p.vignetteB) + abs(p.vignetteC) > 1e-6f)
+    // Vignetting. lensfun measures it where the light fell — the
+    // source position — and publish a falloff to divide out. A DNG
+    // FixVignetteRadial publishes a gain to multiply, and lands on the output
+    // position when it follows the warp in the opcode list.
+    if (any(p.vig != 0.0f) || p.vig10 != 0.0f)
     {
-        const float rc = ru * distort;
-        const float r2 = rc * rc;
-        const float v = 1.0f + p.vignetteA * r2
-                             + p.vignetteB * r2 * r2
-                             + p.vignetteC * r2 * r2 * r2;
-        c /= max(v, 0.05f);
+        const float2 at = (p.vigFlags & 2u) != 0u ? q : sg;
+        const float2 v = (at - p.vigCenter) / p.vigNorm;
+        const float r2 = dot(v, v);
+        const float g = 1.0f + r2 * (p.vig.x + r2 * (p.vig.y + r2 * (p.vig.z
+                      + r2 * (p.vig.w + r2 * p.vig10))));
+        c = (p.vigFlags & 1u) != 0u ? c * g : c / max(g, 0.05f);
     }
 
     dst[tid.xy] = float4(c, 1.0f);

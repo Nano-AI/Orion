@@ -19,7 +19,7 @@
 #include "pipe/WhiteBalance.h"
 #include "raw/NoiseProfile.h"
 #include "raw/RawImage.h"
-#include "gpu/MetalDevice.h"
+#include "gpu/Device.h"
 #include "gpu/Resources.h"
 #include "pipe/ShaderParams.h"
 #include "pipe/DevelopPipeline.h"
@@ -100,6 +100,7 @@ std::vector<std::uint8_t> pixels(const orion::pipe::DevelopPipeline&);
 // why `main.cpp` is now short enough to read its call list at a glance.
 void testBindingCount();
 void testDisabledCacheReleaseGpu();
+void testDawnParityGpu();
 void testReleaseEveryRenderGpu();
 void testPlanckianLocus();
 void testWhiteBalance();
@@ -155,6 +156,12 @@ void testHighlightRecoveryGpu();
 void testLinearizeClipsToWhite();
 void testGradeOffsets();
 void testLensGpu();
+void testDngLensOpcodes();
+void testLensInverseMap();
+void testDngLensOpcodesThroughLibRaw();
+void testLensSourceOnRealSony();
+void testRegionMatchesCropGpu();
+void testRegionAtFrameEdgesGpu();
 void testHueSatMapGpu();
 void testColorGradeGpu();
 void testToneBandsWithoutGuide();

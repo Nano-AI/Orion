@@ -508,6 +508,31 @@ OrionStatus orion_engine_render_preview(OrionEngine* engine, double* out_ms);
 OrionStatus orion_engine_preview_size(const OrionEngine* engine,
                                       unsigned* out_w, unsigned* out_h);
 
+/* Renders only the part of the picture the canvas shows, at the screen's own
+ * resolution (issue #22, decision #371): x, y, w, h are normalized in the
+ * displayed picture (cropped and turned, 0..1), out_w x out_h the screen
+ * pixels that part covers. Cost follows the screen, not the sensor, and the
+ * result is never softer than the screen. Canvas only, like the preview.
+ *
+ * Returns ORION_ERR_BAD_ARG when this edit uses something the region graph
+ * cannot render exactly (masks, spots, grain, the creative vignette, dehaze,
+ * clarity, fusion, highlight recovery, highlights/shadows, the crop tool's
+ * canvas) or the photo is not a mosaic: render the whole graph instead.
+ * Nonzero `interacting` (a drag) also refuses a denoised edit zoomed out past
+ * 100%, which renders at step 1 and would cost more than the preview: render
+ * the preview for the drag, and the region again when it ends. */
+OrionStatus orion_engine_render_region(OrionEngine* engine, float x, float y,
+                                       float w, float h, unsigned out_w,
+                                       unsigned out_h, int interacting,
+                                       double* out_ms);
+
+/* The region graph's output texture (id<MTLTexture>) and the part of it that
+ * holds the last region: top-left out_w x out_h, as asked, capped at the
+ * texture. NULL / ORION_ERR_BAD_ARG before the first region render. */
+void* orion_engine_region_texture(const OrionEngine* engine);
+OrionStatus orion_engine_region_size(const OrionEngine* engine,
+                                     unsigned* out_w, unsigned* out_h);
+
 /* Renders dirty nodes. *out_ms receives GPU-side milliseconds (may be NULL). */
 OrionStatus orion_engine_render(OrionEngine* engine, double* out_ms);
 
@@ -570,7 +595,10 @@ OrionStatus orion_engine_frame_size(const OrionEngine* engine,
                                     uint32_t* out_width, uint32_t* out_height);
 
 /* The pipeline's output as an id<MTLTexture>, for zero-copy display.
- * Non-owning; valid until the next open_raw. NULL when no image is open. */
+ * Non-owning; valid until the next open_raw. NULL when no image is open.
+ * Under ORION_GPU=dawn (decision #375) only an RGBA8 output has one, an
+ * IOSurface Dawn renders into; the wide RGBA16F output answers NULL, and a
+ * shell reads it back instead. The other texture getters behave the same. */
 void* orion_engine_output_texture(const OrionEngine* engine);
 
 /* The preview graph's output texture, or NULL when there is no preview graph.
@@ -588,7 +616,10 @@ OrionStatus orion_engine_sample(const OrionEngine* engine, float u, float v,
                                 float* out_display, float* out_scene);
 
 /* Per-channel histogram of the rendered image. out_bins takes bins*3 entries,
- * packed red then green then blue. */
+ * packed red then green then blue. The full render, except while a region
+ * (orion_engine_render_region) is newer than it and the preview has rendered
+ * the edit: then the preview, the small whole-frame pass (#22). Likewise the
+ * displayed color orion_engine_sample reads. */
 OrionStatus orion_engine_histogram(const OrionEngine* engine,
                                    uint32_t* out_bins, uint32_t bins);
 
@@ -745,17 +776,30 @@ OrionStatus orion_export_snapshot_size(const OrionExportSnapshot* snapshot,
                                        uint64_t* out_bytes);
 void orion_export_snapshot_free(OrionExportSnapshot* snapshot);
 
-/* The lens profile for the open photo, from the vendored lensfun database.
+/* The lens profile for the open photo.
  *
- * `found` is zero when the lens is unknown — which includes every manual lens,
- * since those write no lens name at all. `approximate` is nonzero when the
- * match came from a name the database spells differently, so the interface can
- * say so rather than implying a measurement of this exact copy. */
+ * `found` is zero when no correction is known — which includes every manual
+ * lens, since those write no lens name at all. `approximate` is nonzero when
+ * the match came from a name the lensfun database spells differently, so the
+ * interface can say so rather than implying a measurement of this exact copy.
+ *
+ * `source` says where the correction came from, in order of precedence:
+ * ORION_LENS_SOURCE_DNG (the file's own DNG opcodes), ORION_LENS_SOURCE_LENSFUN
+ * (the bundled database, or a lens chosen by hand). Zero when nothing found.
+ * 2 is unused: it was an Adobe .lcp profile, withdrawn (#372).
+ * Appended last so the earlier fields keep their offsets. */
+enum {
+    ORION_LENS_SOURCE_NONE    = 0,
+    ORION_LENS_SOURCE_LENSFUN = 1,
+    ORION_LENS_SOURCE_DNG     = 3
+};
+
 typedef struct OrionLensProfile {
     int32_t found;
     int32_t approximate;
     char    lens[128];
     char    maker[64];
+    int32_t source;
 } OrionLensProfile;
 
 OrionStatus orion_engine_lens_profile(const OrionEngine* engine,

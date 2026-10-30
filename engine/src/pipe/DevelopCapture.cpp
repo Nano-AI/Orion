@@ -640,41 +640,30 @@ void DevelopPipeline::applyLens(const Adjustments& adj,
     // cover the enable and disable transitions.
     if (first ||
         adj.lensProfile != lastAdj_.lensProfile ||
-        adj.lensPoly[0] != lastAdj_.lensPoly[0] ||
-        adj.lensPoly[1] != lastAdj_.lensPoly[1] ||
-        adj.lensPoly[2] != lastAdj_.lensPoly[2] ||
-        adj.lensVignettePa[0] != lastAdj_.lensVignettePa[0] ||
-        adj.lensVignettePa[1] != lastAdj_.lensVignettePa[1] ||
-        adj.lensVignettePa[2] != lastAdj_.lensVignettePa[2] ||
+        adj.lensModel != lastAdj_.lensModel ||
         adj.lensDistortion != lastAdj_.lensDistortion ||
         adj.lensVignette != lastAdj_.lensVignette ||
         adj.lensCaRed != lastAdj_.lensCaRed ||
         adj.lensCaBlue != lastAdj_.lensCaBlue) {
         pipeline_.setEnabled(nLens_, correctingLens);
 
-        params::Lens lens{};
-        lens.size[0] = width_;
-        lens.size[1] = height_;
-        lens.centerX = 0.5f;
-        lens.centerY = 0.5f;
-        // The sliders run -1..1; the coefficients they drive are much smaller.
-        // These ranges cover what a real lens needs without letting the control
-        // fold the picture through itself at the extremes.
         // A measured profile replaces the sliders rather than adding to them.
         // Two sources for one coefficient is a control that fights the data:
         // the profile knows what this lens does at this focal length, and a
         // slider on top of it would be undoing a correction by feel.
-        if (adj.lensProfile) {
-            lens.distA     = adj.lensPoly[0];
-            lens.distB     = adj.lensPoly[1];
-            lens.distC     = adj.lensPoly[2];
-            lens.vignetteA = adj.lensVignettePa[0];
-            lens.vignetteB = adj.lensVignettePa[1];
-            lens.vignetteC = adj.lensVignettePa[2];
-        } else {
-            lens.distB     = adj.lensDistortion * 0.35f;
-            lens.vignetteA = adj.lensVignette * 0.6f;
-        }
+        //
+        // The sliders run -1..1; the coefficients they drive are much smaller.
+        // These ranges cover what a real lens needs without letting the control
+        // fold the picture through itself at the extremes.
+        const LensModel model = adj.lensProfile
+            ? adj.lensModel
+            : lens::ptlens(0.0f, adj.lensDistortion * 0.35f, 0.0f, adj.lensVignette * 0.6f);
+        // Resolved on the whole frame, because the optical centre and the
+        // normalisation are the frame's (#22): a window graph shifts the two
+        // centres onto its own texels after the autoscale, and the kernel,
+        // which only measures from those centres, needs nothing else.
+        params::Lens lens = lens::resolve(model, wholeW(), wholeH());
+
         // At full slider this is about seven pixels of radial shift at the
         // corner of a 24 MP frame, which is well past any real lateral
         // aberration and still short of obviously wrong.
@@ -683,10 +672,13 @@ void DevelopPipeline::applyLens(const Adjustments& adj,
 
         // Keep the picture in the frame. Without this a barrel correction
         // reaches past the border and the clamp smears the edge column.
-        lens.scale = lens::autoScale(width_, height_,
-                                     lens.centerX, lens.centerY,
-                                     lens.distA, lens.distB, lens.distC,
-                                     lens.caRed, lens.caBlue);
+        lens.scale = lens::autoScale(lens);
+        lens_ = lens;
+        lensOn_ = correctingLens;
+        const float ox = float(window_.x), oy = float(window_.y);
+        lens.center[0] -= ox;    lens.center[1] -= oy;
+        lens.vigCenter[0] -= ox; lens.vigCenter[1] -= oy;
+        lens.size[0] = width_;   lens.size[1] = height_;
         pipeline_.setParams(nLens_, &lens, sizeof lens);
     }
 }
@@ -952,7 +944,10 @@ void DevelopPipeline::applySharpen(const Adjustments& adj,
     if (first || adj.sharpenAmount != lastAdj_.sharpenAmount ||
         adj.sharpenRadius != lastAdj_.sharpenRadius ||
         adj.sharpenMasking != lastAdj_.sharpenMasking) {
-        params::Sharpen sh{adj.sharpenAmount, adj.sharpenRadius,
+        // The radius is in frame pixels, so a graph whose pixel covers
+        // `gridStep_` of them takes a smaller one (#22). The kernel rounds to a
+        // whole pixel and never below one, which is as close as it can get.
+        params::Sharpen sh{adj.sharpenAmount, adj.sharpenRadius / gridStep_,
                            adj.sharpenMasking, 0.0f, {size[0], size[1]}, {0, 0}};
         pipeline_.setParams(nSharpen_, &sh, sizeof sh);
     }

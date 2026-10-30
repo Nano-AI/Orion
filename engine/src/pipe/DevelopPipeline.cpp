@@ -309,6 +309,20 @@ std::pair<float, float> DevelopPipeline::displayedToFrame(float x, float y) cons
     return {p.centerX, p.centerY};
 }
 
+std::pair<float, float> DevelopPipeline::sampledFrom(float x, float y) const {
+    const mask::Crop crop{lastAdj_.cropX, lastAdj_.cropY,
+                          lastAdj_.cropW, lastAdj_.cropH};
+    const bool swaps = (turns_ % 2) != 0;
+    const float rotW = float(swaps ? wholeH() : wholeW());
+    const float rotH = float(swaps ? wholeW() : wholeH());
+    const auto p = mask::toFrame(
+        {x, y, 0.0f}, crop, turns_,
+        lastAdj_.straightenDeg * 3.14159265358979324f / 180.0f,
+        0.5f, 0.5f, rotW, rotH,   // geometry.slang's pivot, not the crop's
+        persp::isIdentity(perspective_) ? nullptr : &perspective_);
+    return {p.centerX, p.centerY};
+}
+
 void DevelopPipeline::displayMap(float toDisplay[9], float toFrame[9]) const {
     const mask::Crop crop{lastAdj_.cropX, lastAdj_.cropY,
                           lastAdj_.cropW, lastAdj_.cropH};
@@ -420,8 +434,8 @@ DevelopPipeline::contextFor(const Adjustments& adj) {
         perspective_ = persp::compose(
             {adj.perspectiveVertical, adj.perspectiveHorizontal,
              adj.perspectiveAspect},
-            float(swapsAxes ? height_ : width_),
-            float(swapsAxes ? width_  : height_));
+            float(swapsAxes ? wholeH() : wholeW()),
+            float(swapsAxes ? wholeW() : wholeH()));
         perspectiveInverse_ = persp::inverse(perspective_);
     }
     // Null rather than an identity matrix, so the neutral case does no work at

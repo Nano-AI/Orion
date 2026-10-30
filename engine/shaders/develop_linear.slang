@@ -178,7 +178,20 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
     c = applyTone(c, guideEv, p.highlights, p.shadows, p.whites, p.blacks,
                   p.toneSigma, p.toneAnchor);
     c = applyColor(c, p.vibrance, p.saturation);
-    c = applyColorMixer(c, p.hueShift, p.satShift, p.lumShift);
+    // ⚠ Copied element by element for the WGSL target: slangc 2026.14.1
+    // segfaults passing a parameter-block array to a function, whole or by
+    // `= p.hueShift`, because WGSL's uniform layout rewrites it (#375).
+    {
+        float hue[8], sat[8], lum[8];
+        [unroll]
+        for (int k = 0; k < 8; ++k)
+        {
+            hue[k] = p.hueShift[k];
+            sat[k] = p.satShift[k];
+            lum[k] = p.lumShift[k];
+        }
+        c = applyColorMixer(c, hue, sat, lum);
+    }
 
     // ── The local adjustments, layer by layer ────────────────────────────
     //
@@ -191,9 +204,17 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
     // ⚠ **One pass over the frame, not one per layer.** Layers apply in stack
     // order inside this loop, so four layers cost four sets of arithmetic on a
     // pixel already in registers rather than four passes over 24 megapixels.
+    // ⚠ Copied out of the parameter block for the WGSL target (#375): slangc
+    // 2026.14.1 miscompiles a parameter-block array element that reaches a
+    // branch or a function with texture parameters — it segfaults, or emits
+    // WGSL reading a temporary it never declares. A local array it handles.
+    int layerMask[8];
+    [unroll]
+    for (int k = 0; k < 8; ++k) layerMask[k] = p.layerMask[k];
+
     for (int L = 0; L < p.layerCount; ++L)
     {
-        const float a = saturate(coverage(p.layerMask[L], tid.xy,
+        const float a = saturate(coverage(layerMask[L], tid.xy,
                                           mask0, mask1, mask2, mask3,
                                           mask4, mask5, mask6, mask7));
         if (a <= 0.0f) continue;
@@ -295,7 +316,7 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
         // node resolves to the fold so far, and the overlay shows the previous
         // run's coverage — the documented run-terminator behavior.
         const int L = clamp(p.maskOverlayLayer, 0, p.layerCount - 1);
-        const float a = saturate(coverage(p.layerMask[L], tid.xy,
+        const float a = saturate(coverage(layerMask[L], tid.xy,
                                           mask0, mask1, mask2, mask3,
                                           mask4, mask5, mask6, mask7));
         const float3 red = float3(0.35f, 0.012f, 0.02f);
