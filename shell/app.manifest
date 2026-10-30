@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Windows only. The shim takes paths as UTF-8 (StringMarshalling.Utf8), and LibRaw,
-     the CRT and std::filesystem read a char* path in the process's code page: this
-     makes that code page UTF-8, so a folder like Pictures\Zoë opens (#376; Windows 10 1903+). -->
+<!-- Windows only: the process's code page is UTF-8 (Windows 10 1903+), for any narrow
+     Win32 or CRT call that reads a char* path. The engine does not rely on it: with this
+     manifest alone a photo under Zoë\ still did not open in CI, so the engine opens every
+     file through a wide path (engine/src/util/Utf8Path.h, #376). -->
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
   <assemblyIdentity version="1.0.0.0" name="Orion"/>
   <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">

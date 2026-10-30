@@ -11,7 +11,7 @@ static partial class SelfTest {
         if (engine.Session is not { } session) return;   // SelfTest.Run already failed for want of a photo
 
         // A photo in a folder and under a file name that are not ASCII opens (#376): the shim
-        // takes UTF-8, which Windows reads as the ANSI code page unless app.manifest says UTF-8.
+        // takes UTF-8, which Windows reads as the ANSI code page unless the engine opens it wide.
         string unicode = Directory.CreateTempSubdirectory("orion-Zo\u00eb-").FullName;
         try {
             string named = Path.Combine(unicode, "caf\u00e9 \u65e5\u672c" + Path.GetExtension(engine.Photos[engine.Current]));

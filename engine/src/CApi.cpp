@@ -34,14 +34,14 @@ struct OrionEngine {
 
 namespace {
 
-/// Runs fn, converting any escaping exception into a status code. When an
-/// engine is available the message is stashed for orion_last_error().
 /// Why the last orion_engine_create on this thread failed; empty after a success.
 std::string& createError() {
     thread_local std::string why;
     return why;
 }
 
+/// Runs fn, converting any escaping exception into a status code. When an
+/// engine is available the message is stashed for orion_last_error().
 template <class Fn>
 OrionStatus guard(OrionEngine* engine, Fn&& fn) noexcept {
     try {
