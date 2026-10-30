@@ -183,6 +183,10 @@ def main():
     # 3. Every gap is declared. An undeclared hole is indistinguishable from a
     #    decision somebody forgot to write, which is exactly what happened.
     for n in range(1, max(plain) + 1):
+        if n in plain and n in gaps:
+            # A gap comes off the list once its row is written; one left on would
+            # hide that row going missing again (376 stayed listed after its row).
+            problems.append(f"#{n} has a row and is still declared a gap. Take it off the list.")
         if n in plain or n in gaps:
             continue
         problems.append(

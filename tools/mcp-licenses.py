@@ -9,7 +9,7 @@ listed is still in it. Each package's own LICENSE text is copied verbatim; the
 MIT and ISC terms require the notice to travel with the binary.
 
 ⚠ **Fails on any license outside a permissive allow-list, or a package with no
-license file.** Orion is proprietary (#243), so a copyleft package arriving as a
+license file.** Orion is source-available, not open source (#359), so a copyleft package arriving as a
 transitive dependency of the MCP SDK would be a licensing change nobody chose;
 this is where it would be noticed. The SDK's tree was all MIT when this was
 written (#310).

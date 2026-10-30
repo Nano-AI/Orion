@@ -14,7 +14,7 @@ macOS, ported:
    stops the build.
 2. Every file in APP maps to the licence texts it needs (RULES). A file no rule
    knows is an error, not a pass: a dependency walk adds what it adds.
-3. No GPL. Orion is proprietary (#243) and cannot carry GPL code, linked
+3. No GPL. Orion is source-available, never redistributed (#359, as #243 before it), and cannot carry GPL code, linked
    dynamically or not; LGPL only in a shared library.
 4. No home directory of anyone but the CI build accounts, and, off CI, not the
    builder's home or git e-mail.
@@ -159,7 +159,7 @@ def check_gpl(licences: Path, needed_by, errors):
         m = GPL.search(text)
         if m:
             line = text.count("\n", 0, m.start()) + 1
-            fail(errors, f"{t.name}:{line} is GPL ({m.group(0).strip()!r}); a proprietary package cannot carry it (#243)")
+            fail(errors, f"{t.name}:{line} is GPL ({m.group(0).strip()!r}); an Orion package cannot carry it (#359)")
         if LGPL.search(text):
             static = [n for n in needed_by.get(t.name, []) if not re.search(r"\.(dll|so)(\.|$)", n)]
             if static:

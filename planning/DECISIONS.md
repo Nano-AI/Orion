@@ -9,7 +9,7 @@ queue in `STATUS.md` offered **already-shipped work as the next story three
 times**, and the third time the reason was that #112 — the decision that closed
 the queue item — had never been written down at all.
 
-⚠ **Declared gaps: 22, 23, 24, 376, 377, 378, 379.** No row was ever written for 22–24 —
+⚠ **Declared gaps: 22, 23, 24, 377, 378, 379.** No row was ever written for 22–24 —
 checked with `git log -S` over this file's whole history. ⚠ The tree does cite
 `#22`/`#24`, about forty times (engine and tests included), but as **GitHub
 issues 22 and 24**, against the "issue N" spelling CLAUDE.md asks for;
@@ -20,8 +20,8 @@ touched, so the carve-out can go. As decisions they are numbers skipped on
 as gaps rather than backfilled with something invented, and listed here so the
 check above can tell a skipped number from a missing one.
 
-⚠ **376–379 are reserved, not skipped** (2026-10-29): #380 was numbered while
-the Dawn port held 375 onward. Each comes off this list if its row is written.
+⚠ **377–379 are reserved, not skipped** (2026-10-29): #380 was numbered while
+the Dawn port held 375 onward; 376 came off when its row was written, and each of the rest comes off the same way (check-decisions fails on a gap that has a row).
 
 ⚠ **`71b`** is a second decision written on 2026-07-30 into a number already
 taken by the wordmark row. Nothing cited it, and the wordmark's `#71` is cited
