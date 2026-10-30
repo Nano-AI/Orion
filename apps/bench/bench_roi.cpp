@@ -66,9 +66,13 @@ bool roiBench(const std::string& path) {
     row("settled, full graph (any zoom)", drag(e, a, 8, [&] { e.render(); }));
     row("whole graph from the mosaic, preview", drag(e, a, 20, [&] { e.renderPreview(); }, true));
     row("whole graph from the mosaic, full", drag(e, a, 8, [&] { e.render(); }, true));
-    std::printf("  textures: full %.0f MiB, preview %.0f MiB\n",
+    const auto total = [&] {
+        return e.develop().graph().allocatedBytes() + e.previewDevelop().graph().allocatedBytes() +
+               (e.hasRegion() ? e.regionDevelop().graph().allocatedBytes() : 0);
+    };
+    std::printf("  textures: full %.0f MiB, preview %.0f MiB; all graphs %.0f MiB\n",
                 mib(e.develop().graph().allocatedBytes()),
-                mib(e.previewDevelop().graph().allocatedBytes()));
+                mib(e.previewDevelop().graph().allocatedBytes()), mib(total()));
 
     // A 2560 x 1440 canvas (a 27-inch display's worth of device pixels).
     // At 100% one screen pixel is one frame pixel, so the view covers that many
@@ -88,7 +92,10 @@ bool roiBench(const std::string& path) {
         row("drag frame, region", drag(e, a, 40, [&] { e.renderRegion(v); }));
         row("settled, region (the same render)", drag(e, a, 8, [&] { e.renderRegion(v); }));
         row("whole region graph (a pan)", drag(e, a, 20, [&] { e.renderRegion(v); }, true));
-        std::printf("  textures: region %.0f MiB\n", mib(e.regionDevelop().graph().allocatedBytes()));
+        e.renderPreview();   // what the shell renders at rest past fit, for the histogram
+        std::printf("  textures: region %.0f MiB, full %.0f MiB (released past fit); all graphs %.0f MiB\n",
+                    mib(e.regionDevelop().graph().allocatedBytes()),
+                    mib(e.develop().graph().allocatedBytes()), mib(total()));
     }
     // A pan: the window moves by a quarter screen each frame, so every frame
     // reloads the mosaic window and renders the whole region graph.

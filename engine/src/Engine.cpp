@@ -156,6 +156,11 @@ void Engine::openDecoded(raw::DecodedImage decoded) {
     mosaic_ = mosaic && !headless_
         ? std::make_shared<const raw::BayerImage>(std::move(*mosaic)) : nullptr;
     regionLoaded_ = false;
+    // A new photograph: the region graph's texture still holds the last one,
+    // and a canvas asking for it before the next region would show that.
+    region_.reset();
+    regionStep_ = 0;
+    fullReleased_ = false;
     fullCurrent_ = previewCurrent_ = regionCurrent_ = false;
 }
 
@@ -237,6 +242,14 @@ double Engine::renderRegion(const Region& v) {
                                   double(v.h) * develop_->outputHeight() / v.outH);
     std::uint32_t step = 1;
     while (step < 8 && step * 2 <= ratio * 1.001) step *= 2;   // 4.0 computed as 3.9999 is 4
+    // The denoise chain's supports are fixed in graph pixels (the starlet's
+    // dilations, the NLM window), so at a coarser step the same slider would
+    // reach further across the picture and the look would change with the
+    // zoom. Those edits render at step 1: the full render's look, at a cost
+    // still bounded by the window — never more than the whole graph.
+    if (adj_.denoiseLuma > 0.0f || adj_.denoiseColor > 0.0f || adj_.denoiseNlm > 0.0f ||
+        std::fabs(adj_.texture) > 1e-4f)
+        step = 1;
 
     // What the geometry node samples for the region, then what the lens
     // fetches for that: the window must cover both, because the nodes before
@@ -278,7 +291,14 @@ double Engine::renderRegion(const Region& v) {
         const std::uint32_t e = b <= 0.0f ? 0u : std::min(whole, std::uint32_t(b));
         size = (std::max(e, o + kRegionAlign) - o + kRegionBucket - 1) / kRegionBucket * kRegionBucket;
         if (size >= whole) { origin = 0; size = whole; return; }
-        while (o + size > whole) o -= kRegionAlign;   // reaches 0 at worst: size < whole
+        // At the far edge: the aligned origin at or before `whole - size`, and
+        // the window then runs to the edge itself. Stopping at `o + size`
+        // would drop the last `whole % 16` rows — a transparent strip — and
+        // the size stays put along the edge, so panning there still reloads.
+        if (o + size > whole) {
+            o = (whole - size) / kRegionAlign * kRegionAlign;
+            size = whole - o;
+        }
         origin = o;
     };
     std::uint32_t ox = 0, oy = 0, ww = 0, wh = 0;
@@ -318,6 +338,14 @@ double Engine::renderRegion(const Region& v) {
     region_->apply(adj_);
     const double ms = region_->render();
     regionCurrent_ = true;
+    // Past fit the canvas shows regions and nothing on screen reads the full
+    // graph: give its textures back (#318's release), ~3.3 GB at 24 MP. The
+    // next full render (export, an edit the region refuses) rebuilds them.
+    if (!fullReleased_) {
+        develop_->graph().releaseOutputs();
+        fullReleased_ = true;
+        fullCurrent_ = false;
+    }
     return ms;
 }
 
@@ -388,6 +416,7 @@ const pipe::DevelopPipeline& Engine::previewDevelop() const {
 double Engine::render() {
     if (!develop_) throw std::runtime_error("no image open");
     const double ms = develop_->render();
+    fullReleased_ = false;
     fullCurrent_ = true;
     return ms;
 }
@@ -397,7 +426,9 @@ const pipe::DevelopPipeline& Engine::measured() const {
     // last edit and only the preview — the small whole-frame pass — has seen
     // it (#22). A readout a quarter of the size is right; a full-size one of
     // the previous edit is not.
-    return (!fullCurrent_ && regionCurrent_ && previewCurrent_ && preview_) ? *preview_ : *develop_;
+    // Released past fit, the full graph has no output to read at all.
+    return ((!fullCurrent_ && regionCurrent_) || fullReleased_) && previewCurrent_ && preview_
+        ? *preview_ : *develop_;
 }
 
 void Engine::sampleAt(float u, float v, float* outDisplay, float* outScene) const {
@@ -455,16 +486,18 @@ void Engine::sampleAt(float u, float v, float* outDisplay, float* outScene) cons
     // the tarmac above it. Silent, because the color-mixer band it picks is
     // plausible either way, and invisible to `repro/eyedropper-color-mixer.txt`
     // because that scenario never crops. A straighten was wrong the same way.
+    // From the same graph as the display read: past fit the full one may be
+    // older than the edit (#22), and its reference with it.
     if (outScene) {
-        const std::uint32_t rw = develop_->width();
-        const std::uint32_t rh = develop_->height();
+        const std::uint32_t rw = shown.width();
+        const std::uint32_t rh = shown.height();
 
-        const auto f = develop_->displayedToFrame(clamp01(u), clamp01(v));
+        const auto f = shown.displayedToFrame(clamp01(u), clamp01(v));
         const auto sx = static_cast<std::uint32_t>(clamp01(f.first)  * float(rw - 1));
         const auto sy = static_cast<std::uint32_t>(clamp01(f.second) * float(rh - 1));
 
         __fp16 px[4]{};
-        develop_->referenceImage().readPixel(sx, sy, px);
+        shown.referenceImage().readPixel(sx, sy, px);
 
         // Scene-linear and unbounded. Normalize by the peak: the caller wants
         // hue, and hue is scale-invariant.
@@ -486,7 +519,8 @@ void Engine::autoEnhance(pipe::Adjustments& adj) {
         develop_->apply(adj);
         develop_->render();
         fullCurrent_ = true;
-        previewCurrent_ = false;   // the preview has not had these
+        fullReleased_ = false;
+        previewCurrent_ = regionCurrent_ = false;   // neither has had these
         histogram(rgb.data(), kBins);
         ae::combine(rgb.data(), kBins, combined.data());
         return ae::measure(combined.data(), kBins, ae::kClipPerSide);

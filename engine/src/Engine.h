@@ -256,6 +256,8 @@ private:
     /// Whether each graph has rendered the current edit. Decides which one
     /// the histogram and the eyedropper read (`measured`).
     bool                                   fullCurrent_ = false, previewCurrent_ = false, regionCurrent_ = false;
+    /// The full graph's outputs were given back once a region was shown (#22).
+    bool                                   fullReleased_ = false;
     [[nodiscard]] const pipe::DevelopPipeline& measured() const;
     Region                                 regionView_{};
     /// What `setAdjustments` last pushed, for the region graph's own apply.

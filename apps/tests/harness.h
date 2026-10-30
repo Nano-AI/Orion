@@ -154,6 +154,7 @@ void testLensInverseMap();
 void testDngLensOpcodesThroughLibRaw();
 void testLensSourceOnRealSony();
 void testRegionMatchesCropGpu();
+void testRegionAtFrameEdgesGpu();
 void testHueSatMapGpu();
 void testColorGradeGpu();
 void testToneBandsWithoutGuide();

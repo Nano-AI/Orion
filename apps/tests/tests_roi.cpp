@@ -89,6 +89,7 @@ void testRegionMatchesCropGpu() {
         const std::uint32_t rx = 640, ry = 96, rw = 448, rh = 320;
         const orion::Engine::Region view{float(rx) / fw, float(ry) / fh,
                                          float(rw) / fw, float(rh) / fh, rw, rh};
+        auto fullPx = pixels(full);   // read first: a region gives the full graph's textures back
         const double ms = engine.renderRegion(view);
         report(ms >= 0.0 && engine.regionStep() == 1, "a 100% view renders at step 1",
                "step " + std::to_string(engine.regionStep()));
@@ -97,7 +98,10 @@ void testRegionMatchesCropGpu() {
         report(std::uint64_t(reg.width()) * reg.height() < std::uint64_t(kW) * kH,
                "from a window smaller than the frame (this one is small; the halo is 192)",
                std::to_string(reg.width()) + "x" + std::to_string(reg.height()));
-        auto want = crop(pixels(full), fw, rx, ry, rw, rh);
+        const auto& g = full.graph();
+        report(g.intermediateBytes() == g.sourceTexture().sizeBytes(),
+               "past fit the full graph gives its textures back once a region is shown");
+        auto want = crop(fullPx, fw, rx, ry, rw, rh);
         auto [worst, differing] = difference(pixels(reg), want);
         std::printf("  step 1, %ux%u window: max %d step(s), %zu of %zu channels differ\n",
                     reg.width(), reg.height(), worst, differing, want.size());
@@ -110,8 +114,9 @@ void testRegionMatchesCropGpu() {
         a.exposureEv = 0.9f;
         engine.setAdjustments(a);
         engine.render();
+        fullPx = pixels(full);
         engine.renderRegion(view);
-        want = crop(pixels(full), fw, rx, ry, rw, rh);
+        want = crop(fullPx, fw, rx, ry, rw, rh);
         std::tie(worst, differing) = difference(pixels(reg), want);
         report(worst <= 1 && differing * 1000 < want.size(),
                "and still after an exposure tick, without a rebuild",
@@ -162,11 +167,85 @@ void testRegionMatchesCropGpu() {
         engine.render();
         report(samples() == sampled(std::uint64_t(fw) * fh), "after a full render, the full graph");
 
+        // ── Denoise renders at step 1 whatever the zoom ─────────────────────
+        // Its supports are fixed in graph pixels; a coarser step would change the look.
+        a.denoiseLuma = 1.0f;
+        engine.setAdjustments(a);
+        engine.renderRegion({float(qx) / pw, float(qy) / ph, float(qw) / pw, float(qh) / ph, qw, qh});
+        report(engine.regionStep() == 1, "with denoise on, a quarter view still renders at step 1");
+        a.denoiseLuma = 0.0f;
+
         // ── What the region graph refuses ───────────────────────────────────
         a.clarity = 0.3f;
         engine.setAdjustments(a);
         report(engine.renderRegion(view) < 0.0, "clarity reads the whole frame: refused");
     } catch (const std::exception& e) {
         report(false, "region rendering", e.what());
+    }
+}
+
+void testRegionAtFrameEdgesGpu() {
+    section("A region at the frame's far edges, turned and keystoned, at step 2 (#22)");
+
+    // Sides that are not multiples of 16 (1544 % 16 = 8, 1036 % 16 = 12; at
+    // step 2, 772 and 518), so a window that reaches the bottom-right edge has
+    // to run to it rather than stop on the alignment grid.
+    constexpr std::uint32_t kW = 1544, kH = 1036;
+    try {
+        orion::Engine engine;
+        engine.openDecoded(structured(kW, kH));
+        orion::pipe::Adjustments a;
+        a.wb = engine.develop().asShotWhiteBalance();
+        a.contrast = 1.3f;
+        a.lensDistortion = 0.5f;
+        a.sharpenAmount = 0.8f;
+        engine.setAdjustments(a);
+        engine.render();
+        const auto& full = engine.develop();
+
+        // ── Step 1: the bottom-right corner of an uncropped frame ───────────
+        {
+            const std::uint32_t fw = full.outputWidth(), fh = full.outputHeight();
+            const std::uint32_t rw = 400, rh = 300, rx = fw - rw, ry = fh - rh;
+            const auto fullPx = pixels(full);
+            engine.renderRegion({float(rx) / fw, float(ry) / fh, float(rw) / fw, float(rh) / fh, rw, rh});
+            const auto want = crop(fullPx, fw, rx, ry, rw, rh);
+            const auto [worst, differing] = difference(pixels(engine.regionDevelop()), want);
+            std::printf("  step 1 corner: max %d, %zu of %zu differ\n", worst, differing, want.size());
+            report(engine.regionStep() == 1 && worst <= 1 && differing * 1000 < want.size(),
+                   "the bottom-right corner at 100% is the full render's, last rows and columns included",
+                   "max " + std::to_string(worst) + ", " + std::to_string(differing) + " differ");
+        }
+
+        // ── Step 2: a quarter turn, a keystone, a crop off any 4-pixel grid ─
+        //
+        // Against the whole frame decimated by two, as the region stands in for
+        // it. The dither is applied before the geometry node, in frame pixels,
+        // and the window's origin is a multiple of 16 of them whatever the crop
+        // or the turn — so its 4x4 phase holds here as at step 1.
+        a.rotateQuarters = 1;
+        a.perspectiveVertical = 0.4f;
+        a.cropX = 0.125f; a.cropY = 0.125f;   // 129.5 and 193 frame pixels
+        a.cropW = 0.75f;  a.cropH = 0.75f;
+        engine.setAdjustments(a);
+        engine.render();
+        orion::pipe::DevelopPipeline half(engine.device(), ORION_SHADER_DIR,
+                                          orion::raw::decimate(structured(kW, kH), 2));
+        half.setGridStep(2.0f);
+        half.setNoiseProfile(full.noiseProfile());
+        half.apply(a);
+        half.render();
+        const std::uint32_t hw = half.outputWidth(), hh = half.outputHeight();
+        const std::uint32_t qw = 200, qh = 150, qx = hw - qw, qy = hh - qh;
+        engine.renderRegion({float(qx) / hw, float(qy) / hh, float(qw) / hw, float(qh) / hh, qw, qh});
+        const auto want = crop(pixels(half), hw, qx, qy, qw, qh);
+        const auto [worst, differing] = difference(pixels(engine.regionDevelop()), want);
+        std::printf("  step 2 turned corner: max %d, %zu of %zu differ (step %d)\n",
+                    worst, differing, want.size(), engine.regionStep());
+        report(engine.regionStep() == 2 && worst <= 1 && differing * 1000 < want.size(),
+               "the turned, keystoned bottom-right corner at step 2 is the half graph's",
+               "step " + std::to_string(engine.regionStep()) + ", max " + std::to_string(worst));
+    } catch (const std::exception& e) {
+        report(false, "region at the frame's edges", e.what());
     }
 }
