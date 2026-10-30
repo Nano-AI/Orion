@@ -10,7 +10,7 @@
 set -euo pipefail
 shell=$1 build=$2 out=$3
 root=$(cd "$(dirname "$0")/.." && pwd)
-version=$(git -C "$root" describe --tags --always --dirty)
+version=$(git -C "$root" describe --tags --always)
 app=$out/AppDir
 rm -rf "$app"; mkdir -p "$app/usr/bin" "$app/usr/lib" "$app/usr/share/doc/orion/licenses"
 
