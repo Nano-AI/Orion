@@ -159,6 +159,8 @@ public sealed class PresetsPanel : StackPanel {
     readonly TextBlock _failure = SheetKit.Note("", Palette.Star);
     /// What Copy took: the open photo's look, every group, as Swift's `copiedState`.
     Preset? _copied;
+    /// The same look as the sidecar holds it: what Sync patches into the other photos' sidecars.
+    System.Text.Json.Nodes.JsonObject? _copiedState;
 
     static int PhotosInView => EngineModel.Shared.Photos.Count;
 
@@ -166,12 +168,15 @@ public sealed class PresetsPanel : StackPanel {
         Spacing = SectionPlate.Gap;
         SheetKit.Restyle(this);
         _save = SheetKit.Button("Save", Save);
-        _copy = SheetKit.Button("Copy", () => { _copied = PresetStore.Capture("Copied", [.. Enumerable.Range(0, PresetStore.Groups.Length)]); Enable(); });
+        _copy = SheetKit.Button("Copy", () => {
+            _copied = PresetStore.Capture("Copied", [.. Enumerable.Range(0, PresetStore.Groups.Length)]);
+            _copiedState = EngineModel.Shared.Session?.Capture(Masks.MaskGroup.Shared.Shapes);
+            Enable();
+        });
         // A paste is a preset made of the copied look and the groups ticked below.
         _paste = SheetKit.Button("Paste", () => { if (_copied != null) PresetStore.Apply(_copied with { Name = "Paste", Groups = [.. _groups] }); });
-        // SyncSettings.sync writes every photo's sidecar; the shell keeps no sidecars to write.
-        // stub(#315): SyncSettings.swift owns this until the logic moves below the facade
-        _sync = SheetKit.Button("Sync all…", () => NotBuilt.Say("syncing to every photo", "SyncSettings.swift"));
+        // Confirmed, counted, and it names the groups: it writes sidecars with no undo across photos.
+        _sync = SheetKit.Button("Sync all…", () => { if (_copied != null && _copiedState != null) SyncSettings.Confirm(_copied, _copiedState, _groups); });
         _export = SheetKit.Button("Export all…", () => Commands.Run("export-all"));
         _name.TextChanged += (_, _) => Enable();
         Children.Add(new VersionsSection().Plate);

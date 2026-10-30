@@ -41,6 +41,7 @@ public sealed partial class Session {
                 if (stored != null && stored[key] is null) state[key] = Get(field);
             ToFrameSpace(state);
             Apply(state);
+            MatteStore.Upload(this, Rows(state));   // restoreMattes: a file that will not read is recorded, not swallowed
             Document = state;          // the carry for the capture: names, matte ids, spots
             Document = Capture();
         } catch (Exception e) {
