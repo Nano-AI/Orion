@@ -147,7 +147,9 @@ void testBrushAccumulator() {
         report(s.firstDab == before,
                "an append continues from the dabs already on the GPU",
                "started at " + std::to_string(s.firstDab) + " of "
-               + std::to_string(s.count));
+               + std::to_string(s.count) + " (prefix " + std::to_string(s.prefix)
+               + " of " + std::to_string(s.previousCount) + ", refusals "
+               + std::to_string(s.refusals) + ")");
     }
     {
         const auto s = dev->brushPrefixStat(0);

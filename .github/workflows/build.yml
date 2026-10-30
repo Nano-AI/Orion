@@ -182,7 +182,8 @@ jobs:
       - name: Configure and build
         run: |
           unset VCPKG_ROOT
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+          # RelWithDebInfo: the PDBs give the debugger step below names.
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl \
             -DCMAKE_TOOLCHAIN_FILE="$ORION_VCPKG/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_TARGET_TRIPLET=x64-windows-release -DORION_SHELL_DIR="$SHELL_DIR"
@@ -194,9 +195,18 @@ jobs:
           key: ${{ steps.vcpkg.outputs.cache-primary-key }}
 
       - name: orion-tests (Dawn on D3D12, WARP)
+        id: tests
         run: |
           mkdir -p /d/tmp   # the tests write to /tmp, which Windows reads as the drive's \tmp
           ./build/apps/tests/orion-tests.exe
+      # Only when they failed: the same run under the Windows SDK's console
+      # debugger, so a crash leaves every thread's stack in the log.
+      - name: orion-tests under cdb (after a failure)
+        if: failure() && steps.tests.outcome == 'failure'
+        run: |
+          cdb="/c/Program Files (x86)/Windows Kits/10/Debuggers/x64/cdb.exe"
+          [ -x "$cdb" ] || { echo "no cdb on this image"; exit 0; }
+          "$cdb" -lines -c "g; .ecxr; ~*kn 40; q" ./build/apps/tests/orion-tests.exe 2>&1 | tail -300
 
       - uses: actions/setup-dotnet@v4
         with: { dotnet-version: '10.0.x' }
