@@ -185,7 +185,7 @@ static partial class SelfTest {
             Check(run.Result == "Exported 1 photo." && written.Length == 1 && new FileInfo(written[0]).Length > 10_000 && ExportRun.Progress == null,
                   $"a batch writes through the engine and says so ('{run.Result}')");
 
-            // JPEG XL (#6): the format choice reaches the engine. With metadata the
+            // JPEG XL (issue 6): the format choice reaches the engine. With metadata the
             // file is the ISO BMFF container, which opens with a 12-byte "JXL " box.
             settings.Format = Array.FindIndex(ExportSettings.Formats, f => f.Code == 3);
             var jxl = ExportRun.Run(ExportRun.Plan([engine.Photos[engine.Current]], folder, settings.Extension));

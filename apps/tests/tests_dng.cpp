@@ -769,7 +769,7 @@ void testFacadeSessionSeams() {
     report(orion_engine_release_render_memory(nullptr) == ORION_ERR_BAD_ARG,
            "release refuses a null engine");
 
-    // The size in two halves (#6): the encode outlives the engine and still
+    // The size in two halves (issue 6): the encode outlives the engine and still
     // measures the same file the one-call measurement does.
     OrionExportOptions jxl{};
     jxl.format = ORION_FORMAT_JXL;

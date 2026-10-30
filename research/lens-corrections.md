@@ -173,7 +173,7 @@ database is not uniformly populated, and a lens being present is not the same as
 a lens being calibrated for what you are about to ask it.
 
 
-## A second source: the file's own DNG opcodes (#5, 2026-10-29)
+## A second source: the file's own DNG opcodes (issue 5, 2026-10-29)
 
 Issue #5: a DJI Mini 4 Pro (`FC8482`) has no lensfun entry, upstream or
 bundled. Its DNGs carry the correction themselves. **Precedence: DNG opcodes,

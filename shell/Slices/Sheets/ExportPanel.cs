@@ -199,7 +199,7 @@ public sealed class ExportPanel : Border {
     /// Re-encodes after a pause: a 24 MP JPEG is a sixth of a second, so one
     /// per slider tick would make the slider unusable. The render stays on the
     /// UI thread, which owns the develop graph; the encode does not, because a
-    /// 24 MP JPEG XL is seconds of it (#6). One encode at a time: a change made
+    /// 24 MP JPEG XL is seconds of it (issue 6). One encode at a time: a change made
     /// while one runs is measured when it ends, and only the latest lands.
     /// The watermark's mask is passed when it is on (the snapshot copies it).
     void Remeasure() {

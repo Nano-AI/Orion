@@ -1,4 +1,4 @@
-// JPEG XL export (#6): written by the engine with libjxl, read back by libjxl
+// JPEG XL export (issue 6): written by the engine with libjxl, read back by libjxl
 // for what the codestream says and by ImageIO for what the metadata says.
 //
 // ImageIO is the second reader on purpose: it is what Preview, Photos and
