@@ -1,4 +1,4 @@
-// Region-of-interest rendering, issue #22 and decision #364: a region must be
+// Region-of-interest rendering, issue #22 and decision #371: a region must be
 // the same pixels as the same crop of the graph it stands in for.
 #include "harness.h"
 #include "Engine.h"

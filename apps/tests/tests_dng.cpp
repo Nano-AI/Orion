@@ -757,6 +757,23 @@ void testFacadeSessionSeams() {
     report(orion_engine_release_render_memory(nullptr) == ORION_ERR_BAD_ARG,
            "release refuses a null engine");
 
+    // The size in two halves (#6): the encode outlives the engine and still
+    // measures the same file the one-call measurement does.
+    OrionExportOptions jxl{};
+    jxl.format = ORION_FORMAT_JXL;
+    jxl.quality = 0.9f;
+    jxl.bit_depth = ORION_DEPTH_8;
+    std::uint64_t whole = 0, halves = 0;
+    OrionExportSnapshot* snapshot = nullptr;
+    const bool measured = orion_engine_export_size(e, &jxl, &whole) == ORION_OK &&
+                          orion_engine_export_snapshot(e, &jxl, &snapshot) == ORION_OK;
     orion_engine_destroy(e);
+    report(measured && orion_export_snapshot_size(snapshot, &halves) == ORION_OK &&
+               whole > 0 && halves == whole,
+           "a snapshot measures what export_size does, after the engine is gone",
+           std::to_string(whole) + " vs " + std::to_string(halves));
+    orion_export_snapshot_free(snapshot);
+    report(orion_export_snapshot_size(nullptr, &halves) == ORION_ERR_BAD_ARG,
+           "the size refuses a null snapshot");
     std::remove(path.c_str());
 }

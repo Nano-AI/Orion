@@ -90,7 +90,11 @@ sealed class App : Application {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) {
             // Before the first open, so the photo it arrives with is armed too. Interactive only:
             // the headless modes read sidecars and never write the photographer's.
-            if (Run.Proof == null) Autosave.Install();
+            if (Run.Proof == null) {
+                Autosave.Install();
+                Library.LibraryModel.Shared.Writes = true;   // ratings and labels, as Library.persist
+                ShellSettings.File = ShellSettings.UserFile;  // and the remembered sizes
+            }
             OpenPhotos();   // the first photo arrives from a background decode
             desktop.MainWindow = MakeWindow() ?? throw new ArgumentException($"no panel '{Run.Panel}'");
             if (Run.Proof is { } dir) CanvasSlice.SharedProof.Start(desktop.MainWindow, dir);

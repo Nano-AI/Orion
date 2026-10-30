@@ -11,6 +11,7 @@ add_executable(orion-tests
     tests_color.cpp
     tests_io.cpp
     tests_watermark.cpp
+    tests_jxl.cpp
     tests_geometry.cpp
     tests_perspective.cpp
     tests_tone.cpp
@@ -50,3 +51,10 @@ target_include_directories(orion-tests PRIVATE ${CMAKE_SOURCE_DIR}/engine/src ${
 target_compile_definitions(orion-tests PRIVATE ORION_SHADER_DIR="${ORION_SHADER_DIR}"
             ORION_DATA_DIR="${CMAKE_SOURCE_DIR}/data")
 target_link_libraries(orion-tests PRIVATE Orion::Engine)
+
+# The JPEG XL round trip decodes with libjxl itself, and converts lossy frames
+# back with libjxl's CMS. Scoped to the one file that includes it.
+find_library(JXL_CMS_LIBRARY NAMES jxl_cms
+    HINTS /opt/homebrew/opt/jpeg-xl/lib /usr/local/opt/jpeg-xl/lib REQUIRED)
+set_source_files_properties(tests_jxl.cpp PROPERTIES INCLUDE_DIRECTORIES ${JXL_INCLUDE_DIR})
+target_link_libraries(orion-tests PRIVATE ${JXL_LIBRARIES} ${JXL_CMS_LIBRARY})

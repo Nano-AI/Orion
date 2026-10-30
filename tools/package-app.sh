@@ -325,7 +325,10 @@ copy_license "LibRaw-COPYRIGHT.txt" "$LIBRAW_DIR/COPYRIGHT"
 for spec in \
     "libomp-Apache-2.0-LLVM.txt:libomp:LICENSE.TXT" \
     "libjpeg-turbo.md:jpeg-turbo:LICENSE.md" \
-    "little-cms2-MIT.txt:little-cms2:LICENSE"
+    "little-cms2-MIT.txt:little-cms2:LICENSE" \
+    "libjxl-BSD-3-Clause.txt:jpeg-xl:LICENSE" \
+    "highway-Apache-2.0-or-BSD-3-Clause.txt:highway:LICENSE" \
+    "brotli-MIT.txt:brotli:LICENSE"
 do
     IFS=: read -r out pkg file <<< "$spec"
     src="$(ls -d /opt/homebrew/Cellar/"$pkg"/*/"$file" 2>/dev/null | tail -1 || true)"

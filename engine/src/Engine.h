@@ -88,7 +88,7 @@ public:
     /// Renders the preview graph. Returns GPU milliseconds.
     double renderPreview();
 
-    // ── Region of interest (issue #22, decision #364) ─────────────────────
+    // ── Region of interest (issue #22, decision #371) ─────────────────────
     //
     // A third graph, over the part of the mosaic the screen shows, decimated
     // to the zoom: a drag frame and a settled render at 100% cost what the
@@ -162,6 +162,12 @@ public:
     /// The export panel shows a measured size rather than an estimate, which
     /// is the whole reason the number is worth showing.
     [[nodiscard]] std::size_t exportedSize(const util::ExportOptions&);
+
+    /// The first half of `exportedSize`: renders at the export's depth and
+    /// reads the pixels back (16-bit RGBA, tightly packed). Touches the graph,
+    /// so it stays on the graph's thread; encoding what it returns does not.
+    [[nodiscard]] std::vector<std::uint16_t> exportPixels(const util::ExportOptions&,
+                                                          std::uint32_t& w, std::uint32_t& h);
 
 private:
     /// The developed output as 16-bit unsigned, which is what the image

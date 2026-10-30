@@ -213,7 +213,20 @@ Lightroom have already installed on the user's own machine. **No Adobe profile
 is bundled or redistributed.** The format is read from its published
 description (the Adobe Camera Model, as documented by Adobe and by the lensfun
 project's manual); no other program's LCP reader was used as a source. See
-`research/lens-corrections.md` and `planning/DECISIONS.md` #361 and #362.
+`research/lens-corrections.md` and `planning/DECISIONS.md` #372 and #373.
 
 Adobe lens profiles are parsed with libxml2 (MIT licence), the copy the
-operating system provides; Orion does not ship it. See decision #363.
+operating system provides; Orion does not ship it. See decision #374.
+
+## JPEG XL
+
+JPEG XL export uses libjxl (0.12), licensed under the **BSD 3-Clause License**,
+Copyright (c) the JPEG XL Project Authors (https://github.com/libjxl/libjxl).
+Orion links it dynamically and confines it to one translation unit
+(`engine/src/util/JxlWriter.cpp`). libjxl in turn links Highway (Apache-2.0 or
+BSD-3-Clause, Copyright Google LLC) and Brotli (MIT, Copyright the Brotli
+Authors). BSD-3-Clause requires the copyright notice, the conditions and the
+disclaimer to travel with a binary: the three license texts are copied verbatim
+from the installed packages into `Contents/Resources/licenses/` of both
+packaged apps (`tools/package-app.sh`, `tools/package-avalonia.sh`). See
+`planning/DECISIONS.md` #363.

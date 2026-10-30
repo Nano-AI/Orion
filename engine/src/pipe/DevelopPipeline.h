@@ -255,7 +255,7 @@ public:
     /// previews. See research/film-grain.md and decision #81.
     void setGridStep(float step);
 
-    // ── Region of interest (issue #22, decision #364) ──────────────────────
+    // ── Region of interest (issue #22, decision #371) ──────────────────────
     //
     // A graph built over a *window* of the frame rather than the whole of it:
     // the canvas's region graph, which renders only what is on screen. The

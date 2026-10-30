@@ -221,6 +221,8 @@ add_custom_command(
             ${OPENCV_LIBRARIES}
             # libxml2, for Adobe lens profiles; the system copy.
             -lxml2
+            # libjxl, for JPEG XL export (engine/src/util/JxlWriter.cpp).
+            ${JXL_LIBRARIES}
             # The engine is C++ and throws internally, so the Swift link needs
             # libc++ and its unwinder even though nothing escapes the facade.
             -lc++ -lc++abi

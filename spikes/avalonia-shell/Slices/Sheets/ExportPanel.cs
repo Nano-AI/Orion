@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Threading;
+using OrionShell.Library;
 
 namespace OrionShell.Sheets;
 
@@ -20,9 +21,9 @@ public sealed class ExportPanel : Border {
     int _token;
     uint _sw, _sh;
 
-    /// How many photographs the selection holds; 0 exports the open one.
-    // stub(#315): Library.swift owns this until the logic moves below the facade
-    static int Selected => 0;
+    /// How many photographs the batch writes (exportSelected): the selection's
+    /// export targets when there is a real selection, 0 to export the open one.
+    static int Selected => LibraryModel.Shared.HasExplicitSelection ? ExportRun.Targets().Count : 0;
     readonly Border _readout;
     /// Closes the sheet. Set by whatever opened it.
     public Action? Dismiss { get; set; }
@@ -49,9 +50,12 @@ public sealed class ExportPanel : Border {
 
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Sm + 2, HorizontalAlignment = HorizontalAlignment.Right };
         actions.Children.Add(SheetKit.Button("Cancel", () => Dismiss?.Invoke()));
-        // exportFile; runBatchExport needs a selection, which is not ported.
-        actions.Children.Add(SheetKit.Button(Selected > 0 ? $"Export {Selected}…" : "Export…",
-            () => { Dismiss?.Invoke(); ExportRun.ExportOpen(); }, prominent: true));
+        // runBatchExport over a selection, else exportFile. The batch reads sidecars: what is owed is written first.
+        actions.Children.Add(SheetKit.Button(Selected > 0 ? $"Export {Selected}…" : "Export…", () => {
+            bool batch = Selected > 0;
+            Dismiss?.Invoke();
+            if (batch) { Autosave.Shared.Flush(); ExportRun.ExportAll(); } else ExportRun.ExportOpen();
+        }, prominent: true));
         Child = new StackPanel {
             Spacing = Space.Lg,
             // The options scroll on a small window; Cancel and Export stay put.
@@ -101,7 +105,7 @@ public sealed class ExportPanel : Border {
     Control QualityControl() {
         var slider = new Slider { Minimum = 0.3, Maximum = 1, Value = _s.Quality, Foreground = Palette.Accent, MinHeight = 0 };
         var value = Faces.Figure("", Faces.Mark, Palette.Dim);
-        void Show() => value.Text = ((int)(_s.Quality * 100)).ToString();
+        void Show() => value.Text = _s.IsJxl && _s.Quality >= 1 ? "Lossless" : ((int)(_s.Quality * 100)).ToString();
         slider.ValueChanged += (_, e) => { _s.Quality = e.NewValue; Show(); Remeasure(); };
         Show();
         var scale = new Grid { ColumnDefinitions = new("Auto,*,Auto,*,Auto") };
@@ -110,7 +114,9 @@ public sealed class ExportPanel : Border {
         Grid.SetColumn(smaller, 2);
         Grid.SetColumn(better, 4);
         scale.Children.AddRange([value, smaller, better]);
-        return new StackPanel { Spacing = 3, Children = { slider, scale } };
+        var panel = new StackPanel { Spacing = 3, Children = { slider, scale } };
+        if (_s.IsJxl) panel.Children.Add(SheetKit.Note("At 100 the file is lossless: every pixel kept exactly.", Palette.Dim));
+        return panel;
     }
 
     /// A menu with the chosen item's note under it.
@@ -120,7 +126,7 @@ public sealed class ExportPanel : Border {
         return new StackPanel { Spacing = 5, Children = { menu, note } };
     }
 
-    string DepthNote() => _s.CarriesDepth ? ExportSettings.Depths[_s.Depth].Note : "JPEG holds eight bits. Choose PNG or TIFF for more.";
+    string DepthNote() => _s.CarriesDepth ? ExportSettings.Depths[_s.Depth].Note : "JPEG holds eight bits. Choose PNG, TIFF or JPEG XL for more.";
 
     /// Commits on Return or on leaving the field, not per keystroke: three
     /// wasted encodes and a jumping number while you type "2048".
@@ -181,30 +187,87 @@ public sealed class ExportPanel : Border {
     void Paint() {
         var (w, h) = _s.Dimensions(_sw, _sh);
         _dims.Text = $"{w} × {h}";
-        _size.Text = _s.SizeText(_sw, _sh);
+        _size.Text = _failed ? "Size unknown" : _s.SizeText(_sw, _sh);
         _size.Foreground = _s.MeasuredBytes == null ? Palette.Dim : Palette.Text;
-        _measuring.IsVisible = _s.MeasuredBytes == null && EngineModel.Shared.Handle != 0;
-        _sizeNote.Text = _s.MeasuredBytes == null ? "Measuring the encoded size…"
+        _measuring.IsVisible = _s.MeasuredBytes == null && !_failed && EngineModel.Shared.Handle != 0;
+        _sizeNote.Text = _failed ? "The encoded size could not be measured."
+            : _s.MeasuredBytes == null ? "Measuring the encoded size…"
             : Selected > 0 ? $"Measured on the open photo. Each of the {Selected} is sized by its own frame and goes to a folder you choose; nothing there is overwritten."
             : $"Encoded size, measured. Color space is {ExportSettings.Spaces[_s.Space].Title}.";
     }
 
     /// Re-encodes after a pause: a 24 MP JPEG is a sixth of a second, so one
-    /// per slider tick would make the slider unusable. Like `Engine.exportedSize`
-    /// it runs on the UI thread, which owns the develop graph.
+    /// per slider tick would make the slider unusable. The render stays on the
+    /// UI thread, which owns the develop graph; the encode does not, because a
+    /// 24 MP JPEG XL is seconds of it (#6). One encode at a time: a change made
+    /// while one runs is measured when it ends, and only the latest lands.
     // The watermark's coverage mask (WatermarkRaster.mask) is not passed, so the size omits the mark:
     // stub(#315): Engine+Document.swift owns this until the logic moves below the facade
     void Remeasure() {
-        int token = ++_token;
+        ++_token;
         _s.MeasuredBytes = null;
+        _failed = false;
         Paint();
         _pending?.Dispose();
-        _pending = DispatcherTimer.RunOnce(() => {
-            nint engine = EngineModel.Shared.Handle;
-            if (token != _token || engine == 0) return;
-            var options = _s.Options(_sw, _sh);
-            if (SheetsNative.orion_engine_export_size(engine, in options, out ulong bytes) == 0) _s.MeasuredBytes = (long)bytes;
-            Paint();
-        }, TimeSpan.FromMilliseconds(260));
+        _pending = DispatcherTimer.RunOnce(Measure, TimeSpan.FromMilliseconds(260));
+    }
+
+    bool _encoding, _again, _failed, _closed;
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e) {
+        base.OnAttachedToVisualTree(e);
+        if (!_closed) return;
+        _closed = false;
+        Remeasure();
+    }
+
+    /// Closed: no more renders on the UI thread, and a result still in flight lands nowhere.
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e) {
+        base.OnDetachedFromVisualTree(e);
+        _closed = true;
+        _pending?.Dispose();
+        _again = false;
+        ++_token;
+    }
+
+    void Measure() {
+        if (_closed) return;
+        // ponytail: one in flight, so a dragged slider never stacks 200 MB snapshots and full-core encodes.
+        if (_encoding) { _again = true; return; }
+        int token = _token;
+        nint engine = EngineModel.Shared.Handle;
+        var options = _s.Options(_sw, _sh);
+        nint snapshot = 0;
+        if (engine == 0 || SheetsNative.orion_engine_export_snapshot(engine, in options, out snapshot) != 0) {
+            Land(token, null);
+            return;
+        }
+        _encoding = true;
+        // The task frees its snapshot itself, once started, whatever the encode does;
+        // so the hand-off frees it only if the task never started.
+        Task<long?>? encode = null;
+        try {
+            encode = Task.Run(() => {
+                try { return SheetsNative.orion_export_snapshot_size(snapshot, out ulong b) == 0 ? (long?)b : null; }
+                finally { SheetsNative.orion_export_snapshot_free(snapshot); }
+            });
+            encode.ContinueWith(t => Dispatcher.UIThread.Post(() => {
+                _encoding = false;
+                Land(token, t.IsCompletedSuccessfully ? t.Result : null);
+                if (_again && !_closed) { _again = false; Measure(); }
+            }), TaskScheduler.Default);
+        } catch {
+            if (encode == null) SheetsNative.orion_export_snapshot_free(snapshot);
+            _encoding = false;
+            Land(token, null);
+        }
+    }
+
+    /// A measurement, or its failure, if it is still the one the sheet is waiting for.
+    void Land(int token, long? bytes) {
+        if (token != _token || _closed) return;
+        _s.MeasuredBytes = bytes;
+        _failed = bytes == null;
+        Paint();
     }
 }

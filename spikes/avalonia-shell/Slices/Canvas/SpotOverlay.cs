@@ -29,6 +29,15 @@ static class SpotModel {
         CanvasState.Touch();
     }
 
+    /// Every spot at once, as undo and redo put them back (EditHistory): the one
+    /// door a restored list comes in by, so pushing spots to the engine is one change here.
+    public static void Replace(IEnumerable<SpotPlacement> spots) {
+        Spots.Clear();
+        Spots.AddRange(spots);
+        Selected = Math.Min(Selected, Spots.Count - 1);
+        CanvasState.Touch();
+    }
+
     /// `moveSpot`: either end, given in displayed coordinates.
     public static void Move(int i, Point? destination, Point? source, FrameDisplayMap fd) {
         if (i < 0 || i >= Spots.Count) return;
@@ -121,7 +130,8 @@ public sealed class SpotOverlay : Control, ICustomHitTest {
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e) {
         if (_dragging == null && !_placing) return;
-        // stub(#315): EditHistory.swift owns this until the logic moves below the facade (commitSpotEdit)
+        // addSpot's "Spot", or commitSpotEdit's "Move spot": one step, recorded at the full render the release settles on.
+        Develop.EditHistory.Label(_placing ? "Spot" : "Move spot");
         (_dragging, _placing) = (null, false);
         e.Pointer.Capture(null);
         EngineModel.Shared.EndInteraction();

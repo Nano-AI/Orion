@@ -175,12 +175,11 @@ static partial class SelfTest {
         Type(window, Key.Escape, PhysicalKey.Escape);
         Check(held && ended, "a crop drag that loses its pointer capture still ends with a full render");
 
-        // A stub says so where a person looks, not on stderr.
+        // Sync all… is built (SelfTest.Matte.cs presses its alert): it waits for a copy and a second photo.
         Click(window, TabButton(window, "Presets"));
         Click(window, Labelled(window, "Copy"));
-        Click(window, Labelled(window, "Sync all…"));
-        Check(engine.Status.StartsWith("Syncing") && engine.Status.EndsWith("isn't in this version yet."),
-              $"Sync all… says it is not built, on the status line ('{engine.Status}')");
+        Check(Labelled(window, "Sync all…").IsEnabled == engine.Photos.Count >= 2,
+              $"Sync all… is armed by a copy and a second photo in view ({engine.Photos.Count} in view)");
         Click(window, TabButton(window, "Light"));
         window.Close();
     }

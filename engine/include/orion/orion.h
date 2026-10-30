@@ -509,7 +509,7 @@ OrionStatus orion_engine_preview_size(const OrionEngine* engine,
                                       unsigned* out_w, unsigned* out_h);
 
 /* Renders only the part of the picture the canvas shows, at the screen's own
- * resolution (issue #22, decision #364): x, y, w, h are normalized in the
+ * resolution (issue #22, decision #371): x, y, w, h are normalized in the
  * displayed picture (cropped and turned, 0..1), out_w x out_h the screen
  * pixels that part covers. Cost follows the screen, not the sensor, and the
  * result is never softer than the screen. Canvas only, like the preview.
@@ -645,7 +645,8 @@ OrionStatus orion_read_thumbnail(const char* path, uint8_t* buffer,
 typedef enum OrionImageFormat {
     ORION_FORMAT_PNG  = 0,
     ORION_FORMAT_JPEG = 1,
-    ORION_FORMAT_TIFF = 2
+    ORION_FORMAT_TIFF = 2,
+    ORION_FORMAT_JXL  = 3   /* JPEG XL, via libjxl; quality 1.0 is lossless */
 } OrionImageFormat;
 
 /* What the file is tagged as, and converted to.
@@ -671,8 +672,8 @@ typedef enum OrionMetadata {
     ORION_METADATA_NONE        = 2
 } OrionMetadata;
 
-/* Bits per component in the file. PNG and TIFF carry either; JPEG is an
- * eight-bit container and ignores it.
+/* Bits per component in the file. PNG, TIFF and JPEG XL carry either; JPEG is
+ * an eight-bit container and ignores it.
  *
  * An eight-bit export renders through the narrow graph, which is the path that
  * dithers — so it is byte-for-byte what the screen shows. Sixteen renders wide.
@@ -700,7 +701,7 @@ typedef enum OrionSharpen {
 
 typedef struct OrionExportOptions {
     int32_t  format;         /* OrionImageFormat; -1 picks from the extension */
-    float    quality;        /* JPEG only, 0..1                               */
+    float    quality;        /* JPEG and JPEG XL, 0..1; JXL at 1 is lossless  */
     uint32_t max_dimension;  /* longest edge; 0 keeps full resolution         */
     int32_t  space;          /* OrionColorSpace                               */
     int32_t  rating;         /* 0-5 written as the star rating; -1 writes none */
@@ -752,6 +753,21 @@ OrionStatus orion_engine_export(OrionEngine* engine, const char* path,
 OrionStatus orion_engine_export_size(OrionEngine* engine,
                                      const OrionExportOptions* options,
                                      uint64_t* out_bytes);
+
+/* orion_engine_export_size in two halves, so the slow half can leave the
+ * thread that owns the engine: a 24 MP JPEG XL is seconds of encode.
+ *
+ * The snapshot renders and reads the pixels back, so call it wherever any
+ * other orion_engine_* call is made. The size encodes the snapshot, touches no
+ * engine, and is safe from any thread, even after the engine is destroyed.
+ * The options (the watermark mask included) are copied. Free every snapshot. */
+typedef struct OrionExportSnapshot OrionExportSnapshot;
+OrionStatus orion_engine_export_snapshot(OrionEngine* engine,
+                                         const OrionExportOptions* options,
+                                         OrionExportSnapshot** out);
+OrionStatus orion_export_snapshot_size(const OrionExportSnapshot* snapshot,
+                                       uint64_t* out_bytes);
+void orion_export_snapshot_free(OrionExportSnapshot* snapshot);
 
 /* The lens profile for the open photo.
  *

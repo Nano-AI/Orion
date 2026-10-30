@@ -3,10 +3,13 @@
 #import <ImageIO/ImageIO.h>
 
 #include "util/ImageWriter.h"
+#include "util/JxlMetadata.h"
+#include "util/JxlWriter.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <fstream>
 #include <stdexcept>
 #include <vector>
 
@@ -20,6 +23,7 @@ CFStringRef uti(ImageFormat f) {
         case ImageFormat::Png:  return CFSTR("public.png");
         case ImageFormat::Jpeg: return CFSTR("public.jpeg");
         case ImageFormat::Tiff: return CFSTR("public.tiff");
+        case ImageFormat::Jxl:  break;  // ImageIO reads JPEG XL but cannot write it
     }
     return CFSTR("public.jpeg");
 }
@@ -454,6 +458,39 @@ CGImageRef convert(CGImageRef source, const ExportOptions& options) {
     return quantiseToEight(wide.ref, target);
 }
 
+/// JPEG XL bytes for one of this file's images, with `props` as its metadata
+/// (nil writes none). Every image reaching here came out of `makeImage`,
+/// `convert` or `quantiseToEight`, so the layout is RGBX at 8 or 16 bits; the
+/// check is for the day that stops being true.
+std::vector<std::uint8_t> jxlBytes(CGImageRef image, const ExportOptions& options,
+                                   NSDictionary* props) {
+    const auto bits = static_cast<int>(CGImageGetBitsPerComponent(image));
+    const CGBitmapInfo info = CGImageGetBitmapInfo(image);
+    const bool rgbx = (bits == 8 || bits == 16)
+        && CGImageGetBitsPerPixel(image) == std::size_t(bits) * 4
+        && (info & kCGBitmapAlphaInfoMask) == kCGImageAlphaNoneSkipLast
+        && (bits == 8 || (info & kCGBitmapByteOrderMask) == kCGBitmapByteOrder16Little);
+    if (!rgbx) throw std::runtime_error("jxl: unexpected pixel layout");
+
+    CFHolder<CFDataRef> pixels(CGDataProviderCopyData(CGImageGetDataProvider(image)));
+    CFHolder<CFDataRef> icc(CGColorSpaceCopyICCData(CGImageGetColorSpace(image)));
+    if (!pixels || !icc) throw std::runtime_error("jxl: could not read the image");
+
+    JxlInput in;
+    in.pixels = CFDataGetBytePtr(pixels.ref);
+    in.width = static_cast<std::uint32_t>(CGImageGetWidth(image));
+    in.height = static_cast<std::uint32_t>(CGImageGetHeight(image));
+    in.bytesPerRow = CGImageGetBytesPerRow(image);
+    in.bits = bits;
+    in.quality = options.quality;
+    const std::uint8_t* p = CFDataGetBytePtr(icc.ref);
+    in.icc.assign(p, p + CFDataGetLength(icc.ref));
+    if (props != nil) {
+        serialiseMetadata((__bridge CFDictionaryRef)props, in.width, in.height, in.exif, in.xmp);
+    }
+    return encodeJxl(in);
+}
+
 }  // namespace
 
 ImageFormat formatForPath(const std::string& path) {
@@ -466,6 +503,7 @@ ImageFormat formatForPath(const std::string& path) {
 
     if (ext == "png") return ImageFormat::Png;
     if (ext == "tif" || ext == "tiff") return ImageFormat::Tiff;
+    if (ext == "jxl") return ImageFormat::Jxl;
     return ImageFormat::Jpeg;
 }
 
@@ -476,6 +514,16 @@ void writeImage(const std::string& path, const std::uint16_t* rgba,
         CFHolder<CGImageRef> full(makeImage(rgba, width, height, bytesPerRow));
         CFHolder<CGImageRef> scaled(convert(full.ref, options));
         CGImageRef image = scaled ? scaled.ref : full.ref;
+
+        if (options.format == ImageFormat::Jxl) {
+            const auto bytes = jxlBytes(
+                image, options, metadata(options.metadataFrom, options.rating, options.metadata));
+            std::ofstream file(path, std::ios::binary | std::ios::trunc);
+            file.write(reinterpret_cast<const char*>(bytes.data()),
+                       static_cast<std::streamsize>(bytes.size()));
+            if (!file.flush()) throw std::runtime_error("could not write: " + path);
+            return;
+        }
 
         NSURL* url = [NSURL fileURLWithPath:@(path.c_str())];
         CFHolder<CGImageDestinationRef> dest(CGImageDestinationCreateWithURL(
@@ -500,6 +548,11 @@ std::size_t encodedSize(const std::uint16_t* rgba,
         CFHolder<CGImageRef> full(makeImage(rgba, width, height, bytesPerRow));
         CFHolder<CGImageRef> scaled(convert(full.ref, options));
         CGImageRef image = scaled ? scaled.ref : full.ref;
+
+        // No metadata, as for the other formats below: the measurement leaves
+        // out the EXIF and XMP boxes, an underestimate of a few hundred bytes
+        // to a few kilobytes against a file measured in megabytes.
+        if (options.format == ImageFormat::Jxl) return jxlBytes(image, options, nil).size();
 
         // To memory, not to a file. An estimate from bytes-per-pixel was off by
         // enough to be misleading — the whole point of the number is that you

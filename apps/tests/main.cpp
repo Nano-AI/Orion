@@ -110,6 +110,7 @@ int main() {
     testBlackLevels();
     testExportFormats();
     testExportWatermark();
+    testExportJxl();
     testFloatToHalf();
     testDngRoundTrip();
     testLinearDngOpens();

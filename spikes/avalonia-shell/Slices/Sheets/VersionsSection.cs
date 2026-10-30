@@ -3,65 +3,53 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using OrionShell.Masks;
 
 namespace OrionShell.Sheets;
 
-/// The saved versions of the open photo, as the Presets tab shows them.
-// stub(#315): Snapshots.swift owns this until the logic moves below the facade
-static class SnapshotStub {
-    public sealed record Version(string Name, DateTimeOffset Created, bool Automatic = false, string[]? Missing = null);
-
-    /// SnapshotStore.Refusal.fileUnreadable's text when the versions file is unreadable.
-    public static string? Unreadable => null;
-
-    public static List<Version> Versions { get; } = Posed();
-
-    /// `ORION_SCENE=versions` poses the three rows Screenshot+Scenes.swift's
-    /// `snapshots(for:)` hands the Swift scene: one of each kind the panel draws.
-    static List<Version> Posed() {
-        if (Environment.GetEnvironmentVariable("ORION_SCENE") != "versions") return [];
-        var epoch = DateTimeOffset.FromUnixTimeSeconds(1_700_000_000);
-        return [
-            new("Before restoring warmer", epoch, Automatic: true),
-            new("warmer", epoch.AddHours(-1)),
-            new("with the sky darkened", epoch.AddDays(-1), Missing: ["Subject"]),
-        ];
-    }
-
-    /// A click on a control that is not built says so on the status line, not on stderr nobody reads.
-    public static void Act(string what) => NotBuilt.Say(what, "Snapshots.swift");
-}
-
 /// A port of `versionsPanel` in app/DevelopPanels+Presets.swift. First in the
-/// tab: the one section about the photograph in front of you.
+/// tab: the one section about the photograph in front of you. The versions are
+/// SnapshotStore.Shared's; a refusal (no name, a hundred already, a file that
+/// will not write) goes to the status line.
 sealed class VersionsSection {
     public SectionPlate Plate { get; } = new("Versions");
-    SnapshotStub.Version? _renaming;
+    SnapshotStore.Snapshot? _renaming;
     string _renameText = "";
+
+    static SnapshotStore Store => SnapshotStore.Shared;
 
     public VersionsSection() {
         Build();
+        Store.Changed += Build;
         EngineModel.Shared.Opened += Build;
     }
 
     static bool Loaded => EngineModel.Shared.Handle != 0;
 
+    /// A store refusal said where the user looks, not thrown up a click handler.
+    static void Try(Action act) {
+        try { act(); } catch (SnapshotStore.Refusal e) { EngineModel.Shared.Say(e.Message); }
+    }
+
     void Build() {
         var rows = Plate.Rows.Children;
         rows.Clear();
-        if (SnapshotStub.Unreadable is { } why) rows.Add(SheetKit.Note(why, Palette.Star));
-        else if (SnapshotStub.Versions.Count == 0)
+        if (Store.UnreadableText is { } why) rows.Add(SheetKit.Note(why, Palette.Star));
+        else if (Store.Snapshots.Count == 0)
             rows.Add(SheetKit.Note(Loaded ? "No versions of this photo yet." : "Open a photo to save a version of it."));
 
-        if (SnapshotStub.Versions.Count > 0) {
+        if (Store.Snapshots.Count > 0) {
             var list = new StackPanel { Spacing = Space.Xs };
-            foreach (var v in SnapshotStub.Versions) list.Children.Add(Row(v));
+            foreach (var v in Store.Snapshots) list.Children.Add(Row(v));
             rows.Add(list);
         }
 
         var name = SheetKit.Field("New version");
-        var save = SheetKit.Button("Save", () => SnapshotStub.Act("saving a version"));
-        void Enable() => save.IsEnabled = Loaded && SnapshotStub.Unreadable == null && (name.Text ?? "").Trim().Length > 0;
+        var save = SheetKit.Button("Save", () => Try(() => {
+            if (EngineModel.Shared.Session is not { } s) return;
+            Store.Save(name.Text ?? "", s.Capture(MaskGroup.Shared.Shapes));
+        }));
+        void Enable() => save.IsEnabled = Loaded && !Store.Unreadable && (name.Text ?? "").Trim().Length > 0;
         name.TextChanged += (_, _) => Enable();
         Enable();
         rows.Add(SheetKit.FieldWithButton(name, save));
@@ -71,9 +59,9 @@ sealed class VersionsSection {
     }
 
     /// One saved version: restore, rename in place, delete.
-    Control Row(SnapshotStub.Version v) {
+    Control Row(SnapshotStore.Snapshot v) {
         var row = new DockPanel();
-        if (_renaming == v) {
+        if (_renaming?.Id == v.Id) {
             var field = SheetKit.Field("Name");
             field.Text = _renameText;
             field.TextChanged += (_, _) => _renameText = field.Text ?? "";
@@ -81,7 +69,7 @@ sealed class VersionsSection {
             field.KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) Commit(v); };
             return SheetKit.FieldWithButton(field, done);
         }
-        var delete = SheetKit.Glyph("minus.circle", "Delete this version", () => SnapshotStub.Act("deleting a version"));
+        var delete = SheetKit.Glyph("minus.circle", "Delete this version", () => Try(() => Store.Remove(v.Id)));
         var rename = SheetKit.Glyph("pencil", "Rename", () => { _renaming = v; _renameText = v.Name; Build(); });
         DockPanel.SetDock(delete, Dock.Right);
         DockPanel.SetDock(rename, Dock.Right);
@@ -98,11 +86,12 @@ sealed class VersionsSection {
             Text = v.Name, FontSize = Faces.Label, TextTrimming = TextTrimming.CharacterEllipsis,
         }]);
         var body = new StackPanel { Spacing = 1, Children = { head } };
-        if (v.Missing is { Length: > 0 } missing)
+        var missing = SnapshotStore.MissingMattes(v, Store.Photo);
+        if (missing.Count > 0)
             // Named, in the colour that means "look at this": a version that
             // quietly restores an empty mask is the defect this line refuses.
             body.Children.Add(new TextBlock {
-                Text = $"{missing.Length} selection{(missing.Length == 1 ? "" : "s")} missing — {string.Join(", ", missing)}",
+                Text = $"{missing.Count} selection{(missing.Count == 1 ? "" : "s")} missing — {string.Join(", ", missing)}",
                 FontSize = Faces.Mark, Foreground = Palette.Star,
             });
         else if (v.Automatic)
@@ -112,16 +101,20 @@ sealed class VersionsSection {
             Background = Palette.Raised, CornerRadius = new CornerRadius(Radius.Sm), Padding = new Thickness(Space.Sm, 3),
             Child = body, IsEnabled = Loaded, Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
         };
-        // SnapshotStore.restore, Engine.restore:
-        // stub(#315): Snapshots.swift owns this until the logic moves below the facade
-        restore.Tapped += (_, _) => SnapshotStub.Act("restoring a version");
+        restore.Tapped += (_, _) => Restore(v);
         row.Children.AddRange([delete, rename, restore]);
         return row;
     }
 
-    void Commit(SnapshotStub.Version v) {
-        SnapshotStub.Act($"renaming '{v.Name}'");
+    /// Through SnapshotStore.Restore, which keeps the working edit before it is overwritten.
+    public static void Restore(SnapshotStore.Snapshot v) {
+        if (EngineModel.Shared.Session is not { } s) return;
+        Store.Restore(v, s.Capture(MaskGroup.Shared.Shapes), SnapshotStore.Assign);
+    }
+
+    void Commit(SnapshotStore.Snapshot v) {
         _renaming = null;
+        Try(() => Store.Rename(v.Id, _renameText));
         Build();
     }
 }

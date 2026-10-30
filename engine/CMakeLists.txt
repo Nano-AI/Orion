@@ -25,6 +25,8 @@ add_library(orion_engine STATIC
     src/pipe/WhiteBalance.cpp
     src/util/ImageWriter.mm
     src/util/DngWriter.cpp
+    src/util/JxlWriter.cpp
+    src/util/JxlMetadata.mm
     src/merge/Merge.cpp
     src/merge/MergeRender.cpp
     src/merge/Align.cpp
@@ -57,6 +59,7 @@ set_source_files_properties(
     src/gpu/Resources.mm
     src/gpu/TexturePool.cpp
     src/util/ImageWriter.mm
+    src/util/JxlMetadata.mm
     PROPERTIES COMPILE_OPTIONS "-fobjc-arc"
 )
 
@@ -115,8 +118,31 @@ find_package(LibXml2 REQUIRED)
 set_source_files_properties(src/pipe/LensLcp.cpp
     PROPERTIES INCLUDE_DIRECTORIES "${LIBXML2_INCLUDE_DIRS}")
 
+# libjxl — JPEG XL export ONLY (src/util/JxlWriter.cpp, the one file that
+# includes it). BSD-3-Clause, dynamically linked; listed in NOTICE. ImageIO
+# reads JPEG XL but cannot write it. DECISIONS #363.
+find_path(JXL_INCLUDE_DIR
+    NAMES jxl/encode.h
+    HINTS /opt/homebrew/opt/jpeg-xl/include /usr/local/opt/jpeg-xl/include
+    REQUIRED
+)
+set(JXL_LIBRARIES "")
+foreach(lib jxl jxl_threads)
+    find_library(JXL_${lib}_LIBRARY
+        NAMES ${lib}
+        HINTS /opt/homebrew/opt/jpeg-xl/lib /usr/local/opt/jpeg-xl/lib
+        REQUIRED
+    )
+    list(APPEND JXL_LIBRARIES ${JXL_${lib}_LIBRARY})
+endforeach()
+message(STATUS "libjxl: ${JXL_jxl_LIBRARY}")
+set(JXL_INCLUDE_DIR ${JXL_INCLUDE_DIR} PARENT_SCOPE)
+set(JXL_LIBRARIES ${JXL_LIBRARIES} PARENT_SCOPE)
+set_source_files_properties(src/util/JxlWriter.cpp
+    PROPERTIES INCLUDE_DIRECTORIES ${JXL_INCLUDE_DIR})
+
 target_link_libraries(orion_engine
     PRIVATE ${METAL_FRAMEWORK} ${FOUNDATION_FRAMEWORK}
             ${COREGRAPHICS_FRAMEWORK} ${IMAGEIO_FRAMEWORK}
-            ${LIBRAW_LIBRARY} ${OPENCV_LIBRARIES} ${LIBXML2_LIBRARIES}
+            ${LIBRAW_LIBRARY} ${OPENCV_LIBRARIES} ${LIBXML2_LIBRARIES} ${JXL_LIBRARIES}
 )

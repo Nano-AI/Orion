@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <cstring>
 #include <exception>
+#include <memory>
 #include <new>
 #include <string>
 #include <utility>
@@ -725,6 +726,24 @@ orion::util::Watermark toWatermark(const OrionExportOptions& o) {
     for (int i = 0; i < 3; ++i) w.rgb[i] = std::clamp(o.watermark_rgb[i], 0.0f, 1.0f);
     return w;
 }
+/// What a size measurement encodes with. The depth and the sharpening both
+/// move the byte count (eight bits is about half the PNG, and sharpening gives
+/// the JPEG encoder more to encode), and so does the watermark, which is detail
+/// the encoder spends bytes on. A measured size that ignored them would be a
+/// measurement of the wrong file. No metadata: see `encodedSize`.
+orion::util::ExportOptions toSizeOptions(const OrionExportOptions& options) {
+    orion::util::ExportOptions o{};
+    o.format = (options.format < 0)
+        ? orion::util::ImageFormat::Jpeg
+        : static_cast<orion::util::ImageFormat>(options.format);
+    o.quality = options.quality;
+    o.maxDimension = options.max_dimension;
+    o.space = toColorSpace(options.space);
+    o.depth = toBitDepth(options.bit_depth);
+    o.sharpen = toSharpen(options.sharpen);
+    o.watermark = toWatermark(options);
+    return o;
+}
 }  // namespace
 
 OrionStatus orion_engine_hdr_merge(OrionEngine* engine,
@@ -797,25 +816,49 @@ OrionStatus orion_engine_export_size(OrionEngine* engine,
         return ORION_ERR_BAD_ARG;
     }
     return guard(engine, [&]() -> OrionStatus {
-        orion::util::ExportOptions o{};
-        o.format = (options->format < 0)
-            ? orion::util::ImageFormat::Jpeg
-            : static_cast<orion::util::ImageFormat>(options->format);
-        o.quality = options->quality;
-        o.maxDimension = options->max_dimension;
-        o.space = toColorSpace(options->space);
-        // The depth and the sharpening both move the byte count — eight bits is
-        // about half the PNG, and sharpening gives the JPEG encoder more to
-        // encode. A measured size that ignored them would be a measurement of
-        // the wrong file.
-        o.depth = toBitDepth(options->bit_depth);
-        o.sharpen = toSharpen(options->sharpen);
-        // And the watermark, which is detail the encoder has to spend bytes on.
-        o.watermark = toWatermark(*options);
-        *out_bytes = static_cast<uint64_t>(engine->impl.exportedSize(o));
+        *out_bytes = static_cast<uint64_t>(engine->impl.exportedSize(toSizeOptions(*options)));
         return ORION_OK;
     });
 }
+
+struct OrionExportSnapshot {
+    std::vector<std::uint16_t> pixels;
+    std::uint32_t width = 0, height = 0;
+    orion::util::ExportOptions options;
+    std::vector<std::uint8_t> mask;  ///< owned copy; options.watermark points here
+};
+
+OrionStatus orion_engine_export_snapshot(OrionEngine* engine,
+                                         const OrionExportOptions* options,
+                                         OrionExportSnapshot** out) {
+    if (engine == nullptr || options == nullptr || out == nullptr) return ORION_ERR_BAD_ARG;
+    *out = nullptr;
+    return guard(engine, [&]() -> OrionStatus {
+        auto s = std::make_unique<OrionExportSnapshot>();
+        s->options = toSizeOptions(*options);
+        // The caller's mask is borrowed only for this call; the encode is later.
+        if (auto& wm = s->options.watermark; wm.active()) {
+            s->mask.assign(wm.mask, wm.mask + std::size_t(wm.width) * wm.height);
+            wm.mask = s->mask.data();
+        }
+        s->pixels = engine->impl.exportPixels(s->options, s->width, s->height);
+        *out = s.release();
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_export_snapshot_size(const OrionExportSnapshot* s, uint64_t* out_bytes) {
+    if (s == nullptr || out_bytes == nullptr) return ORION_ERR_BAD_ARG;
+    // No engine to hold an error message: the status is the whole answer.
+    return guard(nullptr, [&]() -> OrionStatus {
+        *out_bytes = static_cast<uint64_t>(orion::util::encodedSize(
+            s->pixels.data(), s->width, s->height,
+            std::size_t(s->width) * 4 * sizeof(std::uint16_t), s->options));
+        return ORION_OK;
+    });
+}
+
+void orion_export_snapshot_free(OrionExportSnapshot* snapshot) { delete snapshot; }
 
 OrionStatus orion_engine_lens_profile(const OrionEngine* engine,
                                       OrionLensProfile* out) {
