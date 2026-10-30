@@ -1528,3 +1528,17 @@ The shapes are sourced; the numbers that set how hard each one bites are chosen.
 - **Not sourced:** what RCD's ratio correction `1 + (lc - ln) / (eps + lc + ln)` should do with signed low-passes. RCD is described for non-negative data, where the factor is bounded to [0, 2]; around zero its denominator can vanish. The low-passes inside the ratio are read at `max(lpf, 0)`, which keeps the published bound and makes the factor exactly 1 where both sides are dark. The neighbour it scales keeps its sign, and RCD's output is no longer clamped below.
 - **Cost:** on `_PIC8148`'s sky the demosaiced green reads 1.5% under the 4x4-averaged reference (red and blue within 0.5%); `testPreviewShadowsMatchGpu` holds the demosaic's noisy-field mean within 10% of the clean field's, and measured 1%.
 - **What would settle it:** a published demosaic evaluated on signed data (none found), or a comparison of this guard against reading the ratio on a black-offset copy of the mosaic, on night frames at 100%.
+
+---
+
+## 22. Stacking's chosen constants - added 2026-10-30
+
+[stacking.md](stacking.md), `engine/src/stack/`, the Library's stack finder. Decision #391. None of these is a published value; each is a starting point to be measured on real frames.
+
+- **Sourced:** the methods (percentile, sigma, winsorized and linear-fit rejection; additive + scale normalization; SExtractor-style detection; triangle matching; RANSAC) and the winsorization factor 1.134, recomputed.
+- **Chosen, rejection:** 3σ low and high for sigma, winsorized and linear fit; percentile 0.2 low / 0.1 high of the median; the frame-count table (n<3 none, 3-6 percentile, 7-9 sigma, 10-20 winsorized, >20 linear fit; stacking.md cites the rule of thumb from forum practice, not a publication); the stop at 3 survivors; winsorization c = 1.5 (Huber's) iterated to a 5e-4 relative change in σ.
+- **Chosen, normalization:** the scale is sampled where the reference sits at least 10σ over its background, and is 1 below 200 such samples.
+- **Chosen, stars:** threshold 5σ over the background, blob area 2-400 px, the 60 brightest, the 2 px RANSAC threshold and the 6-inlier floor. The 4 nearest neighbours and the 0.1 match radius follow Astroalign as relayed to us, not checked against its source.
+- **Chosen, landscape:** the seam feather is 1% of the image's long edge.
+- **Chosen, finder:** at least 5 frames; cadence agrees within ±2 s on (gap - shutter); astro tag at shutter >= 5 s and ISO >= 800.
+- **What would settle it:** real sequences (a 20-frame 20 s sky, a tripod noise set) measured for residual noise against √N, for star roundness after registration, and for how many suggestions a real library gets that its owner would not stack.

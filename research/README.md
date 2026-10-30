@@ -49,6 +49,7 @@ support what it is attached to.
 | [`denoise-learned.md`](denoise-learned.md) | M5's Core ML denoise — the domain question, the licences, and why it is not a graph node. **Research only; nothing built** |
 | [`lens-corrections.md`](lens-corrections.md) | Distortion, TCA and vignetting; the vendored lensfun database |
 | [`perspective.md`](perspective.md) | Keystone correction — the 4-point homography, the zoom, and why it is not its own node |
+| [`stacking.md`](stacking.md) | Stacking — rejection, normalization, star detection and triangle registration, the landscape split, calibration frames, and the sky-segmentation patent flag - #391 |
 | [`masking.md`](masking.md) | Plan of record for M4's local edits — not built |
 | [`tone-and-gamut-findings.md`](tone-and-gamut-findings.md) | 2026-09-07 audit: the roll-off's mirrored shadow threshold, the patent check that precedes measuring it independently, the chroma deficit's clamp mechanism, exposure fusion's unguided upsample |
 | [`deep-research-2026-07-27.md`](deep-research-2026-07-27.md) | A research run's raw findings, referenced by several entries above |
