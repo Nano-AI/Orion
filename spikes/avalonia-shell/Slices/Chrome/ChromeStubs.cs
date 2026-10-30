@@ -12,8 +12,8 @@ namespace OrionShell.Chrome;
 static class ChromeStubs {
     public static bool Culling => GalleryMode.On;                // mode == .cull
     public static (int Done, int Total)? BatchProgress => ExportRun.Progress;
-    // stub(#315): OrionApp+Files.swift owns this until the logic moves below the facade
-    public static int ExportSelected => 0;
+    /// exportSelected: the export targets of a real selection, 0 when Export writes the open photo.
+    public static int ExportSelected => LibraryModel.Shared.HasExplicitSelection ? ExportRun.Targets().Count : 0;
     public static bool CanUndo => EditHistory.CanUndo;
     public static bool CanRedo => EditHistory.CanRedo;
     // stub(#315): Engine.swift owns this until the logic moves below the facade

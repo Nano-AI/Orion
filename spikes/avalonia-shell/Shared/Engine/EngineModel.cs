@@ -89,9 +89,14 @@ public sealed class EngineModel : INotifyPropertyChanged {
         _list.Load(photos);
         _source.Clear();   // drops an unanswered Request too
         Opening = false;
+        FolderLoaded?.Invoke();
         Changed(nameof(Photos), nameof(Current));
         return true;
     }
+
+    /// A list was opened (Load), not merely reordered or trimmed (Relist): what
+    /// was read about the old one, a photo's marks, is to be read again.
+    public event Action? FolderLoaded;
 
     /// Editor.canLeavePhoto: an edit that will not write keeps its photo on
     /// screen, so the retry stays possible and no later state replaces it.

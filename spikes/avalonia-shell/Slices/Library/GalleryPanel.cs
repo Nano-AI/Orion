@@ -35,7 +35,9 @@ public sealed class GalleryPanel : DockPanel {
         SetDock(size, Dock.Right);
         var order = LibraryUi.SortMenu();
         order.Margin = new Thickness(10, 0, 0, 0);
-        bar.Children.AddRange([size, new StackPanel { Orientation = Orientation.Horizontal, Children = { _filter, order } }]);
+        var count = LibraryUi.SelectionCount();
+        count.Margin = new Thickness(10, 0, 0, 0);
+        bar.Children.AddRange([size, new StackPanel { Orientation = Orientation.Horizontal, Children = { _filter, order, count } }]);
         // On the panel tone, as the toolbar above it, so the filter's ground well reads as a well.
         var header = new Border { Background = Palette.Panel, BorderBrush = Palette.Line, BorderThickness = new Thickness(0, 0, 0, 1), Child = bar };
         SetDock(header, Dock.Top);

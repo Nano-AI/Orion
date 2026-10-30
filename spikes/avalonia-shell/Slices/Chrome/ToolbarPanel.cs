@@ -51,12 +51,13 @@ public sealed class ToolbarPanel : Grid {
         GalleryMode.Changed += RefreshIfChanged;
         ExportRun.Changed += RefreshIfChanged;
         LibraryModel.Shared.Changed += RefreshIfChanged;
+        LibraryModel.Shared.SelectionChanged += RefreshIfChanged;   // "Export 12"
         Refresh();
     }
 
     /// Everything the buttons show, so a pan or a render does not rebuild them.
     static string State => string.Join("|", EngineModel.Shared.Handle, EngineModel.Shared.Current, CompareState.Comparing,
-        CompareState.Vertical, EditHistory.UndoLabel, EditHistory.RedoLabel, GalleryMode.On, ExportRun.Progress,
+        CompareState.Vertical, EditHistory.UndoLabel, EditHistory.RedoLabel, GalleryMode.On, ExportRun.Progress, ChromeStubs.ExportSelected,
         string.Join(",", Commands.All.Select(c => c.CanRun() ? 1 : 0)));
     string _shown = "";
 

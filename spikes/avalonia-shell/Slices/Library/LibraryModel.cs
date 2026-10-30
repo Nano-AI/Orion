@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Input;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 
 namespace OrionShell.Library;
 
@@ -33,6 +34,8 @@ public sealed class LibraryModel {
         public bool Rejected { get; internal set; }
         /// Free text, as XMP has it. Nothing here sets one; it is kept so a write never drops it.
         public string? Label { get; internal set; }
+        /// Marked here since its sidecar was last asked for: a read still in flight must not undo it.
+        internal bool Marked;
 
         /// The file name, and under it the exposure: CaptureInfo.tooltip. Read
         /// from the file on first ask, not at listing: the shell has no index.
@@ -57,6 +60,8 @@ public sealed class LibraryModel {
     LibraryModel() {
         var engine = EngineModel.Shared;
         Selection.Focus(_canvas = Canvas());   // the first photo may have opened before anything asked for this
+        // A folder opened (again): its sidecars are read afresh, so a mark changed on disk since shows.
+        engine.FolderLoaded += () => _rereadAll = true;
         engine.PropertyChanged += (_, e) => {
             if (e.PropertyName == nameof(EngineModel.Photos)) {
                 Selection.Confine(VisiblePaths);
@@ -77,6 +82,7 @@ public sealed class LibraryModel {
     string? _canvas;
 
     readonly Dictionary<string, Photo> _byPath = new();
+    bool _rereadAll;
     IReadOnlyList<string>? _source;
     List<Photo> _photos = [];
     Filter _filter;
@@ -92,11 +98,15 @@ public sealed class LibraryModel {
                 _source = source;
                 // A photo keeps its marks when the list around it changes (a trash
                 // shifts every index after it); only its position moves.
+                var unread = new List<Photo>();
                 _photos = source.Select((p, i) => {
-                    if (!_byPath.TryGetValue(p, out var photo)) _byPath[p] = photo = Listed(p, i);
+                    if (!_byPath.TryGetValue(p, out var photo)) { _byPath[p] = photo = new Photo(p, i); unread.Add(photo); }
+                    else if (_rereadAll) unread.Add(photo);
                     photo.Index = i;
                     return photo;
                 }).ToList();
+                _rereadAll = false;
+                ReadMarks(unread);
             }
             return _photos;
         }
@@ -144,46 +154,72 @@ public sealed class LibraryModel {
     /// headless flags read sidecars and never write the photographer's (as Autosave).
     public bool Writes { get; set; }
 
-    /// A photo as the listing finds it: its marks from its sidecar, if it has one.
+    /// A photo with its marks from its sidecar, read now: what the listing reads in the background.
     internal static Photo Listed(string path, int index) {
         var photo = new Photo(path, index);
-        if (Sidecar.Read(path) is { Unreadable: null } s) (photo.Rating, photo.Rejected, photo.Label) = (s.Rating, s.Rejected, s.Label);
+        Apply(photo, Sidecar.Read(path));
         return photo;
+    }
+
+    static bool Apply(Photo p, Sidecar? s) {
+        if (s is not { Unreadable: null }) return false;
+        (p.Rating, p.Rejected, p.Label) = (s.Rating, s.Rejected, s.Label);
+        return true;
+    }
+
+    /// The marks of a listing, off the UI thread and in batches, each batch
+    /// shown as it lands: a folder appears at once and its stars fill in, as
+    /// Library.open streams its metadata. The selftest waits on it.
+    public Task MarksRead { get; private set; } = Task.CompletedTask;
+
+    void ReadMarks(List<Photo> photos) {
+        if (photos.Count == 0) return;
+        foreach (var p in photos) p.Marked = false;
+        MarksRead = Task.Run(() => {
+            foreach (var batch in photos.Chunk(64)) {
+                var read = batch.Select(p => (Photo: p, Sidecar: Sidecar.Read(p.Path))).ToList();
+                Dispatcher.UIThread.Post(() => {
+                    bool shown = false;
+                    foreach (var (p, s) in read) if (!p.Marked) shown |= Apply(p, s);
+                    if (shown) Changed?.Invoke();
+                });
+            }
+        });
     }
 
     /// A rating un-rejects, as Swift's does.
     public void SetRating(Photo photo, int stars) => SetRating([photo], stars);
 
-    public void SetRating(IEnumerable<Photo> photos, int stars) {
-        foreach (var p in photos) {
-            (p.Rating, p.Rejected) = (Math.Clamp(stars, 0, 5), false);
-            Persist(p);
-        }
-        Changed?.Invoke();
-    }
+    public void SetRating(IEnumerable<Photo> photos, int stars) =>
+        Mark(photos, p => (p.Rating, p.Rejected) = (Math.Clamp(stars, 0, 5), false));
 
     /// Set, never toggled, across a group: the clicked photo decides the
     /// direction, or a mixed selection would flip into its own negative.
     /// A rejection clears the rating.
     public void SetRejected(Photo photo, bool rejected) => SetRejected([photo], rejected);
 
-    public void SetRejected(IEnumerable<Photo> photos, bool rejected) {
-        foreach (var p in photos) {
-            p.Rejected = rejected;
-            if (rejected) p.Rating = 0;
-            Persist(p);
-        }
-        Changed?.Invoke();
-    }
+    public void SetRejected(IEnumerable<Photo> photos, bool rejected) => Mark(photos, p => {
+        p.Rejected = rejected;
+        if (rejected) p.Rating = 0;
+    });
 
     public void ToggleRejected(Photo photo) => SetRejected(photo, !photo.Rejected);
 
-    /// Merged, not rebuilt: the edit lives in the same file. A mark that did not
-    /// land is said on the status line, and the strip keeps showing it, as Swift's does.
-    void Persist(Photo p) {
-        if (!Writes) return;
-        if (!Sidecar.Merge(p.Path, s => (s.Rating, s.Rejected, s.Label) = (p.Rating, p.Rejected, p.Label)))
-            EngineModel.Shared.Say($"Ratings could not be saved for {p.Name}. The card or folder may be read-only.");
+    /// Each photo marked, then merged into its sidecar (not rebuilt: the edit
+    /// lives in the same file). Marks that did not land are said once, counted,
+    /// on the status line, and the strip keeps showing them, as Swift's does:
+    /// a cull is a hundred keystrokes, and a message per frame is its own defect.
+    void Mark(IEnumerable<Photo> photos, Action<Photo> change) {
+        var failed = new List<Photo>();
+        foreach (var p in photos) {
+            change(p);
+            p.Marked = true;
+            if (Writes && !Sidecar.Merge(p.Path, s => (s.Rating, s.Rejected, s.Label) = (p.Rating, p.Rejected, p.Label))) failed.Add(p);
+        }
+        if (failed.Count > 0)
+            EngineModel.Shared.Say((failed.Count == 1 ? $"Ratings could not be saved for {failed[0].Name}."
+                                                      : $"{failed.Count} ratings could not be saved.") + " The card or folder may be read-only.");
+        Changed?.Invoke();
     }
 
     // ── Selection (Library.swift over PhotoSelection) ───────────────────────

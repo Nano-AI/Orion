@@ -100,6 +100,19 @@ static class LibraryUi {
         return items;
     }
 
+    /// Library.summary's selection half, "12 selected", where Swift prints the
+    /// summary (the strip and the gallery header). Hidden for the resting
+    /// selection of one: "1 selected" beside a batch that acts on forty would mislead.
+    public static TextBlock SelectionCount() {
+        var library = LibraryModel.Shared;
+        var text = new TextBlock { FontSize = Faces.Mark, Foreground = Palette.Dim, VerticalAlignment = VerticalAlignment.Center };
+        void Show() { text.Text = library.SelectionSummary; text.IsVisible = text.Text.Length > 0; }
+        library.Changed += Show;
+        library.SelectionChanged += Show;
+        Show();
+        return text;
+    }
+
     /// " (12 photos)" for a group, nothing for one.
     public static string Suffix(IReadOnlyCollection<LibraryModel.Photo> scope) => scope.Count > 1 ? $" ({scope.Count} photos)" : "";
 

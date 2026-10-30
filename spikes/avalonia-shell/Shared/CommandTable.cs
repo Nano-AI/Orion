@@ -51,6 +51,9 @@ static class CommandTable {
         Built("export-all", "Export all…", "Cmd+Shift+E", "OrionApp+Files.swift",
               () => Loaded && !Locked && ChromeStubs.BatchProgress == null && ExportRun.Targets().Count > 0,
               () => { Autosave.Shared.Flush(); ExportRun.ExportAll(); }),   // the batch reads sidecars: what is owed is written first
+        // askHdrMerge, from the strip's menu over a group: the sheet reads the selection.
+        Built("hdr-merge", "Merge to HDR…", null, "HdrMergePanel.swift", () => Loaded && LibraryModel.Shared.HasExplicitSelection,
+              () => Sheet("sheet-hdr-merge", "Merge to HDR")),
         Built("stop-batch", "Stop", null, "OrionApp+Files.swift", () => ChromeStubs.BatchProgress != null, ExportRun.Stop),
         // The shell writes no interaction log (InteractionLog.swift), so there is no file to reveal.
         Stub("reveal-session-log", "Reveal session log in Finder", null, "InteractionLog.swift", () => true),

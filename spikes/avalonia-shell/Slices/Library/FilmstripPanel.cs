@@ -57,7 +57,7 @@ public sealed class FilmstripPanel : Grid {
         filter.CellPadding = new Thickness(8, 0);
         var order = LibraryUi.SortMenu();
         Children.Add(new StackPanel { Spacing = 6, Margin = new Thickness(Space.Pad, 0), VerticalAlignment = VerticalAlignment.Center,
-                                      Children = { filter, order } });
+                                      Children = { filter, order, LibraryUi.SelectionCount() } });
         var line = new Border { Background = Palette.Line };
         SetColumn(line, 1);
         Children.Add(line);
@@ -166,10 +166,19 @@ public sealed class FilmstripPanel : Grid {
         cell.KeyDown += (_, e) => {
             if (e.Key is Key.Enter or Key.Space) { EngineModel.Shared.Open(photo.Index); e.Handled = true; }
         };
-        // Merge to HDR… and Export… need a group selection.
-        // stub(#315): OrionApp.swift owns this until the logic moves below the facade
-        cell.ContextMenu = LibraryUi.Menu(() => LibraryUi.CullItems(photo));
+        cell.ContextMenu = LibraryUi.Menu(() => Menu(photo));
         return (cell, held);
+    }
+
+    /// The cull entries, then Merge to HDR… and Export… only over a group,
+    /// counted like the rest: a merge of one frame means nothing.
+    internal static List<Control> Menu(LibraryModel.Photo photo) {
+        var items = LibraryUi.CullItems(photo);
+        var scope = LibraryModel.Shared.CullScope(photo);
+        if (scope.Count > 1)
+            items.AddRange([new Separator(), LibraryUi.Item("Merge to HDR…" + LibraryUi.Suffix(scope), () => Commands.Run("hdr-merge")),
+                            new Separator(), LibraryUi.Item("Export…" + LibraryUi.Suffix(scope), () => Commands.Run("export"))]);
+        return items;
     }
 
     /// A rejected frame, crossed out corner to corner in the reject red.

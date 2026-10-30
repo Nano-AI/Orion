@@ -29,6 +29,15 @@ static class SpotModel {
         CanvasState.Touch();
     }
 
+    /// Every spot at once, as undo and redo put them back (EditHistory): the one
+    /// door a restored list comes in by, so pushing spots to the engine is one change here.
+    public static void Replace(IEnumerable<SpotPlacement> spots) {
+        Spots.Clear();
+        Spots.AddRange(spots);
+        Selected = Math.Min(Selected, Spots.Count - 1);
+        CanvasState.Touch();
+    }
+
     /// `moveSpot`: either end, given in displayed coordinates.
     public static void Move(int i, Point? destination, Point? source, FrameDisplayMap fd) {
         if (i < 0 || i >= Spots.Count) return;

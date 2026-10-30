@@ -13,8 +13,9 @@ namespace OrionShell.Develop;
 ///
 /// Also `resetEdits` (Engine+Document.swift): the defaults are the state a
 /// photo first opened in, which is the shim's as-shot look.
-static class EditHistory {
-    sealed record Entry(string Label, float[] State, DateTime Time);
+static partial class EditHistory {
+    /// The numbers, and the mask rows with their names and matte ids (EditHistory.Masks.cs).
+    sealed record Entry(string Label, float[] State, MaskShape[] Masks, DateTime Time);
 
     const int Depth = 50;
     static readonly TimeSpan Coalesce = TimeSpan.FromSeconds(0.6);
@@ -27,7 +28,7 @@ static class EditHistory {
     static readonly List<Entry> _entries = new();
     static int _position = -1;
     static string? _label;
-    static readonly Dictionary<string, float[]> _defaults = new();
+    static readonly Dictionary<string, Entry> _defaults = new();
 
     static EngineModel E => EngineModel.Shared;
     public static event Action? Changed;
@@ -40,6 +41,7 @@ static class EditHistory {
     static EditHistory() {
         // The spots clear on open before the open is recorded: their handler first, or "Opened" holds the last photo's.
         System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(SpotModel).TypeHandle);
+        _ = Masks.MaskGroup.Shared;   // and the mask rows reread on open first, for the same reason
         E.Opened += Opened;
         E.Rendered += Settle;
         // The shell opens its first photo before it builds the window that first asks.
@@ -47,9 +49,9 @@ static class EditHistory {
     }
 
     static void Opened() {
-        var state = Snapshot();
-        _defaults.TryAdd(E.Photos[E.Current], state);
-        Reset(state);
+        var opened = new Entry("Opened", Snapshot(), MaskRows(), DateTime.Now);
+        _defaults.TryAdd(E.Photos[E.Current], opened);
+        Reset(opened);
     }
 
     /// Names the next settled edit, as `engine.edit("Crop") { … }` does.
@@ -77,14 +79,8 @@ static class EditHistory {
 
     static void RestoreSpots(float[] state) {
         int at = Slots.Length + CurveChannels * CurveRow;
-        var spots = SpotModel.Spots;
-        spots.Clear();
-        for (int i = 0; i < (int)state[at]; i++) {
-            int r = at + 1 + i * SpotRow;
-            spots.Add(new SpotPlacement(new Point(state[r], state[r + 1]), new Point(state[r + 2], state[r + 3]), state[r + 4], state[r + 5] != 0));
-        }
-        SpotModel.Selected = Math.Min(SpotModel.Selected, spots.Count - 1);
-        CanvasState.Touch();
+        SpotModel.Replace(Enumerable.Range(0, (int)state[at]).Select(i => at + 1 + i * SpotRow).Select(r =>
+            new SpotPlacement(new Point(state[r], state[r + 1]), new Point(state[r + 2], state[r + 3]), state[r + 4], state[r + 5] != 0)).ToList());
     }
 
     /// Four channels, each its point count then up to sixteen x, y pairs.
@@ -108,8 +104,8 @@ static class EditHistory {
 
     static string Name(int slot) => slot < Slots.Length ? Slots[slot].Name : slot < Slots.Length + CurveChannels * CurveRow ? "curve" : "Spot";
 
-    public static void Undo() { if (CanUndo) Restore(_entries[--_position].State); }
-    public static void Redo() { if (CanRedo) Restore(_entries[++_position].State); }
+    public static void Undo() { if (CanUndo) Restore(_entries[--_position]); }
+    public static void Redo() { if (CanRedo) Restore(_entries[++_position]); }
 
     /// Every adjustment back to the as-shot look: one write, one render, one step.
     public static void ResetEdits() {
@@ -120,20 +116,23 @@ static class EditHistory {
 
     /// Writes a snapshot back without a render per field, then renders once and
     /// tells the panels their values moved.
-    public static void Restore(float[] state) {
+    static void Restore(Entry entry) {
+        var state = entry.State;
         RestoreSpots(state);   // before the render, whose settle must find history standing on this state
+        var rows = RestoreMaskNames(entry.Masks);
         E.Apply(s => {
             for (int i = 0; i < Slots.Length; i++)
                 if (s.Get(Slots[i].Name, Slots[i].Index) != state[i]) s.Set(Slots[i].Name, state[i], Slots[i].Index);
             for (int c = 0; c < CurveChannels; c++)
                 if (!s.Curve(c).SequenceEqual(Curve(state, c))) s.SetCurve(c, Curve(state, c));
+            s.SetMaskGroup(rows);
         }, reread: true);
         Changed?.Invoke();
     }
 
-    static void Reset(float[] state) {
+    static void Reset(Entry opened) {
         _entries.Clear();
-        _entries.Add(new Entry("Opened", state, DateTime.Now));
+        _entries.Add(opened);
         _position = 0;
         _label = null;
         Changed?.Invoke();
@@ -143,25 +142,27 @@ static class EditHistory {
     static void Settle() {
         if (E.Interacting || E.Handle == 0) return;
         var state = Snapshot();
-        if (_position < 0) { Reset(state); return; }
+        var masks = MaskRows();
+        if (_position < 0) { Reset(new Entry("Opened", state, masks, DateTime.Now)); return; }
         var here = _entries[_position].State;
-        var moved = Enumerable.Range(0, state.Length).Where(i => here[i] != state[i]).ToList();
+        var moved = Enumerable.Range(0, state.Length).Where(i => here[i] != state[i]).Select(Name).ToList();
+        if (!SameMasks(_entries[_position].Masks, masks)) moved.Add("mask");
         // Taken either way: a named act that changed nothing (a click on the crop, a
         // preset already in effect) must not name the next, unrelated, step.
         string? named = _label;
         _label = null;
         if (moved.Count == 0) return;
-        Record(state, named ?? string.Join(", ", moved.Select(Name).Distinct()));
+        Record(state, masks, named ?? string.Join(", ", moved.Distinct()));
     }
 
-    static void Record(float[] state, string label) {
+    static void Record(float[] state, MaskShape[] masks, string label) {
         if (_position < _entries.Count - 1) _entries.RemoveRange(_position + 1, _entries.Count - _position - 1);
         var now = DateTime.Now;
         var last = _entries[^1];
         if (last.Label == label && now - last.Time < Coalesce) {
-            _entries[^1] = new Entry(label, state, now);
+            _entries[^1] = new Entry(label, state, masks, now);
         } else {
-            _entries.Add(new Entry(label, state, now));
+            _entries.Add(new Entry(label, state, masks, now));
             if (_entries.Count > Depth) _entries.RemoveRange(0, _entries.Count - Depth);
             _position = _entries.Count - 1;
         }

@@ -35,7 +35,65 @@ static partial class SelfTest {
             Directory.Delete(dir, recursive: true);
         }
         SpotAndWheelHistory(engine);
+        MaskIdsInHistory(engine);
         GroupCulling(engine);
+        MarksOffTheUiThread(engine);
+    }
+
+    /// Each history entry holds its mask rows with their names and matte ids
+    /// (#207): put back by position, a removal's undo slid every id up a row.
+    static void MaskIdsInHistory(EngineModel engine) {
+        var group = Masks.MaskGroup.Shared;
+        if (engine.Session is not { } session) return;
+        group.Clear();
+        string Ids() => string.Join(",", group.Shapes.Select(m => $"{m.Name}:{m.MatteId}"));
+        group.Add(1, m => (m.Name, m.MatteId) = ("A", "id-a"));
+        group.Add(2, m => (m.Name, m.MatteId) = ("B", "id-b"));
+        group.Add(1, m => (m.Name, m.MatteId) = ("C", "id-c"));
+        EditHistory.Undo();
+        bool undone = Ids() == "A:id-a,B:id-b";
+        EditHistory.Redo();
+        Check(undone && Ids() == "A:id-a,B:id-b,C:id-c" && session.Capture(group.Shapes)["maskComponents"]![2]!["matteId"]!.GetValue<string>() == "id-c",
+              $"an added row undone and redone comes back with its own name and matte id ('{Ids()}')");
+        group.Remove(0);
+        EditHistory.Undo();
+        Check(Ids() == "A:id-a,B:id-b,C:id-c" && session.ReadMaskGroup().Count == 3, $"a removed row undone comes back with its id, the others unshifted ('{Ids()}')");
+        var version = new SnapshotStore.Snapshot(Guid.NewGuid(), "bare", DateTimeOffset.Now, DevelopJson.Defaults());
+        SnapshotStore.Assign(version);
+        bool bare = group.Shapes.Count == 0;
+        EditHistory.Undo();
+        Check(bare && Ids() == "A:id-a,B:id-b,C:id-c", $"undoing a version restore brings back the masks it replaced, ids and all ('{Ids()}')");
+        group.Clear();
+    }
+
+    /// The listing shows at once and its marks fill in from a background read;
+    /// a folder opened again rereads its sidecars rather than keeping stale marks.
+    static void MarksOffTheUiThread(EngineModel engine) {
+        var library = LibraryModel.Shared;
+        var list = engine.Photos.ToList();
+        int current = engine.Current;
+        string dir = Directory.CreateTempSubdirectory("orion-marks-").FullName;
+        try {
+            string a = Path.Combine(dir, "a.ARW"), b = Path.Combine(dir, "b.ARW");
+            File.CreateSymbolicLink(a, list[current]);
+            File.CreateSymbolicLink(b, list[current]);
+            new Sidecar { Rating = 4 }.Write(b);
+            engine.Load([a, b]);
+            bool deferred = library.Photos[1].Rating == 0;
+            library.MarksRead.Wait();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Check(deferred && library.Photos[1].Rating == 4, "a folder lists before its sidecars are read, and the marks fill in");
+            new Sidecar { Rating = 2 }.Write(b);
+            engine.Load([a, b]);
+            _ = library.Photos;
+            library.MarksRead.Wait();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Check(library.Photos[1].Rating == 2, "opening the folder again reads a mark changed on disk since");
+        } finally {
+            engine.Load(list);
+            engine.Open(current);
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     /// PhotoSelection.swift's rules, as ViewportTests+Selection pins them.
