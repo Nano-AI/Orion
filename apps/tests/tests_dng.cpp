@@ -755,10 +755,17 @@ void testFacadeSessionSeams() {
     const auto back = histogram();
     int moved = 0;
     for (std::size_t i = 0; i < back.size(); ++i) moved += back[i] != again[i];
-    report(back == again && orion_engine_output_texture(e) != nullptr,
+#ifdef __APPLE__
+    const bool output = orion_engine_output_texture(e) != nullptr;
+#else   // no texture handle off macOS (#376): the output is there if it reads back
+    std::uint32_t ow = 0, oh = 0;
+    const bool output = orion_engine_read_pixels(e, 0, nullptr, 0, &ow, &oh) == ORION_OK && ow > 0;
+#endif
+    report(back == again && output,
            "the next render brings the same picture back",
            std::to_string(moved) + " of " + std::to_string(back.size()) + " histogram bins differ, mean "
-               + std::to_string(mean(again)) + " -> " + std::to_string(mean(back)));
+               + std::to_string(mean(again)) + " -> " + std::to_string(mean(back))
+               + (output ? "" : "; no output after the render"));
     report(orion_engine_release_render_memory(nullptr) == ORION_ERR_BAD_ARG,
            "release refuses a null engine");
 

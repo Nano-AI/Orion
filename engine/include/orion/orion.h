@@ -598,7 +598,8 @@ OrionStatus orion_engine_frame_size(const OrionEngine* engine,
  * Non-owning; valid until the next open_raw. NULL when no image is open.
  * Under ORION_GPU=dawn (decision #375) only an RGBA8 output has one, an
  * IOSurface Dawn renders into; the wide RGBA16F output answers NULL, and a
- * shell reads it back instead. The other texture getters behave the same. */
+ * shell reads it back instead. The other texture getters behave the same.
+ * Windows and Linux answer NULL always: no zero-copy hand-off yet (#376). */
 void* orion_engine_output_texture(const OrionEngine* engine);
 
 /* The preview graph's output texture, or NULL when there is no preview graph.

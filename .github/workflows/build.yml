@@ -114,6 +114,9 @@ jobs:
         run: |
           dotnet build "$SHELL_DIR" -c Release
           cp build/shell-native/liborion_shim.so "$SHELL_DIR/bin/Release/net10.0/"
+          # The engine looks for shaders/ and data/ beside the executable (ResourcePaths.cpp).
+          cp -R build/shaders "$SHELL_DIR/bin/Release/net10.0/shaders"
+          mkdir -p "$SHELL_DIR/bin/Release/net10.0/data" && cp -R data/lensfun "$SHELL_DIR/bin/Release/net10.0/data/"
           ./build/apps/tests/orion-selftest-photo "$RUNNER_TEMP/selftest.dng"
           cd "$SHELL_DIR" && python3 "$GITHUB_WORKSPACE/tools/ci-selftest.py" linux \
             bin/Release/net10.0/Orion "$RUNNER_TEMP/selftest.dng"
@@ -217,8 +220,11 @@ jobs:
       - name: Shell selftest (headless)
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         run: |
-          dotnet build "$SHELL_DIR" -c Release
+          env -u Platform dotnet build "$SHELL_DIR" -c Release   # msvc-dev-cmd sets Platform=x64, which moves bin/ under x64/
           cp build/shell-native/*.dll "$SHELL_DIR/bin/Release/net10.0/"
+          # The engine looks for shaders/ and data/ beside the executable (ResourcePaths.cpp).
+          cp -R build/shaders "$SHELL_DIR/bin/Release/net10.0/shaders"
+          mkdir -p "$SHELL_DIR/bin/Release/net10.0/data" && cp -R data/lensfun "$SHELL_DIR/bin/Release/net10.0/data/"
           ./build/apps/tests/orion-selftest-photo.exe "$RUNNER_TEMP/selftest.dng"
           cd "$SHELL_DIR" && python "$GITHUB_WORKSPACE/tools/ci-selftest.py" windows \
             bin/Release/net10.0/Orion.exe "$RUNNER_TEMP/selftest.dng"
