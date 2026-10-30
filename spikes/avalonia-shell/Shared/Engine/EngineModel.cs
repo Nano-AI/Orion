@@ -52,6 +52,7 @@ public sealed class EngineModel : INotifyPropertyChanged {
             if (_zoomed == value) return;
             _zoomed = value;
             if (value && Shown.Graph != Graph.Full) Render(preview: false);
+            else if (!value && Shown.Graph == Graph.Region) Render(preview: true);   // back at fit: the whole picture again
         }
     }
     bool _zoomed;
