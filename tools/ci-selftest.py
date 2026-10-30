@@ -32,6 +32,12 @@ SKIP = {
     "linux": {},
 }
 
+# Where CI has no GPU the engine cannot open (Linux: no CPU Vulkan driver offers
+# TextureFormatsTier1, see orion-tests' ORION_TESTS_GPU_OPTIONAL). Then the shell
+# runs without a picture, and any FAIL is counted as skipped for that reason; the
+# run must still finish and print its summary, which is what this still asserts.
+NO_GPU = {"linux": "adapter lacks feature"}
+
 
 def main() -> int:
     system, exe, photo = sys.argv[1:4]
@@ -43,8 +49,11 @@ def main() -> int:
     fails = [l[5:] for l in out.splitlines() if l.startswith("FAIL ")]
     summary = [l for l in out.splitlines() if l.startswith("selftest: ") and "checks passed" in l]
     unexpected = []
+    no_gpu = system in NO_GPU and NO_GPU[system] in out
     for f in fails:
         reason = next((r for p, r in skip.items() if f.startswith(p)), None)
+        if not reason and no_gpu:
+            reason = "no usable GPU on this runner, so no engine: " + NO_GPU[system]
         if reason:
             print(f"skipped on {system}: {f[:90]} ({reason})")
         else:
