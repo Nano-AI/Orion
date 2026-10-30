@@ -22,6 +22,9 @@ static partial class SelfTest {
     sealed class Boom : Control { public Boom() => throw new InvalidOperationException("boom"); }
 
     public static int Run() {
+        // Motion as designed whatever the machine says: CI runners report Reduce
+        // Motion on, and the checks that want it reduced force it (#376).
+        Motion.Forced = false;
         // Registry: a duplicate name fails loudly and names both types.
         Check(Throws<InvalidOperationException>(() => Panels.Index([
                 (new PanelAttribute("twin", Region.Tools), typeof(TextBlock)),

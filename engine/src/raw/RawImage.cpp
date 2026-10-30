@@ -66,7 +66,10 @@ RawInfo readInfo(const std::string& path) {
     info.aperture    = other.aperture;
     info.focalLength = other.focal_len;
     info.timestamp   = static_cast<std::int64_t>(other.timestamp);
-    // LibRaw reads OpcodeList1/2/3 as-is into rawopcodes[0..2] (0.22).
+    // LibRaw reads OpcodeList1/2/3 as-is into rawopcodes[0..2] (0.22). Older
+    // LibRaw (Ubuntu 24.04 ships 0.21) has no such field: no file opcodes, so
+    // lens correction falls through to lensfun (#376).
+#if LIBRAW_COMPILE_CHECK_VERSION_NOTLESS(0, 22)
     for (int i = 0; i < 3; ++i) {
         const auto& op = proc.imgdata.color.dng_levels.rawopcodes[i];
         if (op.data != nullptr && op.len > 0) {
@@ -74,6 +77,7 @@ RawInfo readInfo(const std::string& path) {
             info.dngOpcodes[i].assign(bytes, bytes + op.len);
         }
     }
+#endif
 
     proc.recycle();
     return info;
@@ -401,7 +405,10 @@ BayerImage window(const BayerImage& image, std::uint32_t x, std::uint32_t y,
     // Everything but the samples, which are the one field worth not copying.
     // ⚠ Field by field: a field added to BayerImage must be added here, and
     // the size check is what says so.
+    // The size is libc++'s (macOS): libstdc++ and MSVC lay std::string out larger.
+#ifdef _LIBCPP_VERSION
     static_assert(sizeof(BayerImage) == 128, "BayerImage changed: copy the new field in window()");
+#endif
     BayerImage out;
     out.width = w;
     out.height = h;

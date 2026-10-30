@@ -188,7 +188,7 @@ static class Motion {
     static readonly Dictionary<object, Func<double, bool>> Running = new();
     static TopLevel? _clock;
     static TimeSpan? _last;
-    static bool _asked;
+    static bool _asked, _draining;
 
     public static bool Reduced => OrionShell.Motion.Reduced;   // the shell's one reader (u5): macOS and Windows
     public static bool IsRunning(object key) => Running.ContainsKey(key);
@@ -221,9 +221,18 @@ static class Motion {
 
     static void Ask() {
         if (_clock == null || Reduced) {   // a second a frame: done in one or two
-            foreach (var (key, frame) in Running.ToArray())
-                for (int i = 0; i < 10 && Current(key, frame) && frame(1); i++) { }
-            Running.Clear();
+            // A frame may start another motion (the canvas's rest settles the
+            // viewport): this loop runs it, rather than Ask recursing until the
+            // stack overflows, as it did under Reduce Motion on CI (#376).
+            if (_draining) return;
+            _draining = true;
+            try {
+                while (Running.Count > 0)
+                    foreach (var (key, frame) in Running.ToArray()) {
+                        for (int i = 0; i < 10 && Current(key, frame) && frame(1); i++) { }
+                        if (Current(key, frame)) Running.Remove(key);
+                    }
+            } finally { _draining = false; }
             return;
         }
         if (_asked) return;

@@ -44,7 +44,7 @@ static partial class SelfTest {
             engine.Set("exposure_ev", start);
             DragCost("in the window", window, slider, track);
         } finally {
-            Motion.Forced = null;
+            Motion.Forced = false;   // the selftest's baseline (SelfTest.Run), not the machine's
             engine.Set("exposure_ev", start);
             window.Close();
         }

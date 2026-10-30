@@ -123,7 +123,7 @@ static partial class SelfTest {
         window.Select("Detail", animate: true);
         AvaloniaHeadlessPlatform.ForceRenderTimerTick();
         bool jumped = !pill.IsAnimating(Control.RenderTransformProperty) && pill.RenderTransform?.Value.M31 == 0 && names[2].Opacity == 1;
-        Motion.Forced = null;
+        Motion.Forced = false;
         Check(Math.Abs(start - from) < 0.5 && lands == 0 && fade < 0.1 && jumped
               && slide is { Duration.TotalMilliseconds: < 200, Easing: SplineEasing },
               $"a click eases the pill from the old tab ({start:0.#} pt over at the first frame, the tab {from:0.#} away; lands at {lands:0.#}) " +
