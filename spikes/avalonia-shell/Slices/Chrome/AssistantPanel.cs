@@ -123,7 +123,7 @@ public sealed class AssistantPanel : DockPanel {
         if (_terminal.IsLive) {
             // Porta.Pty's kill signals the pid alone. forkpty made it a session and group
             // leader, so the group takes the agent's own children (its MCP server) with it.
-            if (_terminal.Pid > 0) kill(-_terminal.Pid, SIGHUP);
+            if (_terminal.Pid > 0 && !OperatingSystem.IsWindows()) kill(-_terminal.Pid, SIGHUP);
             _terminal.Kill();
         }
         _launched = null;

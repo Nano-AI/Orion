@@ -209,6 +209,12 @@ static partial class SelfTest {
 
         // The assistant column: the command puts it at the window's leading edge, and its terminal
         // runs what it is given (a harmless echo here, never the agent).
+        // POSIX only: /bin/sh, and kill on the process group. Windows: skipped, said (#376).
+        if (OperatingSystem.IsWindows()) {
+            Console.WriteLine("selftest: skipped on Windows: the assistant column's process-group checks (POSIX sh and kill)");
+            window.Close();
+            return;
+        }
         var launcher = AssistantPanel.Launcher;
         // The process has a child of its own, as the agent has its MCP server: closing takes both.
         AssistantPanel.Launcher = (t, command, d, _) => t.LaunchProcess(d, "/bin/sh", "-c", $"echo orion-assistant-{command}; sleep 30 & sleep 30");
