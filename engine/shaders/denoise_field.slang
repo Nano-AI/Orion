@@ -38,9 +38,17 @@ void denoiseField(uint3 tid : SV_DispatchThreadID,
     if (tid.x >= p.size.x || tid.y >= p.size.y) return;
 
     float2 beta = float2(0.0f, 0.0f);
+    // ⚠ Copied out of the parameter block for the WGSL target (#375): slangc
+    // 2026.14.1 miscompiles a parameter-block array element that reaches a
+    // branch or a function with texture parameters — it segfaults, or emits
+    // WGSL reading a temporary it never declares. A local array it handles.
+    int layerMask[8];
+    [unroll]
+    for (int k = 0; k < 8; ++k) layerMask[k] = p.layerMask[k];
+
     for (int L = 0; L < p.layerCount; ++L)
     {
-        const float a = saturate(coverage(p.layerMask[L], tid.xy,
+        const float a = saturate(coverage(layerMask[L], tid.xy,
                                           mask0, mask1, mask2, mask3,
                                           mask4, mask5, mask6, mask7));
         beta += a * float2(p.layerLuma[L], p.layerChroma[L]);

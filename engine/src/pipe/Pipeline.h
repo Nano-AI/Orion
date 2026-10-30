@@ -187,6 +187,13 @@ public:
     /// A specific node's output, for debugging and stage inspection.
     [[nodiscard]] const gpu::Texture& nodeOutput(int nodeId) const;
 
+    /// The node as built, and the textures its dispatch binds, in order:
+    /// inputs (resolved past disabled nodes), aux, then its own output. A
+    /// texture not resident is null. For replaying one dispatch elsewhere —
+    /// the Dawn parity test runs each node's kernel alone on Metal's inputs.
+    [[nodiscard]] const Node& node(int nodeId) const { return nodes_.at(static_cast<std::size_t>(nodeId)); }
+    [[nodiscard]] std::vector<const gpu::Texture*> bindings(int nodeId) const;
+
     /// The source mosaic, for debugging.
     [[nodiscard]] const gpu::Texture& sourceTexture() const;
 

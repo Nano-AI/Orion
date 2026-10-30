@@ -100,6 +100,7 @@ std::vector<std::uint8_t> pixels(const orion::pipe::DevelopPipeline&);
 // why `main.cpp` is now short enough to read its call list at a glance.
 void testBindingCount();
 void testDisabledCacheReleaseGpu();
+void testDawnParityGpu();
 void testReleaseEveryRenderGpu();
 void testPlanckianLocus();
 void testWhiteBalance();

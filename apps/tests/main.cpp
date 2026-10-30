@@ -19,6 +19,7 @@ int main() {
     testBindingCount();
     testDisabledCacheReleaseGpu();
     testReleaseEveryRenderGpu();
+    testDawnParityGpu();
 
     testWhiteBalance();
     testPlanckianLocus();

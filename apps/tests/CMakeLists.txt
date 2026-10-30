@@ -38,6 +38,7 @@ add_executable(orion-tests
     tests_grain.cpp
     tests_vignette.cpp
     tests_pipeline.cpp
+    tests_dawn_parity.cpp
     tests_dng.cpp
     tests_lens_sources.cpp
     tests_roi.cpp
