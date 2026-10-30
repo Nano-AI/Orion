@@ -183,10 +183,11 @@ public sealed class ExportPanel : Border {
     void Paint() {
         var (w, h) = _s.Dimensions(_sw, _sh);
         _dims.Text = $"{w} × {h}";
-        _size.Text = _s.SizeText(_sw, _sh);
+        _size.Text = _failed ? "Size unknown" : _s.SizeText(_sw, _sh);
         _size.Foreground = _s.MeasuredBytes == null ? Palette.Dim : Palette.Text;
-        _measuring.IsVisible = _s.MeasuredBytes == null && EngineModel.Shared.Handle != 0;
-        _sizeNote.Text = _s.MeasuredBytes == null ? "Measuring the encoded size…"
+        _measuring.IsVisible = _s.MeasuredBytes == null && !_failed && EngineModel.Shared.Handle != 0;
+        _sizeNote.Text = _failed ? "The encoded size could not be measured."
+            : _s.MeasuredBytes == null ? "Measuring the encoded size…"
             : Selected > 0 ? $"Measured on the open photo. Each of the {Selected} is sized by its own frame and goes to a folder you choose; nothing there is overwritten."
             : $"Encoded size, measured. Color space is {ExportSettings.Spaces[_s.Space].Title}.";
     }
@@ -201,30 +202,68 @@ public sealed class ExportPanel : Border {
     void Remeasure() {
         ++_token;
         _s.MeasuredBytes = null;
+        _failed = false;
         Paint();
         _pending?.Dispose();
         _pending = DispatcherTimer.RunOnce(Measure, TimeSpan.FromMilliseconds(260));
     }
 
-    bool _encoding, _again;
+    bool _encoding, _again, _failed, _closed;
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e) {
+        base.OnAttachedToVisualTree(e);
+        if (!_closed) return;
+        _closed = false;
+        Remeasure();
+    }
+
+    /// Closed: no more renders on the UI thread, and a result still in flight lands nowhere.
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e) {
+        base.OnDetachedFromVisualTree(e);
+        _closed = true;
+        _pending?.Dispose();
+        _again = false;
+        ++_token;
+    }
 
     void Measure() {
+        if (_closed) return;
         // ponytail: one in flight, so a dragged slider never stacks 200 MB snapshots and full-core encodes.
         if (_encoding) { _again = true; return; }
-        nint engine = EngineModel.Shared.Handle;
-        if (engine == 0) return;
         int token = _token;
+        nint engine = EngineModel.Shared.Handle;
         var options = _s.Options(_sw, _sh);
-        if (SheetsNative.orion_engine_export_snapshot(engine, in options, out nint snapshot) != 0) { Paint(); return; }
+        nint snapshot = 0;
+        if (engine == 0 || SheetsNative.orion_engine_export_snapshot(engine, in options, out snapshot) != 0) {
+            Land(token, null);
+            return;
+        }
         _encoding = true;
-        Task.Run(() => {
-            try { return SheetsNative.orion_export_snapshot_size(snapshot, out ulong bytes) == 0 ? (long?)bytes : null; }
-            finally { SheetsNative.orion_export_snapshot_free(snapshot); }
-        }).ContinueWith(t => Dispatcher.UIThread.Post(() => {
+        // The task frees its snapshot itself, once started, whatever the encode does;
+        // so the hand-off frees it only if the task never started.
+        Task<long?>? encode = null;
+        try {
+            encode = Task.Run(() => {
+                try { return SheetsNative.orion_export_snapshot_size(snapshot, out ulong b) == 0 ? (long?)b : null; }
+                finally { SheetsNative.orion_export_snapshot_free(snapshot); }
+            });
+            encode.ContinueWith(t => Dispatcher.UIThread.Post(() => {
+                _encoding = false;
+                Land(token, t.IsCompletedSuccessfully ? t.Result : null);
+                if (_again && !_closed) { _again = false; Measure(); }
+            }), TaskScheduler.Default);
+        } catch {
+            if (encode == null) SheetsNative.orion_export_snapshot_free(snapshot);
             _encoding = false;
-            if (token == _token && t.IsCompletedSuccessfully && t.Result is long bytes) _s.MeasuredBytes = bytes;
-            Paint();
-            if (_again) { _again = false; Measure(); }
-        }));
+            Land(token, null);
+        }
+    }
+
+    /// A measurement, or its failure, if it is still the one the sheet is waiting for.
+    void Land(int token, long? bytes) {
+        if (token != _token || _closed) return;
+        _s.MeasuredBytes = bytes;
+        _failed = bytes == null;
+        Paint();
     }
 }
