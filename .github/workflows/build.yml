@@ -67,7 +67,7 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DORION_SHELL_DIR="$SHELL_DIR"
-          cmake --build build
+          cmake --build build -- -k 0   # every error in one run, not the first
 
       - name: orion-tests (Dawn on Vulkan, lavapipe)
         run: ./build/apps/tests/orion-tests
@@ -151,7 +151,7 @@ jobs:
             -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl \
             -DCMAKE_TOOLCHAIN_FILE="$ORION_VCPKG/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_TARGET_TRIPLET=x64-windows-release -DORION_SHELL_DIR="$SHELL_DIR"
-          cmake --build build
+          cmake --build build -- -k 0   # every error in one run, not the first
       - if: always() && steps.vcpkg.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:

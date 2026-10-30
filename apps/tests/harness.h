@@ -45,6 +45,19 @@
 
 #include <vector>
 
+// libstdc++ (Linux) and MSVC's library pull in less transitively than libc++ (#376).
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <functional>
+#include <limits>
+#include <map>
+#include <memory>
+#include <numeric>
+#include <optional>
+#include <stdexcept>
+
 #include <algorithm>
 #include <utility>
 #include <array>
