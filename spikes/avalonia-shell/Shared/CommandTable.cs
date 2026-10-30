@@ -49,7 +49,8 @@ static class CommandTable {
         Built("open-folder", "Open folder…", null, "OrionApp+Files.swift", () => true, LibraryFiles.OpenFolder),
         Built("export", "Export…", "Cmd+E", "OrionApp+Chrome.swift", () => Loaded && !Locked, () => Sheet("sheet-export", "Export")),
         Built("export-all", "Export all…", "Cmd+Shift+E", "OrionApp+Files.swift",
-              () => Loaded && !Locked && ChromeStubs.BatchProgress == null && ExportRun.Targets().Count > 0, ExportRun.ExportAll),
+              () => Loaded && !Locked && ChromeStubs.BatchProgress == null && ExportRun.Targets().Count > 0,
+              () => { Autosave.Shared.Flush(); ExportRun.ExportAll(); }),   // the batch reads sidecars: what is owed is written first
         Built("stop-batch", "Stop", null, "OrionApp+Files.swift", () => ChromeStubs.BatchProgress != null, ExportRun.Stop),
         // The shell writes no interaction log (InteractionLog.swift), so there is no file to reveal.
         Stub("reveal-session-log", "Reveal session log in Finder", null, "InteractionLog.swift", () => true),

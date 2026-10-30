@@ -41,7 +41,7 @@ public sealed class SessionCache : ISessionSource {
     public bool Busy => _decoding.Count > 0;
 
     public Session? Acquire(int index) {
-        if (!_kept.Remove(index, out var s)) s = Session.Open(_photos.Paths[index]);
+        if (!_kept.Remove(index, out var s)) s = Session.OpenEdited(_photos.Paths[index]);
         if (s != null) _lent[s] = index;
         return s;
     }
@@ -131,7 +131,7 @@ public sealed class SessionCache : ISessionSource {
         int generation = _generation;
         string path = _photos.Paths[index];
         _decoding[index] = Task.Run(() => {
-            var s = Session.Open(path);
+            var s = Session.OpenEdited(path);
             try {
                 if (s?.Render(preview: true) == Graph.Preview) s.Read(Graph.Preview);   // the picture, off the UI thread
             } catch (Exception e) {

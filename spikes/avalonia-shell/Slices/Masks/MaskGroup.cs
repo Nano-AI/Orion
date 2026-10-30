@@ -56,9 +56,12 @@ public sealed class MaskGroup {
     }
 
     void Read() {
-        var rows = EngineModel.Shared.Session?.ReadMaskGroup() ?? [];
-        for (int i = 0; i < rows.Count && i < Shapes.Count; i++)
-            (rows[i].Name, rows[i].MatteId, rows[i].MatteSource) = (Shapes[i].Name, Shapes[i].MatteId, Shapes[i].MatteSource);
+        var session = EngineModel.Shared.Session;
+        var rows = session?.ReadMaskGroup() ?? [];
+        // A photo just opened has no rows here yet: its names come from its sidecar (Session.Document).
+        var named = Shapes.Count > 0 ? Shapes : Session.Rows(session?.Document);
+        for (int i = 0; i < rows.Count && i < named.Count; i++)
+            (rows[i].Name, rows[i].MatteId, rows[i].MatteSource) = (named[i].Name, named[i].MatteId, named[i].MatteSource);
         Shapes.Clear();
         Shapes.AddRange(rows);
         _selected = Math.Clamp(_selected, 0, Math.Max(Shapes.Count - 1, 0));
