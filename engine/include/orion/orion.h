@@ -609,7 +609,10 @@ OrionStatus orion_engine_sample(const OrionEngine* engine, float u, float v,
                                 float* out_display, float* out_scene);
 
 /* Per-channel histogram of the rendered image. out_bins takes bins*3 entries,
- * packed red then green then blue. */
+ * packed red then green then blue. The full render, except while a region
+ * (orion_engine_render_region) is newer than it and the preview has rendered
+ * the edit: then the preview, the small whole-frame pass (#22). Likewise the
+ * displayed color orion_engine_sample reads. */
 OrionStatus orion_engine_histogram(const OrionEngine* engine,
                                    uint32_t* out_bins, uint32_t bins);
 

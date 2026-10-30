@@ -7,7 +7,7 @@ namespace {
 // A noisy mosaic with edges in it, so demosaic, denoise, sharpening, the lens
 // and the straighten all have something to move: rings and a diagonal step.
 orion::raw::BayerImage structured(std::uint32_t w, std::uint32_t h) {
-    auto img = noisyGrey(w, h, 0.25, 2e-4, 1e-6, 22u);
+    auto img = noisyGrey(w, h, 0.25, 4e-3, 1e-5, 22u);   // noisy enough that denoise moves pixels
     for (std::uint32_t y = 0; y < h; ++y) {
         for (std::uint32_t x = 0; x < w; ++x) {
             const double r = std::hypot(double(x) - 0.4 * w, double(y) - 0.55 * h);
@@ -65,11 +65,16 @@ void testRegionMatchesCropGpu() {
         a.cropX = 0.125f; a.cropY = 0.125f;
         a.cropW = 0.75f;  a.cropH = 0.75f;
         a.sharpenAmount = 0.8f;
-        a.denoiseLuma = 1.0f;
+        a.denoiseLuma = 3.0f;
+        a.denoiseColor = 3.0f;       // Smoothness needs Color: the widest support
         a.denoiseSmoothness = 0.5f;
+        a.denoiseNlm = 0.5f;
         engine.setAdjustments(a);
         engine.render();
         const auto& full = engine.develop();
+        // Without a measured noise model the denoise chain, the widest support
+        // here, stays off and the halo goes untested.
+        report(full.noiseProfile().measured, "the frame's noise is measured, so denoise runs");
         const std::uint32_t fw = full.outputWidth(), fh = full.outputHeight();
         report(fw == 1152 && fh == 768, "the full picture is the 0.75 crop",
                std::to_string(fw) + "x" + std::to_string(fh));
@@ -89,8 +94,8 @@ void testRegionMatchesCropGpu() {
                "step " + std::to_string(engine.regionStep()));
         const auto& reg = engine.regionDevelop();
         report(reg.outputWidth() == rw && reg.outputHeight() == rh, "at the size asked for");
-        report(std::uint64_t(reg.width()) * reg.height() * 2 < std::uint64_t(kW) * kH,
-               "from a window smaller than half the frame",
+        report(std::uint64_t(reg.width()) * reg.height() < std::uint64_t(kW) * kH,
+               "from a window smaller than the frame (this one is small; the halo is 192)",
                std::to_string(reg.width()) + "x" + std::to_string(reg.height()));
         auto want = crop(pixels(full), fw, rx, ry, rw, rh);
         auto [worst, differing] = difference(pixels(reg), want);
@@ -116,7 +121,8 @@ void testRegionMatchesCropGpu() {
         //
         // Denoise and sharpening off: the preview measures its own noise from
         // its quarter mosaic where the region takes the frame's, on purpose.
-        a.sharpenAmount = 0.0f; a.denoiseLuma = 0.0f; a.denoiseSmoothness = 0.0f;
+        a.sharpenAmount = 0.0f; a.denoiseLuma = 0.0f; a.denoiseColor = 0.0f;
+        a.denoiseSmoothness = 0.0f; a.denoiseNlm = 0.0f;
         engine.setAdjustments(a);
         engine.renderPreview();
         const auto& pv = engine.previewDevelop();

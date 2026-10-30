@@ -104,6 +104,15 @@ static partial class SelfTest {
         Frames();
         Check(!vp.Live && engine.ZoomedPastFit && engine.Shown.Graph is Graph.Full or Graph.Region,
               $"at rest past fit, the picture renders at full resolution (#318): only what is on screen when the edit allows it (#22), {engine.Shown.Graph}");
+        // The full picture already rendered stays (it costs nothing more); the next edit
+        // renders only what is in view, which the canvas reported as it drew.
+        float ev = engine.Get("exposure_ev");
+        engine.Set("exposure_ev", ev + 0.1f);
+        var part = engine.Shown.Uv;
+        Check(engine.Shown.Graph == Graph.Region && part.Width < 1 && part.Height <= 1 && engine.View is { } seen
+              && seen.Uv == part && seen.Pixels.Width > 0,
+              $"past fit with a plain edit, the engine renders only the part in view at the screen's pixels (#22): {engine.Shown.Graph} {part}");
+        engine.Set("exposure_ev", ev);
 
         // Over the compare divider, which is the canvas's sibling, the pinch still zooms.
         u = CanvasState.Map(size).ToUnit(p);

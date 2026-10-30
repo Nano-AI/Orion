@@ -206,13 +206,15 @@ void Engine::setAdjustments(const pipe::Adjustments& adj) {
 }
 
 namespace {
-/// Region graph pixels of margin around what the screen shows: the widest
-/// support among the nodes `regionSupports` allows. The four-scale starlet is
-/// 2·(1+2+4+8) = 30 pixels, Smoothness's two scales at a quarter of the size
-/// are 4·2·(16+32)/4 = 96, demosaic, sharpening and the lens's chromatic
-/// aberration a few each. A texel inside this margin is computed from the same
-/// neighbours as in the whole frame; the edge clamp is past it.
-constexpr std::uint32_t kRegionHalo = 128;
+/// Region graph pixels of margin around what the screen shows: the supports
+/// of the nodes `regionSupports` allows, added, since each reads the last's
+/// output. Smoothness's two starlet scales at a quarter of the size, 2·(4+8)
+/// quarter pixels = 96; the four full-size scales 2·(1+2+4+8) = 30; its down-
+/// and upsampling 8; demosaic and non-local means under 8 each; the lens's
+/// chromatic aberration up to ~11 at full slider on 24 MP; sharpening 3. About
+/// 165; 192 leaves room. A texel this far inside the window is computed from
+/// the same neighbours as in the whole frame; the edge clamp is past it.
+constexpr std::uint32_t kRegionHalo = 192;
 /// The window's origin is a multiple of this many region pixels, so every
 /// downsampled grid in the graph (Smoothness's quarter, the CFA's two) lands
 /// on the same phase as the whole frame's.
