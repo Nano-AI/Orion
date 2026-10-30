@@ -651,7 +651,7 @@ void testFacadeSessionSeams() {
             return px;
         };
         const auto full = shot(engine.develop());
-        const auto small = shot(engine.previewDevelop());
+        const auto preview = shot(engine.previewDevelop());
         const auto held = engine.develop().graph().allocatedBytes();
         const auto source = engine.develop().graph().sourceTexture().sizeBytes();
 
@@ -672,7 +672,7 @@ void testFacadeSessionSeams() {
         report(gone, "the full output is gone until the next render");
 
         engine.renderPreview();
-        report(shot(engine.previewDevelop()) == small, "the preview rebuilds to the same picture");
+        report(shot(engine.previewDevelop()) == preview, "the preview rebuilds to the same picture");
         engine.render();
         report(shot(engine.develop()) == full, "the full render rebuilds to the same picture");
         a.exposureEv = 0.2f; engine.setAdjustments(a); engine.render();

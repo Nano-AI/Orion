@@ -41,7 +41,10 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 if(MSVC)   # clang-cl, whose -Wall is -Weverything
-    add_compile_options(/W3)
+    # F16C: __fp16 conversions inline, rather than calls into compiler-rt that
+    # MSVC's link has no library for. ponytail: needs an x64 CPU from 2012 on
+    # (Ivy Bridge, Piledriver); link clang_rt.builtins instead if older matters.
+    add_compile_options(/W3 -mf16c)
     add_compile_definitions(_USE_MATH_DEFINES NOMINMAX _CRT_SECURE_NO_WARNINGS)
 else()
     add_compile_options(-Wall -Wextra -Wpedantic)
