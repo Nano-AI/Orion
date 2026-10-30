@@ -23,6 +23,7 @@
 <link rel="preload" as="font" type="font/woff2" crossorigin href="../fonts/Archivo-var.woff2">
 <link rel="stylesheet" href="../css/tokens.css">
 <link rel="stylesheet" href="../css/base.css">
+<link rel="stylesheet" href="../css/chrome.css">
 <link rel="stylesheet" href="../css/download.css">
 </head>
 <body>
@@ -35,8 +36,7 @@
     <a class="nav__mark" href="../" aria-label="Orion, home"><img src="../img/orion-mark.svg" width="32" height="30" alt="" aria-hidden="true">Orion</a>
     <nav class="nav__nav" aria-label="Sections">
       <ul class="nav__links" id="nav-links">
-        <li><a href="../#speed">Speed</a></li>
-        <li><a href="../#raw">RAW</a></li>
+        <li><a href="../#app">The app</a></li>
         <li><a href="../#keep">Your files</a></li>
         <li><a href="../#register">Features</a></li>
       </ul>
@@ -105,11 +105,11 @@
 
 <section class="band" aria-labelledby="first-title" data-steps>
   <div class="wrap band__in">
-    <div data-reveal>
+    <div>
       <h2 class="h2" id="first-title">Opening it the first time</h2>
       <p class="small band__sub">macOS stops the first launch because this alpha is signed ad hoc and isn't notarized. The app is the same either way; the warning is about who vouched for it.</p>
     </div>
-    <ol class="steps" data-reveal>
+    <ol class="steps">
       <li><div>
         <p class="h3">Drag Orion to Applications</p>
         <p class="small">Open the downloaded disk image and drag Orion onto the Applications folder beside it.</p>
@@ -132,11 +132,11 @@
 
 <section class="band" id="platforms" aria-labelledby="platforms-title">
   <div class="wrap band__in band__in--wide">
-    <div class="band__head" data-reveal>
+    <div class="band__head">
       <h2 class="h2" id="platforms-title">Every platform</h2>
       <p class="small" data-only>Orion is Mac only today.</p>
     </div>
-    <ul class="platforms" data-reveal>
+    <ul class="platforms">
       <li data-row="mac">
         <p class="h3">macOS<span class="dl__here" hidden>This computer</span></p>
         <p class="needs">Apple silicon (M1 or later), macOS 14 Sonoma or later</p>
@@ -171,15 +171,15 @@
 
 <section class="band" aria-label="Other downloads and help">
   <div class="wrap more">
-    <div data-reveal>
+    <div>
       <h2 class="h3">Older versions</h2>
       <p class="small">Every build, its notes and its files are on <a class="link" href="https://github.com/Nano-AI/Orion/releases">GitHub Releases</a>.</p>
     </div>
-    <div data-reveal>
+    <div>
       <h2 class="h3">Editing with Claude</h2>
       <p class="small">The MCP server ships inside the app. <a class="link" href="https://github.com/Nano-AI/Orion/tree/main/mcp">How agents use it</a>.</p>
     </div>
-    <div data-reveal>
+    <div>
       <h2 class="h3">Something broke</h2>
       <p class="small">Write to <a class="link" href="mailto:alpha@bankoti.dev?subject=Orion">alpha@bankoti.dev</a> with the photo's camera and what you did.</p>
     </div>
@@ -203,9 +203,7 @@
   </div>
 </footer>
 
-<script src="../js/vendor/anime.umd.min.js?v=4.5.0" defer></script>
 <script src="../js/site.js" defer></script>
-<script src="../js/motion.js" defer></script>
 <script src="../js/download.js" defer></script>
 </body>
 </html>

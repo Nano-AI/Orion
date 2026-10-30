@@ -1,20 +1,12 @@
-/*  Orion site: tokens, type, layout, nav, buttons, captions, footer.
+/*  Orion site: tokens, fonts, reset, layout and type. The nav, buttons,
+ *  footer and motion are in chrome.css; each page's sections in its own file.
  *
- *  Direction (decisions #256, #384): a launch page on near-black. One
- *  headline, the real app, and a few short sections, each one idea. Archivo
- *  set wide for display, Martian Mono for anything the app or a camera would
- *  print: filenames, values, times. Neutrals stay neutral; a tinted ground
- *  reads as a colour cast next to a photograph.
- *
- *  The colours that are not grey come from the palette in design/tokens.json,
- *  which writes tokens.css for this site and Palette.g.cs for the app
- *  (decision #383). Cyan is the one accent and it marks what you can act on:
- *  the primary button, a link under the pointer, the section you are in, a
- *  value Orion changed, and focus. It never fills an area larger than a button.
- *
- *  Every value below the tokens comes from them. What keeps its own numbers
- *  is a drawn replica of something real: the app's slider, a printed page.
- *  Those say so where they are.
+ *  A launch page on near-black (#256, #384, #387): Archivo set wide for
+ *  display, Martian Mono for what a camera would print. Neutrals stay neutral.
+ *  Colours that are not grey come from design/tokens.json via tokens.css
+ *  (#383): cyan marks what you can act on and never fills more than a button.
+ *  The page's copy of the app's Light panel takes the app's own values
+ *  (tokens.css --app-*, light.css).
  */
 
 @font-face {
@@ -35,9 +27,8 @@
 :root {
   /* colour roles. A tinted grey is a colour cast, so every neutral is neutral */
   --ground:  #0b0b0c;   /* the page */
-  --well:    #0f0f10;   /* sunk below the ground: a slider's groove, a value's well */
   --panel:   #131315;   /* a note, a command */
-  --raised:  #1c1c1e;   /* a panel standing on the page */
+  --raised:  #1c1c1e;   /* a panel standing on the page (build-tokens.py checks the accent on it) */
   --line:    #242427;
   --line-2:  #3a3a3e;   /* a rule that has to read on --raised */
   --text:    #ececee;
@@ -55,7 +46,7 @@
    * Two registers, very large and small: the small one gets the steps, and
    * display and h2 stay fluid. */
   --fs-2xs:  0.6875rem;  /* 11: tracked capitals only (the 11px floor wins over the ratio's 10.6) */
-  --fs-xs:   0.75rem;    /* 12: mono captions, file facts, a value in a well */
+  --fs-xs:   0.75rem;    /* 12: mono captions, file facts */
   --fs-sm:   0.84rem;    /* 13.4: nav, small buttons, fine print */
   --fs-md:   0.945rem;   /* 15.1: notes, lists, buttons */
   --fs-base: 1.0625rem;  /* 17: body and h3 */
@@ -70,25 +61,21 @@
   --max: 1360px;
   --measure: 36rem;                         /* a lede, a note */
   --measure-sm: 30rem;                      /* the line under a heading */
-  --nav-h: 78px;                            /* the bar, 12px from the top, plus air */
+  --nav-h: 64px;                            /* the bar across the top */
   --section: clamp(96px, 11vw, 176px);
   --section-tight: clamp(64px, 7vw, 112px);   /* the download page's bands */
 
   /* radii: an instrument's part, the page's one radius, a window, and pills */
-  --r-sm: 4px;
-  --r: 6px;
-  --r-lg: 12px;
-  --r-pill: 999px;
+  --r-sm: 4px;  --r: 6px;  --r-lg: 12px;  --r-xl: 20px;  --r-pill: 999px;   /* xl: a plate */
 
   /* elevation is shadow, never a glow, one step per job */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.6);             /* a thumb */
   --shadow-md: 0 6px 22px rgba(0, 0, 0, 0.45);           /* a control over a photograph */
   --shadow-lg: 0 24px 60px -28px rgba(0, 0, 0, 0.85);    /* the phone menu */
 
   /* motion: one curve, two lengths. Feedback is fast; an arrival is a little slower */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --dur-1: 160ms;   /* hover, press, colour */
-  --dur-2: 280ms;   /* a menu opening, a section arriving */
+  --dur-2: 280ms;   /* a menu opening, the nav taking the ground */
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -119,13 +106,6 @@ button { font: inherit; color: inherit; }
 ::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
-.skip {
-  position: absolute; left: var(--s-3); top: -60px; z-index: 100;
-  padding: var(--s-2) var(--s-3); border-radius: var(--r);
-  background: var(--accent); color: var(--on-accent); text-decoration: none;
-}
-.skip:focus { top: var(--s-3); }
-
 /* one icon set: the app's own (shell/Shared/Icons.cs), drawn on a 24 grid
  * with one 1.6 stroke that does not scale with the box (tokens.json `icon`),
  * in a sprite on each page. Icons are 16, 20 or 24px. */
@@ -135,15 +115,6 @@ button { font: inherit; color: inherit; }
   fill: none; stroke: currentColor; stroke-width: 1.6px; stroke-linecap: round; stroke-linejoin: round;
 }
 
-/* a small label above a headline: what it is, where it runs */
-.pill {
-  display: inline-flex; align-items: center; gap: var(--s-2);
-  min-height: 32px; padding: 0 var(--s-3) 0 var(--s-2); border-radius: var(--r-pill);
-  border: 1px solid var(--line-2); background: var(--panel);
-  font-family: var(--mono); font-stretch: 100%; font-size: var(--fs-xs); color: var(--text-2);
-}
-.pill .ico { font-size: 20px; color: var(--accent); }
-
 /* ---------- layout ---------- */
 .wrap { width: min(var(--max), 100% - 2 * var(--gutter)); margin-inline: auto; }
 .section { padding-block: var(--section); scroll-margin-top: var(--nav-h); }
@@ -152,156 +123,16 @@ button { font: inherit; color: inherit; }
 /* Two registers and nothing between them: very large wide display, and small
  * text. Display is Archivo stretched to 118%, the proportion of lettering
  * engraved on a lens barrel. */
-.display, .h2 {
-  font-stretch: 118%;
-  font-weight: 700;
-  text-wrap: balance;
-}
-.display {
-  font-size: var(--fs-display);
-  letter-spacing: -0.035em;
-  line-height: 0.98;
-}
-.h2 {
-  font-size: var(--fs-h2);
-  letter-spacing: -0.03em;
-  line-height: 1.04;
-  max-width: 20ch;
-}
-.h3 {
-  font-size: var(--fs-base);
-  font-weight: 600;
-  font-stretch: 105%;
-  letter-spacing: -0.005em;
-  line-height: 1.3;
-}
+.display, .h2 { font-stretch: 118%; font-weight: 700; text-wrap: balance; }
+.display { font-size: var(--fs-display); letter-spacing: -0.035em; line-height: 0.98; }
+.h2 { font-size: var(--fs-h2); letter-spacing: -0.03em; line-height: 1.04; max-width: 20ch; }
+.h3 { font-size: var(--fs-base); font-weight: 600; font-stretch: 105%; letter-spacing: -0.005em; line-height: 1.3; }
 .lede { font-size: clamp(var(--fs-base), 0.95rem + 0.4vw, var(--fs-lg)); line-height: 1.5; color: var(--dim); max-width: var(--measure); }
 .small { font-size: var(--fs-md); line-height: 1.5; color: var(--dim); }
-.mono, .caption { font-family: var(--mono); font-stretch: 100%; }
-.small .mono { font-size: 0.86em; }
-.caption { font-size: var(--fs-xs); line-height: 1.7; letter-spacing: 0.01em; color: var(--dim); }
-.caption b, .val { font-weight: 400; color: var(--accent); }
+.caption { font-family: var(--mono); font-stretch: 100%; font-size: var(--fs-xs); line-height: 1.7; letter-spacing: 0.01em; color: var(--dim); }
+.caption b { font-weight: 400; color: var(--accent); }
 .link {
   text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 0.22em;
   transition: color var(--dur-1) var(--ease-out), text-decoration-color var(--dur-1) var(--ease-out);
 }
 @media (hover: hover) { .link:hover { color: var(--accent); text-decoration-color: currentColor; } }
-
-/* ---------- buttons ---------- */
-/* Ranked, not coloured by meaning: cyan is the one thing to do, ghost is the other. */
-.btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2);
-  min-height: 44px; padding: 0 var(--s-5);
-  border: 1px solid var(--accent); border-radius: var(--r);
-  background: var(--accent); color: var(--on-accent);
-  font-size: var(--fs-md); font-weight: 600; font-stretch: 108%; letter-spacing: -0.005em;
-  white-space: nowrap; text-decoration: none; cursor: pointer;
-  transition: transform var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out),
-              border-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
-}
-/* the press is the app's (scale .97, design/DESIGN.md); hover waits for a real pointer,
- * so a tap on a phone does not leave a button lit */
-@media (hover: hover) and (pointer: fine) {
-  .btn:hover { background: var(--accent-hi); border-color: var(--accent-hi); }
-  .btn--ghost:hover { background: var(--panel); border-color: var(--line-2); color: var(--text); }
-}
-.btn:active { transform: scale(0.97); }
-.btn--ghost { background: transparent; color: var(--text); border-color: var(--line-2); }
-.btn--lg { min-height: 52px; padding: 0 var(--s-6); font-size: var(--fs-base); }
-.btn .ico { font-size: 20px; }
-/* the shutter: two curtains meet and part across a pressed primary button
- * (motion.js). It sits over the words for 160 ms and never stops the click. */
-.btn { position: relative; overflow: hidden; }
-.btn__shutter { position: absolute; inset: 0; pointer-events: none; }
-.btn__shutter i { position: absolute; left: 0; right: 0; height: 51%; background: var(--ground); transform: scaleY(0); }
-.btn__shutter i:first-child { top: 0; transform-origin: 50% 0; }
-.btn__shutter i:last-child { bottom: 0; transform-origin: 50% 100%; }
-
-/* ---------- nav: a floating bar ---------- */
-/* Three columns, so the links sit on the bar's centre whatever the widths of
- * the mark and the button. The bar is the ground, see-through and blurred, so
- * the page reads under it without fighting it. The section in view is cyan.
- * The bar's 7px inset is (54 - 40) / 2, so the button's pill is concentric. */
-.nav { position: fixed; top: var(--s-3); left: 0; right: 0; z-index: 50; pointer-events: none; }
-.nav__in {
-  position: relative; pointer-events: auto;
-  width: min(1080px, 100% - 2 * var(--gutter)); height: 54px; margin-inline: auto;
-  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; column-gap: var(--s-3);
-  padding: 0 7px; border-radius: var(--r-pill);
-  background: var(--veil); border: 1px solid rgba(255, 255, 255, 0.08);
-  -webkit-backdrop-filter: blur(14px) saturate(1.4); backdrop-filter: blur(14px) saturate(1.4);
-}
-@media (prefers-reduced-transparency: reduce) { .nav__in { background: var(--panel); -webkit-backdrop-filter: none; backdrop-filter: none; } }
-.nav__mark {
-  justify-self: start; display: inline-flex; align-items: center; gap: var(--s-2); padding-left: 9px;
-  min-height: 44px;
-  font-size: var(--fs-md); font-weight: 700; font-stretch: 125%; letter-spacing: 0.14em; text-transform: uppercase;
-  text-decoration: none;
-}
-.nav__mark img { width: 30px; height: auto; }
-.nav__links { display: flex; gap: 2px; list-style: none; margin: 0; padding: 0; }
-.nav__links a {
-  display: flex; align-items: center; min-height: 40px; padding: 0 var(--s-3); border-radius: var(--r-pill);
-  font-size: var(--fs-sm); color: var(--text-2); text-decoration: none;
-  transition: color var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out);
-}
-@media (hover: hover) { .nav__links a:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); } }
-.nav__links a[aria-current] { color: var(--accent); }
-.nav__cta { justify-self: end; min-height: 40px; padding: 0 var(--s-4); border-radius: var(--r-pill); font-size: var(--fs-sm); }
-.nav__cta[aria-current] { color: var(--accent); border-color: currentColor; }   /* you are on the download page */
-.nav__toggle { display: none; }
-
-@media (max-width: 760px) {
-  .nav__in { grid-template-columns: auto 1fr auto auto; column-gap: var(--s-2); }
-  .nav__mark { padding-left: 7px; }
-  .js .nav__toggle {
-    display: grid; place-items: center; width: 40px; height: 40px;
-    background: none; border: 0; cursor: pointer;
-  }
-  .nav__toggle span, .nav__toggle span::before {
-    content: ""; display: block; width: 18px; height: 1.5px; background: var(--text);
-    transition: transform var(--dur-2) var(--ease-out);
-  }
-  .nav__toggle span { position: relative; transform: translateY(-3px); }
-  .nav__toggle span::before { position: absolute; top: 6px; }
-  .nav.is-open .nav__toggle span { transform: rotate(45deg); }
-  .nav.is-open .nav__toggle span::before { transform: translateY(-6px) rotate(-90deg); }
-  /* scripts on: a rounded sheet under the bar. scripts off: the row scrolls sideways. */
-  .js .nav__links {
-    position: absolute; top: calc(100% + var(--s-2)); left: 0; right: 0;
-    flex-direction: column; gap: 2px; padding: var(--s-2);
-    border-radius: var(--r-lg); border: 1px solid rgba(255, 255, 255, 0.08);
-    background: var(--panel); box-shadow: var(--shadow-lg);
-    visibility: hidden; opacity: 0; transform: translateY(-6px);
-    transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-2) var(--ease-out), visibility 0s var(--dur-2);
-  }
-  .js .nav.is-open .nav__links { visibility: visible; opacity: 1; transform: none; transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-2) var(--ease-out); }
-  .js .nav__links a { min-height: 48px; padding: 0 var(--s-4); font-size: var(--fs-base); border-radius: calc(var(--r-lg) - var(--s-2)); }
-  html:not(.js) .nav__in { height: auto; min-height: 54px; grid-template-columns: 1fr auto; border-radius: var(--r-lg); }
-  html:not(.js) .nav__nav { grid-row: 2; grid-column: 1 / -1; overflow-x: auto; padding-block: var(--s-1); }
-  html:not(.js) .nav__cta { grid-column: 2; grid-row: 1; }
-}
-@media (max-width: 400px) { .nav__mark { letter-spacing: 0.08em; } .nav__cta { padding-inline: var(--s-3); } }
-
-/* ---------- footer ---------- */
-.footer { padding-block: var(--s-7); border-top: 1px solid var(--line); }
-.footer__in { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: var(--s-5) var(--s-7); }
-.footer__mark { display: inline-flex; align-items: center; gap: var(--s-2); font-weight: 700; font-stretch: 125%; letter-spacing: 0.14em; text-transform: uppercase; font-size: var(--fs-md); }
-.footer__mark img { width: 24px; height: auto; }
-.footer__links { display: flex; flex-wrap: wrap; gap: 0 var(--s-5); list-style: none; padding: 0; margin: 0; font-size: var(--fs-md); color: var(--dim); }
-.footer__links a { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; transition: color var(--dur-1) var(--ease-out); }
-@media (hover: hover) { .footer__links a:hover { color: var(--accent); } }
-
-/* ---------- motion: one arrival, once ---------- */
-/* motion.js adds .motion when the visitor has not asked for less, and .is-in
- * when a block first enters the screen. Without it, everything is in place. */
-.motion [data-reveal] { transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out); }
-.motion [data-reveal]:not(.is-in) { opacity: 0; transform: translateY(12px); }
-
-/* Reduced motion keeps the fades and colour changes that say something
- * happened, and drops every movement. */
-@media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
-  *, *::before, *::after { transition-property: opacity, color, background-color, border-color, text-decoration-color, visibility !important; animation: none !important; }
-  .motion [data-reveal]:not(.is-in) { transform: none; }
-}

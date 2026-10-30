@@ -1,0 +1,112 @@
+/*  Orion site: the page's chrome. The nav, the skip link, buttons, the
+ *  footer and the one fade-up. Tokens are in base.css. */
+
+/* ---------- nav: a bar across the top ---------- */
+/* Over the top of the page it is clear: the mark, the sections and Download
+ * stand on the page itself. Once the page moves under it (site.js adds
+ * .is-stuck) it takes the ground, see-through and blurred, over a hairline.
+ * The section in view is underlined in cyan; the line grows from its centre. */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 50; border-bottom: 1px solid transparent;
+  transition: background-color var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
+}
+.nav.is-stuck { background: var(--veil); border-bottom-color: var(--line); -webkit-backdrop-filter: blur(14px) saturate(1.4); backdrop-filter: blur(14px) saturate(1.4); }
+@media (prefers-reduced-transparency: reduce) { .nav.is-stuck { background: var(--ground); -webkit-backdrop-filter: none; backdrop-filter: none; } }
+.nav__in { position: relative; width: min(var(--max), 100% - 2 * var(--gutter)); height: var(--nav-h); margin-inline: auto; display: flex; align-items: center; gap: var(--s-6); }
+.nav__mark {
+  margin-right: auto; display: inline-flex; align-items: center; gap: var(--s-3); min-height: 44px;
+  font-size: var(--fs-md); font-weight: 700; font-stretch: 125%; letter-spacing: 0.16em; text-transform: uppercase; text-decoration: none;
+}
+.nav__mark img { width: 34px; height: auto; }
+.nav__links { display: flex; gap: var(--s-6); list-style: none; margin: 0; padding: 0; }
+.nav__links a {
+  position: relative; display: flex; align-items: center; min-height: 44px;
+  font-size: var(--fs-md); color: var(--text-2); text-decoration: none; transition: color var(--dur-1) var(--ease-out);
+}
+.nav__links a::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 6px; height: 2px; border-radius: 1px;
+  background: var(--accent); transform: scaleX(0); transition: transform var(--dur-2) var(--ease-out);
+}
+@media (hover: hover) { .nav__links a:hover { color: var(--text); } }
+.nav__links a[aria-current] { color: var(--text); }
+.nav__links a[aria-current]::after { transform: none; }
+.nav__cta { min-height: 40px; padding: 0 var(--s-4); font-size: var(--fs-sm); }
+.nav__cta[aria-current] { background: transparent; color: var(--accent); border-color: currentColor; }   /* you are on the download page */
+.nav__toggle { display: none; }
+
+@media (max-width: 760px) {
+  .nav__in { gap: var(--s-2); }
+  .js .nav__toggle { display: grid; place-items: center; width: 44px; height: 44px; margin-right: -10px; background: none; border: 0; cursor: pointer; }
+  .nav__toggle span, .nav__toggle span::before {
+    content: ""; display: block; width: 18px; height: 1.5px; background: var(--text);
+    transition: transform var(--dur-2) var(--ease-out);
+  }
+  .nav__toggle span { position: relative; transform: translateY(-3px); }
+  .nav__toggle span::before { position: absolute; top: 6px; }
+  .nav.is-open .nav__toggle span { transform: rotate(45deg); }
+  .nav.is-open .nav__toggle span::before { transform: translateY(-6px) rotate(-90deg); }
+  /* scripts on: a sheet under the bar. scripts off: the links take a second row that scrolls sideways. */
+  .js .nav__links {
+    position: absolute; top: calc(100% + var(--s-1)); left: 0; right: 0;
+    flex-direction: column; gap: 2px; padding: var(--s-2);
+    border-radius: var(--r-lg); border: 1px solid var(--line);
+    background: var(--panel); box-shadow: var(--shadow-lg);
+    visibility: hidden; opacity: 0; transform: translateY(-6px);
+    transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-2) var(--ease-out), visibility 0s var(--dur-2);
+  }
+  .js .nav.is-open .nav__links { visibility: visible; opacity: 1; transform: none; transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-2) var(--ease-out); }
+  .js .nav__links a { min-height: 48px; padding: 0 var(--s-3); font-size: var(--fs-base); }
+  .js .nav__links a::after { left: var(--s-3); right: auto; width: 24px; bottom: 10px; }
+  html:not(.js) .nav__in { height: auto; min-height: var(--nav-h); flex-wrap: wrap; }
+  html:not(.js) .nav__nav { order: 3; width: 100%; overflow-x: auto; }
+}
+@media (max-width: 400px) { .nav__mark { letter-spacing: 0.1em; } .nav__cta { padding-inline: var(--s-3); } }
+
+.skip {
+  position: absolute; left: var(--s-3); top: -60px; z-index: 100;
+  padding: var(--s-2) var(--s-3); border-radius: var(--r);
+  background: var(--accent); color: var(--on-accent); text-decoration: none;
+}
+.skip:focus { top: var(--s-3); }
+
+/* ---------- buttons ---------- */
+/* Ranked, not coloured by meaning: cyan is the one thing to do, ghost is the other. */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2);
+  min-height: 44px; padding: 0 var(--s-5);
+  border: 1px solid var(--accent); border-radius: var(--r);
+  background: var(--accent); color: var(--on-accent);
+  font-size: var(--fs-md); font-weight: 600; font-stretch: 108%; letter-spacing: -0.005em;
+  white-space: nowrap; text-decoration: none; cursor: pointer;
+  transition: transform var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out),
+              border-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+/* the press is the app's (scale .97, design/DESIGN.md); hover waits for a real pointer,
+ * so a tap on a phone does not leave a button lit */
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover { background: var(--accent-hi); border-color: var(--accent-hi); }
+  .btn--ghost:hover { background: var(--panel); border-color: var(--line-2); color: var(--text); }
+}
+.btn:active { transform: scale(0.97); }
+.btn--ghost { background: transparent; color: var(--text); border-color: var(--line-2); }
+.btn--lg { min-height: 52px; padding: 0 var(--s-6); font-size: var(--fs-base); }
+.btn .ico { font-size: 20px; }
+/* ---------- footer ---------- */
+.footer { padding-block: var(--s-7); border-top: 1px solid var(--line); }
+.footer__in { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: var(--s-5) var(--s-7); }
+.footer__mark { display: inline-flex; align-items: center; gap: var(--s-2); font-weight: 700; font-stretch: 125%; letter-spacing: 0.14em; text-transform: uppercase; font-size: var(--fs-md); }
+.footer__mark img { width: 24px; height: auto; }
+.footer__links { display: flex; flex-wrap: wrap; gap: 0 var(--s-5); list-style: none; padding: 0; margin: 0; font-size: var(--fs-md); color: var(--dim); }
+.footer__links a { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; transition: color var(--dur-1) var(--ease-out); }
+@media (hover: hover) { .footer__links a:hover { color: var(--accent); } }
+
+/* ---------- motion ---------- */
+/* Nothing arrives, nothing reveals on scroll. What moves: the hero's parts
+ * taking a turn once (site.js), the loupe further down (develop.js), and
+ * feedback under a hand: hover, the 0.97 press, the menu. Reduced motion
+ * keeps the fades and colour changes that say something happened and drops
+ * every movement. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition-property: opacity, color, background-color, border-color, text-decoration-color, visibility !important; }
+}

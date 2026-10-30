@@ -1,6 +1,7 @@
-/*  Orion site: the behaviour that has to work without the motion layer.
+/*  Orion site: the behaviour every page shares.
  *  The phone menu, the section in view, the download buttons' label, the
- *  compares and the exposure sweep. motion.js only fades blocks in on top.
+ *  bar's ground, and the window's parts naming themselves. develop.js is
+ *  the loupe.
  */
 (() => {
   'use strict';
@@ -48,57 +49,48 @@
     document.querySelectorAll('main section[id]').forEach(s => spy.observe(s));
   }
 
-  // ---------- compare: a native range drives --pos ----------
-  document.querySelectorAll('[data-compare]').forEach(fig => {
-    const input = fig.querySelector('input[type="range"]');
-    if (!input) return;
-    const unit = input.dataset.unit || '';
-    const set = () => {
-      const v = Number(input.value);
-      fig.style.setProperty('--pos', `${v}%`);
-      fig.classList.toggle('is-low', v < 12);
-      fig.classList.toggle('is-high', v > 88);
-      input.setAttribute('aria-valuetext', `${Math.round(v)}% ${unit}`.trim());
-    };
-    input.addEventListener('input', set);
-    input.addEventListener('keydown', e => {
-      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
-      e.preventDefault();
-      const direction = ['ArrowRight', 'ArrowUp'].includes(e.key) ? 1 : -1;
-      input.value = Number(input.value) + direction * (e.shiftKey ? 10 : 1);
-      set();
-    });
-    set();
-  });
+  // ---------- nav: clear over the top of the page, the ground once the page moves under it ----------
+  if (nav && 'IntersectionObserver' in window) {
+    const top = document.createElement('div');
+    top.setAttribute('aria-hidden', 'true');
+    top.style.cssText = 'position:absolute;top:0;left:0;width:1px;height:8px;pointer-events:none';
+    document.body.prepend(top);
+    new IntersectionObserver(([e]) => nav.classList.toggle('is-stuck', !e.isIntersecting)).observe(top);
+  }
 
-  // ---------- exposure sweep: one slider crossfades seven real renders ----------
-  document.querySelectorAll('[data-sweep]').forEach(fig => {
-    const input = fig.querySelector('input[type="range"]');
-    const frames = [...fig.querySelectorAll('.sweep__frames img')];
-    const out = fig.querySelector('[data-sweep-val]');
-    const evs = (fig.dataset.evs || '').split(',').map(Number);
-    if (!input || frames.length < 2 || evs.length !== frames.length) return;
-    const last = frames.length - 1;
-    const fmt = ev => (Math.abs(ev) < 0.005 ? '0.00 EV' : `${ev < 0 ? '−' : '+'}${Math.abs(ev).toFixed(2)} EV`);
-    // where 0 EV sits on the rail, as a fraction: the groove fills from there to the handle
-    let zero = 0;
-    for (let i = 0; i < last; i++) if (evs[i] <= 0 && evs[i + 1] >= 0) { zero = (i - evs[i] / (evs[i + 1] - evs[i])) / last; break; }
-    fig.style.setProperty('--zero', zero);
-    const set = () => {
-      const v = Math.min(last, Math.max(0, Number(input.value)));
-      const i = Math.min(last - 1, Math.floor(v));
-      const t = v - i;
-      frames.forEach((f, k) => { f.style.opacity = k <= i ? 1 : k === i + 1 ? t : 0; });
-      const ev = evs[i] + (evs[i + 1] - evs[i]) * t;
-      if (out) {
-        out.textContent = fmt(ev);
-        out.classList.toggle('is-changed', Math.abs(ev) >= 0.005);
-      }
-      input.setAttribute('aria-valuetext', fmt(ev));
-      fig.style.setProperty('--lo', Math.min(v / last, zero));
-      fig.style.setProperty('--hi', Math.max(v / last, zero));
+  // ---------- the window: each outlined part says what it is ----------
+  // On a wide screen the label hangs off the part (sections.css); on a phone
+  // it is the line under the plate. The tour is the hero's one moment. The first time the window is well in
+  // view each part takes a turn, once, so it is plain there is something to
+  // point at; the moment anyone points, taps or tabs, the tour stops for good.
+  const say = document.querySelector('[data-say]');
+  const shot = say && say.closest('.shot');
+  if (shot) {
+    const hints = [...shot.querySelectorAll('.hint')];
+    let on = null, tour = 0;
+    const set = hint => {
+      if (on) on.classList.remove('is-on');
+      on = hint;
+      if (hint) hint.classList.add('is-on');
+      say.textContent = hint ? hint.getAttribute('aria-label') : '';
     };
-    input.addEventListener('input', set);
-    set();
-  });
+    const stop = () => { clearTimeout(tour); tour = -1; };
+    hints.forEach(h => {
+      h.addEventListener('pointerenter', () => { stop(); set(h); });
+      h.addEventListener('pointerleave', () => set(document.activeElement.matches('.hint') ? document.activeElement : null));
+      h.addEventListener('focus', () => { stop(); set(h); });
+      h.addEventListener('blur', () => set(null));
+      h.addEventListener('click', () => { stop(); set(h); });   // a tap ends with a pointerleave, then this
+    });
+    if ('IntersectionObserver' in window) {
+      const seen = new IntersectionObserver(([e]) => {
+        if (!e.isIntersecting || tour === -1) return;
+        seen.disconnect();
+        const shown = hints.filter(h => h.offsetParent);   // the phone hides the title bar's two
+        const step = k => { if (tour === -1) return; set(shown[k] || null); if (k < shown.length) tour = setTimeout(step, 2200, k + 1); };
+        tour = setTimeout(step, 600, 0);
+      }, { threshold: 0.35 });
+      seen.observe(shot);
+    }
+  }
 })();

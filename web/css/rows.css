@@ -1,0 +1,75 @@
+/*  Orion site: the home page below the hero. The bento of the app's own
+ *  panels, two rows that flip sides, the build list and the close. */
+
+/* two-tone heads: the claim in white, the rest of the sentence in grey */
+.h2__more { color: var(--dim); }
+
+/* ---------- bento: crops of the app's headless captures, each with a two-tone line ---------- */
+.bento .h2 { max-width: 22ch; }
+.bento__note { margin-top: var(--s-4); font-size: var(--fs-xs); color: var(--dim); }
+.bento__grid { margin-top: clamp(var(--s-6), 4vw, var(--s-7)); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); }
+.card { display: flex; flex-direction: column; gap: var(--s-4); padding: var(--s-4); border-radius: var(--r-lg); background: var(--panel); }
+.card img { width: 100%; border-radius: var(--r); }
+.card figcaption { margin-top: auto; padding: 0 var(--s-2) var(--s-2); font-size: var(--fs-md); line-height: 1.45; color: var(--dim); }
+.card figcaption b { font-weight: 600; color: var(--text); }
+.card--wide { grid-column: span 2; }
+.card--tall { grid-row: span 2; }
+@media (max-width: 900px) {
+  .bento__grid { grid-template-columns: 1fr; }
+  .card--wide, .card--tall { grid-column: auto; grid-row: auto; }
+  .card--tall img { max-width: 360px; }
+}
+
+/* ---------- rows: a picture on one side, the words on the other, flipped ---------- */
+.row__grid { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--s-6) clamp(var(--s-6), 5vw, var(--s-8)); align-items: center; }
+.row--flip .row__grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
+.row--flip .row__copy { order: -1; }
+.row .h2 { font-size: clamp(1.75rem, 2.6vw, 2.4rem); }
+.row__copy .small { margin-top: var(--s-5); max-width: var(--measure-sm); }
+@media (max-width: 900px) {
+  .row__grid, .row--flip .row__grid { grid-template-columns: 1fr; }
+  .row--flip .row__copy { order: 0; }
+}
+
+/* ---------- keep: the two files, on the fog they came from ---------- */
+.keep__files { display: flex; flex-direction: column; justify-content: center; gap: var(--s-3); }
+.keep__file {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s-1) var(--s-4);
+  padding: var(--s-5); border-radius: var(--r-lg); background: color-mix(in srgb, var(--ground) 84%, transparent);
+}
+.keep__name { font-family: var(--mono); font-weight: 300; font-size: clamp(1.05rem, 1.7vw, 1.5rem); line-height: 1.1; letter-spacing: -0.03em; }
+.keep__meta { font-family: var(--mono); font-size: var(--fs-xs); color: var(--dim); text-align: right; }
+.keep__meta--ours { color: var(--accent); }   /* the file Orion writes */
+@media (max-width: 520px) { .keep__file { grid-template-columns: 1fr; } .keep__meta { text-align: left; } }
+
+/* ---------- register: the whole build, scannable ---------- */
+.register__groups {
+  margin-top: clamp(var(--s-6), 3vw, var(--s-7));
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-6) clamp(var(--s-5), 2.4vw, var(--s-7));
+}
+.register__group { padding-top: var(--s-4); border-top: 1px solid var(--line); }
+.register__list { list-style: none; margin: var(--s-2) 0 0; padding: 0; }
+.register__list li { font-size: var(--fs-md); line-height: 1.45; color: var(--text-2); }
+.register__list li + li { margin-top: var(--s-2); }
+.register__list code { font-family: var(--mono); font-size: 0.84em; color: var(--text); }
+.register__notyet { grid-column: span 2; border-top-style: dashed; border-top-color: var(--faint); }
+.register__notyet .h3, .register__notyet li { color: var(--dim); }
+.register__cite { margin-top: var(--s-7); }
+@media (max-width: 1100px) { .register__groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) {
+  .register__groups { grid-template-columns: 1fr; }
+  .register__notyet { grid-column: auto; }
+}
+
+/* ---------- close: the ask, over the pier, signed with the mark ---------- */
+.close { position: relative; display: grid; align-items: end; min-height: min(86svh, 820px); overflow: hidden; }
+.close__photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 60% 50%; }
+.close::before {   /* the scrim the words stand on */
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(to top, rgba(11, 11, 12, 0.9) 0%, rgba(11, 11, 12, 0.35) 45%, rgba(11, 11, 12, 0) 70%),
+              linear-gradient(to bottom, var(--ground) 0%, rgba(11, 11, 12, 0) 18%);
+}
+.close__copy { position: relative; z-index: 2; padding-block: var(--section) clamp(var(--s-7), 8vh, var(--s-9)); }
+.close__sub { margin-top: var(--s-4); max-width: var(--measure-sm); font-size: clamp(var(--fs-base), 0.95rem + 0.3vw, var(--fs-lg)); color: var(--text-2); }
+.close .hero__cta { justify-content: flex-start; }
+.close__mark { width: clamp(48px, 5vw, 64px); height: auto; margin-bottom: var(--s-5); }
