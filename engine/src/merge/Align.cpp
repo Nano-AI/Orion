@@ -1,6 +1,7 @@
 /*  Alignment — see Align.h. This is the one translation unit that includes
- *  OpenCV for alignment, and with util/ImageWriterPortable.cpp (Windows and
- *  Linux export, #376) one of only two; keep it that way.
+ *  OpenCV for HDR alignment, and with util/ImageWriterPortable.cpp (Windows
+ *  and Linux export, #376) and stack/StarAlign.cpp (star registration, #391)
+ *  one of only three; keep it that way.
  *
  *  Pipeline: exposure-normalized log-luma proxies (~1500 px long edge) -> ORB ->
  *  Hamming brute-force with cross-check -> findHomography(RANSAC) -> ECC

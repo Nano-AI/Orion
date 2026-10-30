@@ -53,6 +53,7 @@ add_library(orion_engine STATIC
     src/merge/Align.cpp
     src/merge/HdrMerge.cpp
     src/stack/Rejection.cpp
+    src/stack/StarAlign.cpp
 )
 
 add_library(Orion::Engine ALIAS orion_engine)
@@ -125,8 +126,9 @@ set(LIBRAW_LIBRARY ${LIBRAW_LIBRARY} PARENT_SCOPE)
 
 target_include_directories(orion_engine PRIVATE ${LIBRAW_INCLUDE_DIR})
 
-# OpenCV — for HDR-merge alignment, and off macOS for export too
-# (ImageWriterPortable.cpp, #376). Those are the only translation units that
+# OpenCV — for HDR-merge alignment, star registration (stack/StarAlign.cpp,
+# #391), and off macOS for export too (ImageWriterPortable.cpp, #376). Those
+# are the only translation units that
 # include it, and the include path is scoped to that
 # file so the dependency cannot leak into a header by accident. OpenCV 5
 # renamed features2d to features and split calib3d: findHomography is in
@@ -162,7 +164,7 @@ else()
     set_source_files_properties(src/util/ImageWriterPortable.cpp
         PROPERTIES INCLUDE_DIRECTORIES "${OPENCV_INCLUDE_DIR}")
 endif()
-set_source_files_properties(src/merge/Align.cpp
+set_source_files_properties(src/merge/Align.cpp src/stack/StarAlign.cpp
     PROPERTIES INCLUDE_DIRECTORIES "${OPENCV_INCLUDE_DIR}")
 
 
