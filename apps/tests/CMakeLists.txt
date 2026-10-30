@@ -19,6 +19,7 @@ add_executable(orion-tests
     tests_linear.cpp
     tests_effects.cpp
     tests_display.cpp
+    tests_display_copy.cpp
     tests_highlights.cpp
     tests_fusion.cpp
     tests_fusion_wiring.cpp

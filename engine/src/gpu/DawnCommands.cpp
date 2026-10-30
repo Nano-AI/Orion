@@ -84,9 +84,33 @@ struct DawnCommandBuffer final : CommandBuffer::Impl {
         recorded.push_back(std::move(r));
     }
 
+    void commit() override {
+        ErrorScope scope(*ctx);
+        submit();
+        scope.check("GPU work failed");
+    }
+
     void commitAndWait() override {
         const auto start = std::chrono::steady_clock::now();
         ErrorScope scope(*ctx);
+        submit();
+        // This submit's own completion: the future is taken straight after it.
+        bool done = false;
+        ctx->wait(ctx->queue.OnSubmittedWorkDone(wgpu::CallbackMode::WaitAnyOnly,
+            [&](wgpu::QueueWorkDoneStatus st, wgpu::StringView) {
+                done = st == wgpu::QueueWorkDoneStatus::Success;
+            }));
+        gpuMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+        scope.check("GPU work failed");
+        if (!done) throw std::runtime_error("GPU work failed: the queue did not finish");
+    }
+
+    /// Encodes everything recorded and submits it; the recording is emptied either way.
+    void submit() {
+        struct Clear {
+            DawnCommandBuffer* c;
+            ~Clear() { c->recorded.clear(); c->params.clear(); }
+        } clear{this};
         wgpu::Buffer uniforms;
         if (!params.empty()) {
             wgpu::BufferDescriptor bd{.usage = wgpu::BufferUsage::Uniform,
@@ -116,17 +140,6 @@ struct DawnCommandBuffer final : CommandBuffer::Impl {
         pass.End();
         wgpu::CommandBuffer cmd = enc.Finish();
         ctx->queue.Submit(1, &cmd);
-        // This submit's own completion: the future is taken straight after it.
-        bool done = false;
-        ctx->wait(ctx->queue.OnSubmittedWorkDone(wgpu::CallbackMode::WaitAnyOnly,
-            [&](wgpu::QueueWorkDoneStatus st, wgpu::StringView) {
-                done = st == wgpu::QueueWorkDoneStatus::Success;
-            }));
-        gpuMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-        recorded.clear();
-        params.clear();
-        scope.check("GPU work failed");
-        if (!done) throw std::runtime_error("GPU work failed: the queue did not finish");
     }
 };
 

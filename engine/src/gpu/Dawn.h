@@ -82,6 +82,7 @@ std::unique_ptr<Texture::Impl> makeTexture(std::shared_ptr<Context>, std::uint32
 std::unique_ptr<Library::Impl> makeLibrary(std::shared_ptr<Context>, const std::string& path);
 std::unique_ptr<Kernel::Impl>  makeKernel(Library&, const std::string& entryPoint);
 std::unique_ptr<CommandBuffer::Impl> makeCommandBuffer(std::shared_ptr<Context>);
+std::unique_ptr<Readback::Slot> makeStaging(std::shared_ptr<Context>);
 
 // ── The platform half ──────────────────────────────────────────────────────
 

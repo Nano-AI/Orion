@@ -271,8 +271,10 @@ public sealed class EngineModel : INotifyPropertyChanged {
         if (_session != null) Render(preview: false);
     }
 
-    /// Engine render, then shown: left on the GPU for the canvas to take with no
-    /// copy (Shown.OnGpu, #317), else copied into the session's bitmap.
+    /// Engine render, then shown live: the canvas takes it from the GPU with no
+    /// copy (SharedPicture, #317) or copies it at the size it shows it, without
+    /// waiting (CopiedPicture, #386). Copy is what showing it cost this thread,
+    /// that copy's start included; a reader with no canvas copies on first ask.
     public (double Render, double Copy) Render(bool preview) {
         if (_session is not { } s) return (0, 0);
         var sw = Stopwatch.StartNew();
@@ -288,19 +290,16 @@ public sealed class EngineModel : INotifyPropertyChanged {
         if (graph == Graph.None) graph = s.Render(preview);
         double render = sw.Elapsed.TotalMilliseconds;
         sw.Restart();
-        var bitmap = Shown.OnGpu ? null : s.Read(graph);
-        var size = bitmap?.PixelSize ?? s.Size(graph);
+        var size = s.Size(graph);
         if (size == default) {
             SetTiming("render failed: " + s.LastError);
             return (render, 0);
         }
+        Shown.ShowLive(s, graph, graph == Graph.Region ? view!.Value.Uv : null);
         double copy = sw.Elapsed.TotalMilliseconds;
         Last = (render, copy);
-        var uv = graph == Graph.Region ? view!.Value.Uv : (Avalonia.Rect?)null;
-        if (bitmap != null) Shown.Show(bitmap, graph, uv);
-        else Shown.ShowLive(s, graph, uv);
         SetTiming($"{graph.ToString().ToLowerInvariant()} {size.Width}×{size.Height} · engine {render:0.0} ms · " +
-                  (bitmap != null ? $"copy {copy:0.0} ms" : "on the GPU"));
+                  (Shown.OnGpu ? "on the GPU" : $"copy {copy:0.0} ms"));
         Changed(nameof(Picture));
         Rendered?.Invoke();
         return (render, copy);

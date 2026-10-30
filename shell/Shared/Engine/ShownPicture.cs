@@ -11,8 +11,9 @@ public enum Graph { Failed = -1, None = 0, Preview = 1, Full = 2, Region = 3 }
 
 /// The one picture the canvas shows. Everything that wants a picture on screen
 /// goes through Show or ShowLive; the canvas repaints on Changed. A kept picture
-/// (the cache's) is a CPU bitmap. A render is either copied into one, or, while
-/// the canvas can take it straight from the GPU (OnGpu, #317), left there: Live.
+/// (the cache's) is a CPU bitmap. A render is left on the GPU, Live, and the
+/// canvas takes it from there: straight from the GPU while it can (OnGpu, #317),
+/// else as a screen-sized copy that never waits on the engine (#386).
 public sealed class ShownPicture {
     Bitmap? _bitmap;
 
@@ -29,8 +30,8 @@ public sealed class ShownPicture {
     public Session? Live { get; private set; }
     /// Something to show, found without copying a live render to find out.
     public bool Any => _bitmap != null || Live != null;
-    /// Set by the canvas while it can show a render with no CPU copy (SharedPicture):
-    /// EngineModel.Render then calls ShowLive instead of copying.
+    /// Set by the canvas while it can show a render with no CPU copy (SharedPicture);
+    /// otherwise the canvas copies it (CopiedPicture).
     public bool OnGpu { get; set; }
     /// After every Show, including the same bitmap with new pixels.
     public event Action? Changed;

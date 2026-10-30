@@ -159,6 +159,7 @@ void CommandBuffer::dispatch(const Kernel& kernel,
 }
 
 void CommandBuffer::commitAndWait() { impl_->commitAndWait(); }
+void CommandBuffer::commit() { impl_->commit(); }
 
 double CommandBuffer::gpuMilliseconds() const noexcept { return impl_->gpuMs; }
 

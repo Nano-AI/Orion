@@ -79,6 +79,7 @@ set(ORION_SHADERS
     develop_display:developDisplay
     grain:grain
     geometry:geometry
+    display_reduce:displayReduce
 )
 
 if(ORION_DAWN)

@@ -24,9 +24,11 @@ set(ORION_SHADER_DIR ${ORION_SHADER_DIR} PARENT_SCOPE)
 add_library(orion_engine STATIC
     src/CApi.cpp
     src/CApiExport.cpp
+    src/CApiDisplay.cpp
     src/Engine.cpp
     src/ResourcePaths.cpp
     src/gpu/Gpu.cpp
+    src/gpu/Readback.cpp
     src/raw/RawImage.cpp
     src/raw/NoiseProfile.cpp
     src/gpu/TexturePool.cpp
@@ -37,6 +39,7 @@ add_library(orion_engine STATIC
     src/pipe/DevelopDenoiseLocal.cpp
     src/pipe/DevelopMask.cpp
     src/pipe/DevelopOutput.cpp
+    src/pipe/DisplayCopy.cpp
     src/pipe/CubeLut.cpp
     src/pipe/LensDatabase.cpp
     src/pipe/LensOpcodes.cpp

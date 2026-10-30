@@ -6,6 +6,7 @@
 #include "gpu/Device.h"
 #include "merge/HdrMerge.h"
 #include "pipe/DevelopPipeline.h"
+#include "pipe/DisplayCopy.h"
 #include "pipe/LensDatabase.h"
 #include "raw/RawImage.h"
 #include "util/ImageWriter.h"
@@ -119,6 +120,10 @@ public:
     /// decoded photo: what a cache does to a photo it holds but is not
     /// showing (decision #318). The next render of either rebuilds it.
     void releaseRenderMemory() noexcept;
+
+    /// The canvas's copy of a render (#386), made on first use; released with
+    /// the render memory, its copies in flight with it.
+    [[nodiscard]] pipe::DisplayCopy& displayCopy();
 
     // ── State that is not an adjustment ───────────────────────────────────
     //
@@ -257,6 +262,7 @@ private:
     std::unique_ptr<pipe::DevelopPipeline> preview_;
     /// The region graph and what it was last loaded with (#22).
     std::unique_ptr<pipe::DevelopPipeline> region_;
+    std::unique_ptr<pipe::DisplayCopy>     display_;
     // ponytail: the whole mosaic stays on the CPU for the region graph to cut
     // windows from (2 bytes a pixel, 48 MB at 24 MP); read windows back from
     // the full graph's source texture if that ever matters.

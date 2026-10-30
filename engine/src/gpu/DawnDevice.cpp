@@ -113,6 +113,7 @@ struct DawnDevice final : Device::Impl {
     std::unique_ptr<CommandBuffer::Impl> commandBuffer() override {
         return makeCommandBuffer(ctx);
     }
+    std::unique_ptr<Readback::Slot> staging() override { return makeStaging(ctx); }
     // No explicit Destroy(): a texture may outlive this object, and the device
     // goes when the last Context reference does.
 };

@@ -138,6 +138,7 @@ void testDngEmbeddedPreview();
 void testLinearDngBaselineExposure();
 void testLinearDngEngineOpen();
 void testFacadeSessionSeams();
+void testDisplayCopyGpu();
 void testMergeExposureMaths();
 void testMergeReconstruction();
 void testMergeDeghostAndCoverage();

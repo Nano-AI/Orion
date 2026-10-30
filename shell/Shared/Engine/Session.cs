@@ -127,6 +127,23 @@ public sealed partial class Session : IDisposable {
         }
     }
 
+    /// Queues the canvas's copy of the last render of `graph`, `level` halvings
+    /// down, on the GPU, and does not wait for it (#386). Its ticket; 0 when there
+    /// is nothing to copy.
+    public ulong BeginCopy(Graph graph, int level) =>
+        graph is Graph.None or Graph.Failed ? 0 : Native.shim_copy_begin(Shim, (int)graph, level, out _, out _);
+
+    /// The newest copy that has landed, written straight into `bitmap`, which is
+    /// made again only when the copy's size is not its own. `wait`: for the last
+    /// one begun. Its ticket; 0 when none has landed.
+    public unsafe ulong TakeCopy(bool wait, ref WriteableBitmap? bitmap) {
+        if (Native.shim_copy_take(Shim, wait ? 1 : 0, null, 0, 0, out int w, out int h) == 0) return 0;
+        if (bitmap?.PixelSize != new PixelSize(w, h))
+            bitmap = new WriteableBitmap(new PixelSize(w, h), new Vector(96, 96), PixelFormat.Rgba8888, AlphaFormat.Opaque);
+        using var fb = bitmap.Lock();
+        return Native.shim_copy_take(_shim, 0, (byte*)fb.Address, fb.RowBytes, fb.RowBytes * h, out _, out _);
+    }
+
     /// The last render of `graph` as tightly packed RGBA bytes, with no bitmap
     /// and so no Avalonia platform: what `Orion --agent` measures and crops.
     public unsafe byte[]? Rgba(Graph graph, out int w, out int h) {

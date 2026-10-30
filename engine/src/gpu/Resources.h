@@ -162,6 +162,10 @@ public:
 
     void commitAndWait();
 
+    /// Submits and returns at once: what is committed later on this device runs
+    /// after it, a `Readback` included (#386). Metal waits anyway.
+    void commit();
+
     /// GPU-side duration of the committed work. Valid after commitAndWait().
     /// On Dawn, the wall time from submit to completion, which includes the
     /// wait's own latency (no timestamp queries yet).
@@ -171,6 +175,44 @@ public:
 
 private:
     std::unique_ptr<Impl> impl_;
+};
+
+/// A texture copied to the CPU without waiting for it (#386), for a canvas that
+/// cannot draw the texture itself. `begin` queues the copy behind everything
+/// committed before it and returns; `newest` names the newest copy that has
+/// landed, `take` copies it out. Three copies may be in flight; a fourth
+/// `begin` reuses a landed one nobody took, or waits for the oldest.
+/// On Metal `begin` copies at once: there the window draws the texture itself
+/// (present.mm), and only tests and the headless shell read back.
+class Readback {
+public:
+    explicit Readback(Device&);
+    ~Readback();
+    Readback(const Readback&)            = delete;
+    Readback& operator=(const Readback&) = delete;
+
+    /// Queues a copy of `t`'s top-left width x height. Returns its ticket, from 1.
+    std::uint64_t begin(const Texture& t, std::uint32_t width, std::uint32_t height);
+
+    /// The newest copy that has landed since the last `take`: its ticket and
+    /// size, or 0 when none has. Held for `take`; older landed copies are
+    /// dropped. `wait` first waits for the last begun copy to land.
+    std::uint64_t newest(bool wait, std::uint32_t& width, std::uint32_t& height);
+
+    /// What `newest` last named and nobody took yet, without looking again.
+    std::uint64_t held(std::uint32_t& width, std::uint32_t& height) const noexcept;
+
+    /// Copies the copy `newest` named into rows of `bytesPerRow` and frees it.
+    /// False when `newest` named none (or a `begin` since reused it).
+    bool take(void* dst, std::size_t bytesPerRow);
+
+    struct Slot;    // backend-private: one staging buffer (Backend.h)
+    struct Entry;
+
+private:
+    std::vector<std::unique_ptr<Entry>> entries_;
+    Entry*        held_    = nullptr;   // what `newest` named
+    std::uint64_t tickets_ = 0, taken_ = 0;
 };
 
 }  // namespace orion::gpu
