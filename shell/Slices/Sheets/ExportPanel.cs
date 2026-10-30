@@ -12,7 +12,7 @@ namespace OrionShell.Sheets;
 public sealed class ExportPanel : Border {
     readonly ExportSettings _s = ExportSettings.Shared;
     readonly Watermark _mark = Watermark.Shared;
-    readonly StackPanel _options = new() { Spacing = Space.Lg, Margin = new Thickness(0, 0, 14, 0) };   // clear of the overlay scrollbar
+    readonly StackPanel _options = new() { Spacing = Space.Lg, Margin = new Thickness(0, 0, Space.Pad, 0) };   // clear of the overlay scrollbar
     readonly TextBlock _dims = Faces.Figure("", Faces.Label, Palette.Dim);
     readonly TextBlock _size = Faces.Figure("", Faces.Label);
     readonly TextBlock _sizeNote = SheetKit.Note("", Palette.Dim);
@@ -30,7 +30,7 @@ public sealed class ExportPanel : Border {
 
     public ExportPanel() {
         Width = 380;
-        Padding = new Thickness(22);
+        Padding = new Thickness(Space.Lg);
         Background = Palette.Panel;
         HorizontalAlignment = HorizontalAlignment.Left;
         VerticalAlignment = VerticalAlignment.Top;
@@ -41,14 +41,14 @@ public sealed class ExportPanel : Border {
         var readout = new DockPanel();
         DockPanel.SetDock(_size, Dock.Right);
         DockPanel.SetDock(_measuring, Dock.Right);
-        _measuring.Margin = new Thickness(0, 0, Space.Sm + 2, 0);
+        _measuring.Margin = new Thickness(0, 0, Space.Md, 0);
         readout.Children.AddRange([_size, _measuring, _dims]);
         _readout = new Border {
-            Background = Palette.Raised, CornerRadius = new CornerRadius(Radius.Md), Padding = new Thickness(11, 9), Child = readout,
+            Background = Palette.Raised, CornerRadius = new CornerRadius(Radius.Md), Padding = new Thickness(Space.Md), Child = readout,
         };
         Build();
 
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Sm + 2, HorizontalAlignment = HorizontalAlignment.Right };
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Md, HorizontalAlignment = HorizontalAlignment.Right };
         actions.Children.Add(SheetKit.Button("Cancel", () => Dismiss?.Invoke()));
         // runBatchExport over a selection, else exportFile. The batch reads sidecars: what is owed is written first.
         actions.Children.Add(SheetKit.Button(Selected > 0 ? $"Export {Selected}…" : "Export…", () => {
@@ -80,12 +80,12 @@ public sealed class ExportPanel : Border {
         var depth = new Segmented(ExportSettings.Depths.Select(c => c.Title).ToList(), _s.Depth) { IsEnabled = _s.CarriesDepth };
         var depthNote = SheetKit.Note(DepthNote(), Palette.Dim);
         depth.Changed += i => { _s.Depth = i; depthNote.Text = DepthNote(); Remeasure(); };
-        _options.Children.Add(SheetKit.Row("Depth", new StackPanel { Spacing = 5, Children = { depth, depthNote } }));
+        _options.Children.Add(SheetKit.Row("Depth", new StackPanel { Spacing = Space.Gap, Children = { depth, depthNote } }));
 
         _options.Children.Add(SheetKit.Row("Metadata", NotedMenu(ExportSettings.Metadatas, () => _s.Metadata, i => _s.Metadata = i)));
 
         var size = SheetKit.Menu(ExportSettings.Sizes.Select(c => c.Title), _s.Size, i => { _s.Size = i; Build(); Remeasure(); });
-        var sizeRow = new StackPanel { Spacing = Space.Sm + 2, Children = { size } };
+        var sizeRow = new StackPanel { Spacing = Space.Md, Children = { size } };
         if (ExportSettings.Sizes[_s.Size].Code < 0) sizeRow.Children.Add(CustomFields());
         _options.Children.Add(SheetKit.Row("Size", sizeRow));
 
@@ -93,7 +93,7 @@ public sealed class ExportPanel : Border {
         var sharp = new Segmented(ExportSettings.Sharpenings.Select(c => c.Title).ToList(), _s.Sharpening);
         var sharpNote = SheetKit.Note(ExportSettings.Sharpenings[_s.Sharpening].Note, Palette.Dim);
         sharp.Changed += i => { _s.Sharpening = i; sharpNote.Text = ExportSettings.Sharpenings[i].Note; Remeasure(); };
-        _options.Children.Add(SheetKit.Row("Sharpening", new StackPanel { Spacing = 5, Children = { sharp, sharpNote } }));
+        _options.Children.Add(SheetKit.Row("Sharpening", new StackPanel { Spacing = Space.Gap, Children = { sharp, sharpNote } }));
 
         _options.Children.Add(SheetKit.Row("Watermark", WatermarkRow()));
 
@@ -114,7 +114,7 @@ public sealed class ExportPanel : Border {
         Grid.SetColumn(smaller, 2);
         Grid.SetColumn(better, 4);
         scale.Children.AddRange([value, smaller, better]);
-        var panel = new StackPanel { Spacing = 3, Children = { slider, scale } };
+        var panel = new StackPanel { Spacing = Space.Gap, Children = { slider, scale } };
         if (_s.IsJxl) panel.Children.Add(SheetKit.Note("At 100 the file is lossless: every pixel kept exactly.", Palette.Dim));
         return panel;
     }
@@ -123,7 +123,7 @@ public sealed class ExportPanel : Border {
     Control NotedMenu(ExportSettings.Choice[] choices, Func<int> get, Action<int> set) {
         var note = SheetKit.Note(choices[get()].Note, Palette.Dim);
         var menu = SheetKit.Menu(choices.Select(c => c.Title), get(), i => { set(i); note.Text = choices[i].Note; Remeasure(); });
-        return new StackPanel { Spacing = 5, Children = { menu, note } };
+        return new StackPanel { Spacing = Space.Gap, Children = { menu, note } };
     }
 
     string DepthNote() => _s.CarriesDepth ? ExportSettings.Depths[_s.Depth].Note : "JPEG holds eight bits. Choose PNG, TIFF or JPEG XL for more.";
@@ -156,7 +156,7 @@ public sealed class ExportPanel : Border {
     Control WatermarkRow() {
         var toggle = new ToggleSwitch { IsChecked = _mark.Enabled, OnContent = null, OffContent = null, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center };
         var summary = new TextBlock {
-            FontSize = TypeSize.Sm, TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
+            FontSize = Faces.Mark, TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
         };
         void Show() {
             summary.Text = _mark.Summary;
@@ -169,7 +169,7 @@ public sealed class ExportPanel : Border {
         var row = new DockPanel();
         DockPanel.SetDock(toggle, Dock.Left);
         DockPanel.SetDock(edit, Dock.Right);
-        summary.Margin = new Thickness(Space.Sm + 2, 0);
+        summary.Margin = new Thickness(Space.Md, 0);
         row.Children.AddRange([toggle, edit, summary]);
         return row;
     }

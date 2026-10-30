@@ -11,7 +11,7 @@ namespace OrionShell.CanvasSlice;
 public sealed class ColorLoupe : Panel {
     const double Diameter = 46;
     readonly Border _label = new() {
-        Background = Ink.Black(0.72), CornerRadius = new CornerRadius(4), Padding = new Thickness(7, 3),
+        Background = Ink.Black(0.72), CornerRadius = new CornerRadius(Radius.Md), Padding = new Thickness(Space.Sm, Space.Gap),
         Child = new TextBlock { FontSize = Faces.Mark, FontWeight = FontWeight.Medium, Foreground = Ink.White() },
     };
     readonly Drawn _swatchLayer;

@@ -23,7 +23,7 @@ sealed class ColorWheel : StackPanel {
 
     public ColorWheel(string title, string field) {
         (_title, _field) = (title, field);
-        Spacing = 6;
+        Spacing = Space.Sm;
         _name = new TextBlock { Text = title, FontSize = Faces.Mark, VerticalAlignment = VerticalAlignment.Center };
         // engine.edit("Reset \(title)"): one write, one render, one history step under that name.
         var reset = StateButton.Glyph("arrow.uturn.backward", $"Reset {title}", () => {
@@ -34,7 +34,7 @@ sealed class ColorWheel : StackPanel {
         }, size: 9);
         (reset.Ink, reset.Width, reset.Height, reset.MinWidth, reset.MinHeight) = (Palette.Accent, 18, 18, 0, 0);
         _reset = reset;
-        Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center,
+        Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Xs, HorizontalAlignment = HorizontalAlignment.Center,
                                       Height = 18, Children = { _name, _reset } });
         _disc = new Disc(this);
         Children.Add(_disc);
@@ -111,9 +111,9 @@ sealed class ColorWheel : StackPanel {
             double r = Size / 2 - Puck / 2;
             // Screen y grows downward and the wheel's does not.
             var puck = new Point(Size / 2 + x * r, Size / 2 - y * r);
-            c.DrawRectangle(Brushes.White, new Pen(new SolidColorBrush(Colors.Black, 0.5), 1),
+            c.DrawRectangle(Palette.Text, new Pen(new SolidColorBrush(Colors.Black, 0.5), 1),
                             new RoundedRect(new Rect(puck.X - Puck / 2, puck.Y - Puck / 2, Puck, Puck), Puck / 2),
-                            new BoxShadows(new BoxShadow { Blur = _dragging ? 6 : 3, Color = Color.FromArgb(128, 0, 0, 0) }));
+                            AnalogTrack.Lift(blur: _dragging ? 2 * Shadow.Blur : Shadow.Blur));
         }
 
         protected override void OnPointerPressed(PointerPressedEventArgs e) {

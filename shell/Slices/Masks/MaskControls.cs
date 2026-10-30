@@ -22,12 +22,12 @@ sealed class MaskSlider : StackPanel {
     public MaskSlider(string name, Func<float> get, Action<float> set, float min, float max,
                       string unit, int decimals, float baseValue) {
         (_set, _unit, _decimals) = (set, unit, decimals);
-        Spacing = 5;
+        Spacing = Space.Gap;
         _track = new AnalogTrack { Min = min, Max = max, Base = baseValue };
         _track.Changed += Apply;
         _readout.HorizontalAlignment = HorizontalAlignment.Right;
         var window = new Border {
-            MinWidth = 54, Height = 21, Padding = new Thickness(6, 0), CornerRadius = new CornerRadius(Radius.Sm),
+            MinWidth = 54, Height = 21, Padding = new Thickness(Space.Sm, 0), CornerRadius = new CornerRadius(Radius.Sm),
             Background = Palette.Ground, BorderBrush = Palette.Line, BorderThickness = new Thickness(1), Child = _readout,
         };
         window.Tapped += (_, _) => { _set(baseValue); _track.Glide(baseValue); Paint(); };
@@ -70,44 +70,25 @@ static class MaskControls {
     /// closes, because most of them rebuild the panel this button sits in.
     public static Button Menu(object? icon, string? title, IEnumerable<Control> items, bool enabled = true,
                               string help = "", bool chevron = true) {
-        var label = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-        if (icon is string name) label.Children.Add(Icons.Create(name, 11, Palette.Text));
+        var label = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Gap };
+        if (icon is string name) label.Children.Add(Icons.Create(name, IconSize.Sm, Palette.Text));
         else if (icon is Control glyph) label.Children.Add(glyph);
         if (title != null) label.Children.Add(new TextBlock { Text = title, VerticalAlignment = VerticalAlignment.Center });
-        if (chevron) label.Children.Add(Icons.Create("chevron.down", 7, Palette.Text));
+        if (chevron) label.Children.Add(Icons.Create("chevron.down", IconSize.Sm, Palette.Text));
         var flyout = new MenuFlyout();
         foreach (var item in items) flyout.Items.Add(item);
         var b = new StateButton { Kind = ButtonKind.Bare, Content = label, Flyout = flyout, IsEnabled = enabled, Ink = Palette.Text,
-                                  Padding = new Thickness(title == null ? 4 : 6, 0), MinWidth = 0, Height = title == null ? 20 : 24,
+                                  Padding = new Thickness(title == null ? Space.Gap : Space.Sm, 0), MinWidth = 0, Height = title == null ? 20 : 24,
                                   VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
         return b.Help(help);
     }
 
-    // Glyphs the shared icon table has no drawing for, on its 24-unit grid.
-    public const string Plus = "M12,5 L12,19 M5,12 L19,12", Minus = "M5,12 L19,12", Cross = "M6,6 L18,18 M18,6 L6,18",
-                        Ellipsis = "M5,12 L5.01,12 M12,12 L12.01,12 M19,12 L19.01,12";
-
-    /// Drawn on the whole 24-unit grid and scaled as a box, so a flat mark (−, ⋯)
-    /// keeps its proportions instead of being stretched to fill; the stroke is
-    /// thickened to come out at the icon table's 1.6 points.
-    public static Control Glyph(string data, double size, IBrush brush) => new Viewbox {
-        Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center,
-        Child = new Avalonia.Controls.Shapes.Path {
-            Data = Geometry.Parse(data), Width = 24, Height = 24, Stretch = Stretch.None, Stroke = brush,
-            StrokeThickness = (data == Ellipsis ? 2.6 : 1.6) * 24 / size, StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round,
-        },
-    };
-
     /// A mask kind's mark: a ring in a ring for a radial (not an eye: the eye is
-    /// visibility), ramp lines for a linear, the pencil for a brush.
-    public static Control KindGlyph(int kind, double size = 12) => kind switch {
-        2 => Glyph("M3,12 A9,9 0 1 0 21,12 A9,9 0 1 0 3,12 Z M8.5,12 A3.5,3.5 0 1 0 15.5,12 A3.5,3.5 0 1 0 8.5,12 Z", size, Palette.Text),
-        1 => Glyph("M4,5 L20,5 M4,12 L20,12 M4,19 L20,19", size, Palette.Text),
-        3 => Icons.Create("pencil", size, Palette.Text),
-        5 => Glyph("M3,18 L9,18 L12,6 L15,18 L21,18", size, Palette.Text),
-        6 => Icons.Create("eyedropper", size, Palette.Text),
-        _ => Icons.Create("circle", size, Palette.Text),
-    };
+    /// visibility), ramp lines for a linear, the pencil for a brush. From the
+    /// shared table, so it keeps the one grid and the one stroke.
+    public static Control KindGlyph(int kind, double size = IconSize.Sm) => Icons.Create(kind switch {
+        2 => "mask.radial", 1 => "mask.linear", 3 => "pencil", 5 => "mask.range", 6 => "eyedropper", _ => "circle",
+    }, size, Palette.Text);
 
     public static MenuItem Item(string header, Action act) {
         var item = new MenuItem { Header = header };
@@ -126,7 +107,7 @@ static class MaskControls {
 
     /// A segmented picker (the shared one); the pick runs after the event, since it rebuilds the panel.
     public static Control Segmented(string[] labels, int chosen, Action<int> pick) {
-        var picker = new OrionShell.Segmented(labels, chosen) { CellPadding = new Thickness(4, 0) };
+        var picker = new OrionShell.Segmented(labels, chosen) { CellPadding = new Thickness(Space.Gap, 0) };
         picker.Changed += i => Dispatcher.UIThread.Post(() => pick(i));
         return picker;
     }

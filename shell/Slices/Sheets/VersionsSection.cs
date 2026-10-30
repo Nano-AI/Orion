@@ -34,7 +34,7 @@ sealed class VersionsSection {
     void Build() {
         var rows = Plate.Rows.Children;
         rows.Clear();
-        if (Store.UnreadableText is { } why) rows.Add(SheetKit.Note(why, Palette.Star));
+        if (Store.UnreadableText is { } why) rows.Add(SheetKit.Note(why, Palette.Warn));
         else if (Store.Snapshots.Count == 0)
             rows.Add(SheetKit.Note(Loaded ? "No versions of this photo yet." : "Open a photo to save a version of it."));
 
@@ -73,19 +73,19 @@ sealed class VersionsSection {
         var rename = SheetKit.Glyph("pencil", "Rename", () => { _renaming = v; _renameText = v.Name; Build(); });
         DockPanel.SetDock(delete, Dock.Right);
         DockPanel.SetDock(rename, Dock.Right);
-        rename.Margin = new Thickness(Space.Sm - 2, 0, 0, 0);
+        rename.Margin = new Thickness(Space.Gap, 0, 0, 0);
 
         var head = new DockPanel();
         var stamp = new TextBlock {
             // Short and unambiguous: a version list is read by date — "the one from before lunch".
             Text = v.Created.ToLocalTime().ToString("M/d/yy, h:mm tt", CultureInfo.InvariantCulture),
-            FontSize = TypeSize.Sm, Foreground = Palette.Faint, Margin = new Thickness(Space.Sm, 0, 0, 0),
+            FontSize = Faces.Mark, Foreground = Palette.Dim, Margin = new Thickness(Space.Sm, 0, 0, 0),
         };
         DockPanel.SetDock(stamp, Dock.Right);
         head.Children.AddRange([stamp, new TextBlock {
             Text = v.Name, FontSize = Faces.Label, TextTrimming = TextTrimming.CharacterEllipsis,
         }]);
-        var body = new StackPanel { Spacing = 1, Children = { head } };
+        var body = new StackPanel { Spacing = Space.Xs, Children = { head } };
         var missing = SnapshotStore.MissingMattes(v, Store.Photo);
         if (missing.Count > 0)
             // Named, in the colour that means "look at this": a version that
@@ -98,7 +98,7 @@ sealed class VersionsSection {
             body.Children.Add(new TextBlock { Text = "Kept automatically. Rename it to keep it.", FontSize = Faces.Mark, Foreground = Palette.Dim });
 
         var restore = new Border {
-            Background = Palette.Raised, CornerRadius = new CornerRadius(Radius.Sm), Padding = new Thickness(Space.Sm, 3),
+            Background = Palette.Raised, CornerRadius = new CornerRadius(Radius.Sm), Padding = new Thickness(Space.Sm, Space.Gap),
             Child = body, IsEnabled = Loaded, Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
         };
         restore.Tapped += (_, _) => Restore(v);

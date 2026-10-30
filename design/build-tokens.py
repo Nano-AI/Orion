@@ -60,6 +60,17 @@ def css_block(t):
         lines.append(f"    --layout-{name}: {px}px;")
 
     lines.append("")
+    lines.append("")
+    lines.append("    /* Shadow: the one lift */")
+    sh = strip_comments(t["shadow"])
+    lines.append(f"    --shadow-lift: 0 {sh['y']}px {sh['blur']}px rgba(0, 0, 0, {sh['alpha']});")
+
+    lines.append("")
+    lines.append("    /* Icon */")
+    for name, v in strip_comments(t["icon"]).items():
+        lines.append(f"    --icon-{name}: {v}px;")
+
+    lines.append("")
     lines.append("    /* Motion */")
     for name, v in strip_comments(t["motion"]).items():
         lines.append(f"    --motion-{name}: {v};")
@@ -89,7 +100,8 @@ def csharp_file(t):
                    f"new ImmutableSolidColorBrush(Color.FromRgb({r}, {g}, {b}));")
     out.append("}")
     for group, cls in (("space", "Space"), ("radius", "Radius"),
-                       ("type", "TypeSize"), ("layout", "Layout")):
+                       ("type", "TypeSize"), ("layout", "Layout"),
+                       ("shadow", "Shadow"), ("icon", "IconSize")):
         out += ["", f"public static class {cls} {{"]
         for name, v in strip_comments(t[group]).items():
             if isinstance(v, (int, float)):

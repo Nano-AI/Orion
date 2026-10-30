@@ -69,14 +69,14 @@ public class StateButton : Button {
     public StateButton(string? icon, string title, Action click, ButtonKind kind = ButtonKind.Standard, string help = "") : this() {
         Kind = kind;
         var text = new TextBlock { Text = title, FontSize = Faces.Body, VerticalAlignment = VerticalAlignment.Center };
-        Content = icon == null ? text : new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6,
-            Children = { Icons.Create(icon, 14, Palette.Text), text } };
+        Content = icon == null ? text : new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Sm,
+            Children = { Icons.Create(icon, IconSize.Md, Palette.Text), text } };
         Help(help);
         Click += (_, _) => click();
     }
 
     /// An icon alone: `help` names it, because nothing else does.
-    public static StateButton Glyph(string icon, string help, Action click, ButtonKind kind = ButtonKind.Bare, double size = 14) {
+    public static StateButton Glyph(string icon, string help, Action click, ButtonKind kind = ButtonKind.Bare, double size = IconSize.Md) {
         var b = new StateButton { Kind = kind, Content = Icons.Create(icon, size, Palette.Text), Padding = new Thickness(0), Width = 30 };
         b.Help(help);
         b.Click += (_, _) => click();
@@ -95,7 +95,7 @@ public class StateButton : Button {
         set {
             _kind = value;
             BorderThickness = new Thickness(value is ButtonKind.Segment or ButtonKind.Bare ? 0 : 1);
-            if (value == ButtonKind.Primary) Padding = new Thickness(12, 0);
+            if (value == ButtonKind.Primary) Padding = new Thickness(Space.Pad, 0);
             Paint();
         }
     }
@@ -119,14 +119,14 @@ public class StateButton : Button {
         VerticalContentAlignment = VerticalAlignment.Center;
         Height = MinSize;
         MinWidth = MinSize;
-        Padding = new Thickness(10, 0);
+        Padding = new Thickness(Space.Md, 0);
         CornerRadius = new CornerRadius(Radius.Md);
         BorderThickness = new Thickness(1);
         FocusAdorner = null;
         ClipToBounds = false;   // the halo is drawn outside the bounds
         // Kept under reduced motion (Motion.Reduced): a 3% press in place is feedback, not travel.
         Transitions = [new TransformOperationsTransition {
-            Property = RenderTransformProperty, Duration = TimeSpan.FromMilliseconds(100), Easing = new CubicEaseOut(),
+            Property = RenderTransformProperty, Duration = TimeSpan.FromMilliseconds(100), Easing = Motion.EaseOut,
         }];
         Paint();
     }
@@ -173,7 +173,7 @@ public class StateButton : Button {
 
     public override void Render(DrawingContext c) {
         base.Render(c);
-        if (_keyboardFocus) DrawFocusRing(c, new Rect(Bounds.Size), Radius.Md);
+        if (_keyboardFocus) DrawFocusRing(c, new Rect(Bounds.Size), CornerRadius.TopLeft);   // concentric with this button, whatever its radius
     }
 
     /// The keyboard-focus halo around `r`: 2 px of ground, then 2 px of accent
@@ -204,7 +204,7 @@ public class StateButton : Button {
 public sealed class ToolButton : StateButton {
     readonly CanvasTool _tool;
     readonly string _icon, _armedIcon, _label, _armedLabel;
-    readonly StackPanel _content = new() { Orientation = Orientation.Horizontal, Spacing = 6 };
+    readonly StackPanel _content = new() { Orientation = Orientation.Horizontal, Spacing = Space.Sm };
 
     public ToolButton(CanvasTool tool, string icon, string label, string armedLabel, string? armedIcon = null, string help = "") {
         (_tool, _icon, _armedIcon, _label, _armedLabel) = (tool, icon, armedIcon ?? icon, label, armedLabel);
@@ -219,7 +219,7 @@ public sealed class ToolButton : StateButton {
 
     void Refresh() {
         _content.Children.Clear();
-        _content.Children.Add(Icons.Create(Armed ? _armedIcon : _icon, 13, Palette.Text));
+        _content.Children.Add(Icons.Create(Armed ? _armedIcon : _icon, IconSize.Md, Palette.Text));
         _content.Children.Add(new TextBlock { Text = Armed ? _armedLabel : _label, FontSize = Faces.Label, VerticalAlignment = VerticalAlignment.Center });
         On = Armed;   // and inks the new content
     }

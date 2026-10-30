@@ -20,7 +20,7 @@ Controls and states boards). Committed 2026-10-27.
 | Axis | Choice | Why |
 |---|---|---|
 | Neutrals | `tokens.json` greys unchanged, near-perfectly neutral | A tinted grey is a color cast in a raw editor (tokens.json's own rule) |
-| Accent | `accent` #4DB6C4, **interaction only**: edited fill, pressed toggle, focus ring, primary action | Cyan sits outside the indigo band and away from skin and sky hues |
+| Accent | `accent` #4DB6C4, **interaction only**: edited fill and dot, pressed toggle, focus ring, primary action | Cyan sits outside the indigo band and away from skin. ⚠ Measured 2026-10-30, it is 18° of OKLCH hue from a clear sky; three candidates further from every memory colour wait on the developer (#381) |
 | Words | System face (SF Pro on macOS, Segoe UI on Windows) | Native controls read as native; Apple HIG. Deliberate override of the deslop skill's ban on system type |
 | Numbers | Barlow Semi Condensed 500, tabular | Every figure looks read off a dial; condensed fits five-digit Kelvin in a 54 px readout. SIL OFL 1.1, fine to bundle in a proprietary app |
 | Case | Sentence case everywhere; no tracked all-caps labels | Removes the most common generated-UI tell |
@@ -30,10 +30,24 @@ Controls and states boards). Committed 2026-10-27.
 
 | Token | Now | Proposed | Reason |
 |---|---|---|---|
-| `type.base` | 12 | 13 | macOS body size; 12 read cramped at panel density |
-| `type.xs` | 10 | retire for figures | No numeral under 11 px |
-| `type.numeral` | none | Barlow Semi Condensed 500 | The numbers face above |
-| `trackingWide` / `trackingLabel` | used for caps labels | drop with the caps labels | Sentence case |
+| `type.base` | 12 | 13 | macOS body size; 12 read cramped at panel density (still open) |
+| `type.xs` | 10 | retire for figures | No numeral under 11 px (done; xs stays for the old mockup only) |
+| `type.numeral` | none | Barlow Semi Condensed 500 | The numbers face above (done) |
+| `trackingWide` / `trackingLabel` | used for caps labels | drop with the caps labels | Sentence case (done 2026-10-30) |
+
+## Scales (token pass, 2026-10-30, #381)
+
+Nothing in `shell/` sets a colour, spacing, radius, font size, shadow or icon size except through `tokens.json`.
+
+| Axis | Scale | Rule |
+|---|---|---|
+| Space | 2 · 4 · 6 · 10 · 14 · 18 · 26 (`xs gap sm md pad lg xl`) | Tight inside a group (xs–sm), generous between groups (pad–xl). A control's side padding is `md`; icon to word is `sm`; a label to its control is `gap`; sheets and canvas pills sit `lg` in |
+| Type | 11 · 12 · 13, then 17 · 28 (`Faces.Mark Label Body`, `Title`, `Display`) | 1 px steps for the working text; about 1.3× for the two large words |
+| Radius | 3 · 5 · 7 | `lg` = `md` + 2: a well holding `md` controls 2 px in, so corners are concentric. A pill is half its height |
+| Shadow | one: black .7, y 1, blur 3 | Only under what a hand grabs (thumb, puck, compare handle); hover and press move it from there |
+| Icons | 24-unit grid kept, one 1.6 stroke, `sm` 12 / `md` 16 | Never stretched to a glyph's bounds; `sm` in a row of text, `md` on a button, tab or nameplate |
+| Colour roles | `warn` apart from `star`; `faint` not for words | A warning is not a rating; faint is 2.5:1 |
+| Exempt | 1 px hairlines, ring offsets, the 80 px traffic lights, pills, the tab cells' 8 px | The tab padding is pinned by `SelfTest.Design` (8 spare at 322, equal cells at 560) |
 
 ## Craft decisions
 

@@ -26,6 +26,12 @@ public partial class MainWindow : Window {
     public MainWindow(string tab) {
         InitializeComponent();
         if (OperatingSystem.IsMacOS()) ToolbarHost.Margin = new Thickness(80, 0, Space.Pad, 0); // traffic lights
+        AboveTabsHost.Margin = new Thickness(Space.Pad, 0);
+        TabWell.Margin = new Thickness(Space.Pad, Space.Md);
+        TabWell.Padding = new Thickness(Space.Xs);
+        TabWell.CornerRadius = new CornerRadius(Radius.Lg);   // concentric: the pill's Md plus the Xs inset
+        TabPill.CornerRadius = new CornerRadius(Radius.Md);
+        ToolsHost.Margin = new Thickness(Space.Pad, Space.Lg, Space.Pad, Space.Xl);
         // ponytail: the width is not remembered across launches (Swift keeps it in @AppStorage); add with a settings file.
         Body.ColumnDefinitions = [
             new ColumnDefinition(GridLength.Star) { MinWidth = CanvasMin },
@@ -52,9 +58,9 @@ public partial class MainWindow : Window {
     /// focused from the keyboard), so the edge says it moves before it is
     /// pressed. Opacity only, 120 ms ease-out; the resize cursor does the rest.
     void DressSplitter() {
-        var grip = new Border { Width = 3, CornerRadius = new CornerRadius(1.5), Opacity = 0, IsHitTestVisible = false,
-                                Background = Palette.Dim, Margin = new Thickness(0, 4),
-                                Transitions = [new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(120), Easing = new CubicEaseOut() }] };
+        var grip = new Border { Width = 3, CornerRadius = new CornerRadius(3 / 2.0), Opacity = 0, IsHitTestVisible = false,   // a pill: half its width
+                                Background = Palette.Dim, Margin = new Thickness(0, Space.Gap),
+                                Transitions = [new DoubleTransition { Property = OpacityProperty, Duration = Motion.Fade, Easing = Motion.EaseOut }] };
         Splitter.Template = new FuncControlTemplate<GridSplitter>((_, _) => new Panel { Background = Brushes.Transparent, Children = { grip } });
         Splitter.Cursor = new Cursor(StandardCursorType.SizeWestEast);
         Avalonia.Automation.AutomationProperties.SetName(Splitter, "Tool column width");
@@ -98,10 +104,10 @@ public partial class MainWindow : Window {
             string tab = Panels.Tabs[i];
             TabBar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
             var button = new StateButton {
-                Kind = ButtonKind.Segment, Height = 24, MinWidth = 0, Padding = new Thickness(8, 0),
-                HorizontalAlignment = HorizontalAlignment.Stretch, CornerRadius = new CornerRadius(Radius.Md - 1),
-                Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Transitions = [Glide(RenderTransformProperty)], Children = {
-                    Icons.Create(Panels.TabIcons[i], 14, Palette.Text),
+                Kind = ButtonKind.Segment, Height = 24, MinWidth = 0, Padding = new Thickness(8, 0),   // off the scale on purpose: SelfTest.Design holds 8 spare each side at 322 and equal cells at 560
+                HorizontalAlignment = HorizontalAlignment.Stretch, CornerRadius = new CornerRadius(Radius.Md),
+                Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Gap, Transitions = [Glide(RenderTransformProperty)], Children = {
+                    Icons.Create(Panels.TabIcons[i], IconSize.Md, Palette.Text),
                     new TextBlock { Text = tab, FontSize = Faces.Label, VerticalAlignment = VerticalAlignment.Center, Transitions = [Glide(OpacityProperty)] },
                 } },
             };

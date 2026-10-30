@@ -86,9 +86,9 @@ static partial class SelfTest {
         static string Spoken(Control c) => Avalonia.Automation.AutomationProperties.GetName(c) ?? "";
         Check(names.Select(n => n.FontWeight).Distinct().Count() == 1 && names[2].Foreground == Palette.Text
               && names.Select((n, i) => n.IsVisible == (i == 2)).All(b => b) && pill.Bounds == tabs[2].Bounds
-              && tabs.All(b => b.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single().Width == 14)
+              && tabs.All(b => b.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single().Width == IconSize.Md)
               && tabs.Select((b, i) => ToolTip.GetTip(b) as string == $"{Panels.Tabs[i]} (⌘{i + 1})" && Spoken(b) == Panels.Tabs[i]).All(b => b),
-              $"the chosen tab alone shows its name, on the pill ({pill.Bounds} under {tabs[2].Bounds}); the rest are 14 pt icons named by tooltip and screen reader");
+              $"the chosen tab alone shows its name, on the pill ({pill.Bounds} under {tabs[2].Bounds}); the rest are IconSize.Md icons named by tooltip and screen reader");
 
         // At the column's narrowest and widest, whichever tab is chosen, every cell holds its content with 8 to spare
         // each side; at the widest the seven cells are equal, as a segmented control's are.

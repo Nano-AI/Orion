@@ -30,7 +30,7 @@ static class SheetKit {
         // priority: above the values a Fluent template sets on its own parts.
         static Selector Live<T>(Selector? x) where T : StyledElement => x.OfType<T>().Not(y => y.Class("fluent"));
         Add(x => Live<Slider>(x).Template().OfType<Thumb>(), (TemplatedControl.BackgroundProperty, Palette.Text));
-        Add(x => Live<CheckBox>(x), (TemplatedControl.PaddingProperty, new Thickness(2, 0, 0, 0)));
+        Add(x => Live<CheckBox>(x), (TemplatedControl.PaddingProperty, new Thickness(Space.Xs, 0, 0, 0)));
         Add(x => Live<CheckBox>(x).Template().OfType<Border>().Name("NormalRectangle"),
             (Layoutable.WidthProperty, 12.0), (Layoutable.HeightProperty, 12.0),
             (Border.CornerRadiusProperty, new CornerRadius(Radius.Sm)),
@@ -51,7 +51,7 @@ static class SheetKit {
     }
 
     /// A sheet's title: the words face, a step above the panel's section titles.
-    public static TextBlock Title(string text) => new() { Text = text, FontSize = 17, FontWeight = FontWeight.SemiBold };
+    public static TextBlock Title(string text) => new() { Text = text, FontSize = Faces.Title, FontWeight = FontWeight.SemiBold };
 
     /// A wrapping line of small print.
     public static TextBlock Note(string text, IBrush? color = null) => Engraved.Note(text, color ?? Palette.Dim);
@@ -67,7 +67,7 @@ static class SheetKit {
     public static TextBox Field(string placeholder) => new() {
         PlaceholderText = placeholder, FontSize = Faces.Label, MinHeight = 0,
         Background = Palette.Panel, BorderBrush = Palette.Faint,
-        Padding = new Thickness(Space.Sm, 3), CornerRadius = new CornerRadius(Radius.Md),
+        Padding = new Thickness(Space.Sm, Space.Gap), CornerRadius = new CornerRadius(Radius.Md),
         VerticalContentAlignment = VerticalAlignment.Center,
     };
 
@@ -83,7 +83,7 @@ static class SheetKit {
 
     /// The `minus.circle` / `pencil` glyph buttons beside a row.
     public static Button Glyph(string symbol, string help, Action click) {
-        var b = StateButton.Glyph(symbol, help, click, size: 12);
+        var b = StateButton.Glyph(symbol, help, click, size: IconSize.Md);
         (b.Width, b.Height, b.VerticalAlignment) = (24, 24, VerticalAlignment.Center);
         return b;
     }
@@ -92,7 +92,7 @@ static class SheetKit {
     public static ComboBox Menu(IEnumerable<string> titles, int selected, Action<int> changed) {
         var box = new ComboBox {
             ItemsSource = titles.ToList(), SelectedIndex = selected, FontSize = Faces.Label,
-            MinHeight = 0, Padding = new Thickness(Space.Sm + 2, 3), CornerRadius = new CornerRadius(Radius.Md),
+            MinHeight = 0, Padding = new Thickness(Space.Md, Space.Gap), CornerRadius = new CornerRadius(Radius.Md),
             Background = Palette.Raised, BorderBrush = Palette.Line,
         };
         box.SelectionChanged += (_, _) => { if (box.SelectedIndex >= 0) changed(box.SelectedIndex); };

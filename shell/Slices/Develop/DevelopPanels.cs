@@ -13,7 +13,7 @@ static class Develop {
 
     /// A word that acts, with no frame until hovered: Remove, Clear, a lens name.
     public static StateButton TextButton(string title, IBrush ink, Action action) =>
-        new(null, title, action, ButtonKind.Bare) { Ink = ink, Padding = new Thickness(6, 0), Height = 24 };
+        new(null, title, action, ButtonKind.Bare) { Ink = ink, Padding = new Thickness(Space.Sm, 0), Height = 24 };
 
     /// Undo spot, Clear: the standard button, as the board draws every in-panel one.
     public static StateButton SmallButton(string title, Action action) => new(null, title, action);
@@ -36,7 +36,7 @@ static class Develop {
     public static Control LocalSlider(string name, float min, float max, float baseValue, int decimals, Action<float>? changed = null) {
         var text = Faces.Figure("");
         text.HorizontalAlignment = HorizontalAlignment.Right;
-        var window = new Border { MinWidth = 54, Height = 21, Padding = new Thickness(6, 0), CornerRadius = new CornerRadius(Radius.Sm),
+        var window = new Border { MinWidth = 54, Height = 21, Padding = new Thickness(Space.Sm, 0), CornerRadius = new CornerRadius(Radius.Sm),
                                   Background = Palette.Ground, BorderBrush = Palette.Line, BorderThickness = new Thickness(1), Child = text };
         var track = new AnalogTrack { Min = min, Max = max, Base = baseValue };
         void Show(float v) {
@@ -50,6 +50,6 @@ static class Develop {
         DockPanel.SetDock(window, Dock.Right);
         head.Children.Add(window);
         head.Children.Add(Engraved.Label(name));
-        return new StackPanel { Spacing = 5, Children = { head, track } };
+        return new StackPanel { Spacing = Space.Gap, Children = { head, track } };
     }
 }

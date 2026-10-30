@@ -115,7 +115,7 @@ static class SyncSettings {
         };
         var chosen = groups.ToHashSet();   // what was ticked when asked, not when answered
         window.Content = new StackPanel {
-            Width = 320, Margin = new Thickness(22), Spacing = Space.Md,
+            Width = 320, Margin = new Thickness(Space.Lg), Spacing = Space.Md,
             Children = {
                 new TextBlock { Text = window.Title, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap },
                 new TextBlock { Text = Warning(chosen, n), Foreground = Palette.Dim, TextWrapping = TextWrapping.Wrap },

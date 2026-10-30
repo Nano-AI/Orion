@@ -14,7 +14,7 @@ public sealed class DetailPanel : StackPanel {
     readonly Button _undoSpot, _clearSpots;
     readonly ContentControl _lutButton = new();
     readonly Button _lutRemove;
-    readonly TextBlock _lutError = Engraved.Note("", Palette.Star);
+    readonly TextBlock _lutError = Engraved.Note("", Palette.Warn);
     readonly AdjustmentSlider _lutStrength = new("Strength", "lut_strength", 0, 1, baseValue: 1);
     /// Engine.lutName, which the session keeps (Session.LutName); one loaded
     /// past the panel (a preset, the selftest) is named by its TITLE.

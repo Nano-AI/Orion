@@ -49,7 +49,7 @@ already calls all three, and an unimplemented one compiles away.
   it is off. The drag picture: the engine's preview and full renders agree within one level at
   −4…+1.5 EV with lens correction on, so look at how `CanvasPanel.Draw` scales and filters the
   quarter-size preview bitmap (its `FitScale` is computed against the full image size). Fluent's
-  accent: a `SystemAccentColor` resource in `Theme.axaml`, which loads after `FluentTheme`.
+  accent: the `SystemAccentColor` shades, set from `Palette.Accent` in `Theme.axaml.cs` (#381).
 
 ## Round 2: the developer's UI pass (2026-10-28)
 
