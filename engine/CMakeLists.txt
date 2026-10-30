@@ -23,6 +23,7 @@ set(ORION_SHADER_DIR ${ORION_SHADER_DIR} PARENT_SCOPE)
 
 add_library(orion_engine STATIC
     src/CApi.cpp
+    src/CApiExport.cpp
     src/Engine.cpp
     src/ResourcePaths.cpp
     src/gpu/Gpu.cpp
