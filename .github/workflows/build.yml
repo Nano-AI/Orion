@@ -35,11 +35,41 @@ jobs:
       - name: Packages
         run: |
           sudo apt-get update
-          # mesa-vulkan-drivers is lavapipe: the runner has no GPU, so Dawn's Vulkan
-          # backend runs on Mesa's CPU driver.
           sudo apt-get install -y --no-install-recommends ninja-build clang \
-            libraw-dev libopencv-dev libjxl-dev mesa-vulkan-drivers libvulkan1 vulkan-tools
-          vulkaninfo --summary || true
+            libraw-dev libopencv-dev libjxl-dev libvulkan1 vulkan-tools
+
+      # The runner has no GPU, so Dawn's Vulkan backend runs on a CPU driver.
+      # SwiftShader, at the commit Dawn's DEPS pins: Mesa's lavapipe (25.2) cannot
+      # blend into SNORM targets, so Dawn withholds TextureFormatsTier1 there,
+      # which the engine requires (r16float/rg16float/r16uint storage).
+      - name: SwiftShader (cached)
+        id: swiftshader
+        uses: actions/cache/restore@v4
+        with:
+          path: swiftshader
+          key: swiftshader-cddb5c91-1
+      - name: SwiftShader (build)
+        if: steps.swiftshader.outputs.cache-hit != 'true'
+        run: |
+          ss="$RUNNER_TEMP/ss"
+          mkdir -p "$ss" && cd "$ss" && git init -q .
+          git fetch -q --depth 1 https://swiftshader.googlesource.com/SwiftShader cddb5c91b23ff70a1f607ea31610aa0d7f4b5ad5
+          git checkout -q FETCH_HEAD
+          cmake -S "$ss" -B "$ss-build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DREACTOR_BACKEND=Subzero \
+            -DSWIFTSHADER_BUILD_TESTS=OFF -DSWIFTSHADER_BUILD_BENCHMARKS=OFF -DSWIFTSHADER_WARNINGS_AS_ERRORS=OFF
+          cmake --build "$ss-build" --target vk_swiftshader
+          mkdir -p "$GITHUB_WORKSPACE/swiftshader"
+          cp "$ss-build"/Linux/libvk_swiftshader.so "$ss-build"/Linux/vk_swiftshader_icd.json "$GITHUB_WORKSPACE/swiftshader/"
+      - if: steps.swiftshader.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: swiftshader
+          key: ${{ steps.swiftshader.outputs.cache-primary-key }}
+      - name: Use SwiftShader
+        run: |
+          echo "VK_ICD_FILENAMES=$GITHUB_WORKSPACE/swiftshader/vk_swiftshader_icd.json" >> "$GITHUB_ENV"
+          VK_ICD_FILENAMES="$GITHUB_WORKSPACE/swiftshader/vk_swiftshader_icd.json" vulkaninfo --summary || true
 
       - name: Slang
         run: |
@@ -69,7 +99,7 @@ jobs:
             -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DORION_SHELL_DIR="$SHELL_DIR"
           cmake --build build -- -k 0   # every error in one run, not the first
 
-      - name: orion-tests (Dawn on Vulkan, lavapipe)
+      - name: orion-tests (Dawn on Vulkan, SwiftShader)
         run: ./build/apps/tests/orion-tests
 
       - uses: actions/setup-dotnet@v4

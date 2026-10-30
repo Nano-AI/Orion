@@ -12,6 +12,8 @@
 #include "pipe/LensOpcodes.h"
 #include "util/DngWriter.h"
 
+#include <libraw/libraw.h>
+
 #include <cstdint>
 #include <filesystem>
 
@@ -294,6 +296,11 @@ void testLensInverseMap() {
 
 void testDngLensOpcodesThroughLibRaw() {
     section("A DNG's own lens opcodes reach the engine through LibRaw");
+#if !LIBRAW_COMPILE_CHECK_VERSION_NOTLESS(0, 22)
+    std::printf("  skipped: LibRaw %s keeps no DNG opcodes (0.22 does; Ubuntu 24.04 ships 0.21)\n",
+                LIBRAW_VERSION_STR);
+    return;
+#endif
 
     const auto path = (std::filesystem::temp_directory_path() / "orion-lens-opcodes.dng").string();
     std::vector<float> rgb(std::size_t(kW) * kH * 3, 0.4f);
