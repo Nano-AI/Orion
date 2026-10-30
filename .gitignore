@@ -121,3 +121,9 @@ mcp/node_modules/
 # The site links installers on GitHub Releases and never carries one (#283).
 # web/download/ is the download page, so it is tracked.
 web/**/*.dmg
+
+# --- The Avalonia spike's old home -------------------------------------------
+# The shell moved to shell/ (#380) and its ignore rules with it; a checkout made
+# before that still holds ~566 MB of bin/, obj/ and bin-native/ here, which
+# `git add -A` would otherwise stage.
+spikes/avalonia-shell/
