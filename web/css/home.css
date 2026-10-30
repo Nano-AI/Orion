@@ -7,9 +7,19 @@
    72px at y256, sub-line 21px/500 grey 780px wide with bold white spans, pill
    button, 12px requirement line, then a 1250px rounded plate with the window
    on it. The same rhythm here, scaled by the viewport below 1440. */
-.hero { padding-top: calc(var(--nav-h) + clamp(28px, 3vw, 44px)); text-align: center; }
-.hero__copy { display: flex; flex-direction: column; align-items: center; }
-.hero__mark { width: clamp(52px, 5.3vw, 76px); height: auto; margin-bottom: clamp(40px, 5vw, 72px); }
+.hero { position: relative; padding-top: calc(var(--nav-h) + clamp(28px, 3vw, 44px)); text-align: center; }
+.hero__copy { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; }
+.hero__mark { width: clamp(52px, 5.3vw, 76px); height: auto; margin-bottom: clamp(40px, 5vw, 72px); filter: drop-shadow(0 0 18px color-mix(in srgb, var(--accent) 70%, transparent)); }
+/* the sky: two layers of stars (site.js places them), twinkling out of phase; faded out before the plate */
+.sky { position: absolute; inset: 0 0 auto 0; height: 720px; overflow: hidden; pointer-events: none; -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent); mask-image: linear-gradient(to bottom, #000 60%, transparent); }
+.sky i { position: absolute; left: calc(50% - 720px); top: 0; width: 1px; height: 1px; border-radius: 50%; background: transparent; color: #fff; animation: twinkle 5s ease-in-out infinite; }
+.sky i:nth-child(2) { animation-delay: -2.5s; animation-duration: 7s; color: var(--accent); }
+@keyframes twinkle { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.9; } }
+/* the mark drifts, the headline comes into focus once */
+@keyframes drift { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.hero .hero__mark { animation: rise 700ms var(--ease-out) both, drift 6s ease-in-out 700ms infinite; }
+@keyframes focus { from { opacity: 0; filter: blur(12px); transform: translateY(10px); } }
+.hero .h1 { animation: focus 1100ms var(--ease-out) 60ms both; }
 .hero .h1 { max-width: 14ch; }
 @media (min-width: 1280px) { .hero .h1 { max-width: none; white-space: nowrap; } }
 .hero .lede { margin-top: clamp(20px, 2vw, 28px); max-width: 780px; font-size: clamp(1.0625rem, 0.9rem + 0.6vw, 1.3125rem); line-height: 1.38; }
@@ -27,12 +37,18 @@
 
 /* ---------- the plate: one of Orion's own photographs, rounded, the window on it ---------- */
 .stage { position: relative; width: min(1250px, 100% - 2 * var(--gutter)); margin: clamp(40px, 4vw, 56px) auto 0; padding: clamp(24px, 4.5vw, 56px) 0; border-radius: clamp(16px, 1.7vw, 24px); overflow: hidden; background: var(--panel); box-shadow: var(--ring); }
-.stage__back { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 45%; filter: brightness(0.9) saturate(1.1); }
+.stage__back { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 45%; filter: brightness(0.72) saturate(1.2); }
 .stage::after {   /* a little weight at the foot of the plate, so the window's shadow has something to fall on */
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(to bottom, rgba(11, 11, 12, 0) 55%, rgba(11, 11, 12, 0.45) 100%);
 }
-.stage__in { position: relative; z-index: 1; width: min(76%, 100% - 2 * var(--s-5)); margin-inline: auto; }
+/* the light: cyan and gold, blurred, drifting behind the window; the plate carries a cyan glow out into the ground */
+.stage { box-shadow: var(--ring), 0 0 160px -20px color-mix(in srgb, var(--accent) 45%, transparent); }
+.stage__light { position: absolute; inset: -20%; pointer-events: none; mix-blend-mode: screen; filter: blur(60px); opacity: 0.85;
+  background: radial-gradient(40% 50% at 30% 40%, color-mix(in srgb, var(--accent) 80%, transparent), transparent 70%), radial-gradient(35% 45% at 72% 65%, color-mix(in srgb, var(--status) 70%, transparent), transparent 70%);
+  animation: roam 22s ease-in-out infinite; }
+@keyframes roam { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 33% { transform: translate(6%, -5%) rotate(8deg); } 66% { transform: translate(-5%, 6%) rotate(-6deg); } }
+.stage__in { position: relative; z-index: 1; width: min(76%, 100% - 2 * var(--s-5)); margin-inline: auto; transform: perspective(1400px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform 400ms var(--ease-out); transform-style: preserve-3d; }
 @media (max-width: 760px) { .stage__in { width: calc(100% - 2 * var(--s-4)); } }
 .stage__window { position: relative; aspect-ratio: 8 / 5; border-radius: var(--r); overflow: hidden; background: var(--panel); box-shadow: var(--shadow-window), var(--ring); }
 .stage__window img { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
@@ -64,7 +80,7 @@ html:not(.js) .stage__grab, html:not(.js) .stage__ctl { display: none; }
 /* ---------- four real numbers ---------- */
 .facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-5); margin-top: clamp(var(--s-6), 5vw, var(--s-8)); list-style: none; padding: 0; }
 .facts li { padding-top: var(--s-4); border-top: 1px solid var(--line); }
-.facts b { display: block; font-family: var(--mono); font-weight: 300; font-size: clamp(1.5rem, 2.4vw, 2.25rem); line-height: 1.1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+.facts b { display: block; color: var(--accent); font-family: var(--mono); font-weight: 300; font-size: clamp(1.5rem, 2.4vw, 2.25rem); line-height: 1.1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
 .facts span { display: block; margin-top: var(--s-2); font-size: var(--fs-sm); color: var(--dim); }
 @media (max-width: 760px) { .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
@@ -119,3 +135,10 @@ html:not(.js) .cmp__range, html:not(.js) .cmp__grip { display: none; }
 .close__copy { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; text-align: center; padding-block: var(--section) clamp(var(--s-7), 8vh, var(--s-8)); }
 .close .btn { margin-top: var(--s-5); }
 .close .mono { margin-top: var(--s-4); color: var(--text-2); }
+
+/* ---------- alive below the fold: things rise in as they arrive, the pier drifts ---------- */
+.js .reveal { opacity: 0; transform: translateY(18px); transition: opacity 700ms var(--ease-out), transform 900ms var(--ease-out); }
+.js .reveal.is-in { opacity: 1; transform: none; }
+@keyframes kenburns { from { transform: scale(1); } to { transform: scale(1.08); } }
+.close__photo { animation: kenburns 40s linear infinite alternate; }
+@media (prefers-reduced-motion: reduce) { .js .reveal { opacity: 1; transform: none; } }

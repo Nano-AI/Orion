@@ -5,6 +5,7 @@
 (() => {
   'use strict';
   document.documentElement.classList.add('js');
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;   // nothing moves on its own
 
   // ---------- nav: phone menu ----------
   const nav = document.querySelector('.nav');
@@ -105,5 +106,83 @@
     // a double click on either slider is the app's "back to zero"
     [ctl, grab].forEach(i => i && i.addEventListener('dblclick', () => show(0)));
     show(0);
+    // until someone touches a slider, Exposure breathes on its own between -1 and +1 EV
+    if (!still) {
+      let idle = true, t0 = 0, raf = 0;
+      const stop = () => { idle = false; cancelAnimationFrame(raf); };
+      [ctl, grab].forEach(i => i && ['pointerdown', 'keydown', 'focus'].forEach(ev => i.addEventListener(ev, stop)));
+      const breathe = now => { if (!idle) return; t0 = t0 || now; show(Math.sin((now - t0) / 2600)); raf = requestAnimationFrame(breathe); };
+      new IntersectionObserver(es => { cancelAnimationFrame(raf); if (idle && es[0].isIntersecting) raf = requestAnimationFrame(breathe); }).observe(fig);
+    }
   });
+
+  // ---------- the compare wipes once on its own when it comes into view ----------
+  if (!still) document.querySelectorAll('[data-compare]').forEach(fig => {
+    const input = fig.querySelector('input[type="range"]');
+    let touched = false;
+    input.addEventListener('pointerdown', () => { touched = true; }, { once: true });
+    const io = new IntersectionObserver(es => {
+      if (!es[0].isIntersecting || touched) return;
+      io.disconnect();
+      const t0 = performance.now();
+      const step = now => {
+        if (touched) return;
+        const p = Math.min(1, (now - t0) / 3200);
+        input.value = 50 + 22 * Math.sin(p * Math.PI * 2) * (1 - p * 0.3);
+        input.dispatchEvent(new Event('input'));
+        if (p < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }, { threshold: 0.7 });
+    io.observe(fig);
+  });
+
+  // ---------- the numbers count up once, when they come into view ----------
+  if (!still) {
+    const io = new IntersectionObserver(es => es.forEach(e => {
+      if (!e.isIntersecting) return;
+      io.unobserve(e.target);
+      const b = e.target, m = b.textContent.match(/[\d,]+/);
+      if (!m) return;
+      const n = Number(m[0].replace(/,/g, '')), [pre, post] = b.textContent.split(m[0]), t0 = performance.now();
+      const step = now => {
+        const p = Math.min(1, (now - t0) / 1200);
+        b.textContent = pre + Math.round(n * (1 - Math.pow(1 - p, 3))).toLocaleString('en-US') + post;
+        if (p < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }), { threshold: 0.6 });
+    document.querySelectorAll('.facts b').forEach(b => io.observe(b));
+  }
+
+  // ---------- things below the fold rise in as they arrive ----------
+  const rv = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('is-in'); rv.unobserve(e.target); } }), { rootMargin: '0px 0px -10% 0px' });
+  document.querySelectorAll('.section__head, .cmp, .files > div, .build__group, .build__cite, .facts li').forEach((el, i) => { el.classList.add('reveal'); el.style.transitionDelay = `${(i % 4) * 70}ms`; rv.observe(el); });
+
+  // ---------- the plate tilts a little toward the pointer ----------
+  const stage = document.querySelector('.stage');
+  if (stage && matchMedia('(hover: hover) and (pointer: fine)').matches && !still) {
+    const plate = stage.querySelector('.stage__in');
+    stage.addEventListener('pointermove', e => {
+      const r = stage.getBoundingClientRect();
+      plate.style.setProperty('--ry', `${((e.clientX - r.left) / r.width - 0.5) * 6}deg`);
+      plate.style.setProperty('--rx', `${(0.5 - (e.clientY - r.top) / r.height) * 4}deg`);
+    });
+    stage.addEventListener('pointerleave', () => { plate.style.removeProperty('--rx'); plate.style.removeProperty('--ry'); });
+  }
+
+  // ---------- the sky: a few dozen stars behind the hero, two layers that twinkle out of phase ----------
+  const hero = document.querySelector('.hero');
+  if (hero) {
+    const sky = document.createElement('div');
+    sky.className = 'sky'; sky.setAttribute('aria-hidden', 'true');
+    for (let layer = 0; layer < 2; layer++) {
+      const dots = [];
+      for (let i = 0; i < 70; i++) dots.push(`${Math.round(Math.random() * 1600 - 80)}px ${Math.round(Math.random() * 720)}px 0 ${Math.random() < 0.15 ? 1 : 0}px`);
+      const d = document.createElement('i');
+      d.style.boxShadow = dots.join(',');
+      sky.append(d);
+    }
+    hero.prepend(sky);
+  }
 })();
