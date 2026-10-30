@@ -95,10 +95,12 @@ which the OFL requires to travel with the files.
   Archivo      — Copyright 2020 The Archivo Project Authors
   Martian Mono — Copyright 2021 The Martian Mono Project Authors
 
-`web/index.html` inlines nine Phosphor icons in the light weight
-(sliders-horizontal, bandaids, crop, selection-foreground, images, export,
-hourglass-medium, file-text, arrows-horizontal), and `web/download/index.html` inlines one (download-simple;
-https://github.com/phosphor-icons/core), MIT License, Copyright (c) 2023 Phosphor Icons.
+`web/js/vendor/anime.umd.min.js` is anime.js 4.5.0 (https://animejs.com,
+https://github.com/juliangarnier/anime), MIT License, Copyright (c) 2025 Julian
+Garnier, vendored unmodified from the npm package's `dist/bundles/`. The
+license text travels beside it in `web/js/vendor/anime.LICENSE.md`.
+
+The site's icons are Orion's own, the drawings in `shell/Shared/Icons.cs`.
 
 Self-hosted rather than loaded from a font service, so the page makes no
 third-party request.

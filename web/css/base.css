@@ -126,10 +126,23 @@ button { font: inherit; color: inherit; }
 }
 .skip:focus { top: var(--s-3); }
 
-/* one icon set: Phosphor Light's 256 grid and 12-unit stroke, in a sprite on
- * each page. Icons are 16, 20 or 24px. */
+/* one icon set: the app's own (shell/Shared/Icons.cs), drawn on a 24 grid
+ * with one 1.6 stroke that does not scale with the box (tokens.json `icon`),
+ * in a sprite on each page. Icons are 16, 20 or 24px. */
 .sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
-.ico { width: 1em; height: 1em; flex: none; fill: currentColor; vertical-align: -0.14em; }
+.ico {
+  width: 1em; height: 1em; flex: none; vertical-align: -0.14em;
+  fill: none; stroke: currentColor; stroke-width: 1.6px; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* a small label above a headline: what it is, where it runs */
+.pill {
+  display: inline-flex; align-items: center; gap: var(--s-2);
+  min-height: 32px; padding: 0 var(--s-3) 0 var(--s-2); border-radius: var(--r-pill);
+  border: 1px solid var(--line-2); background: var(--panel);
+  font-family: var(--mono); font-stretch: 100%; font-size: var(--fs-xs); color: var(--text-2);
+}
+.pill .ico { font-size: 20px; color: var(--accent); }
 
 /* ---------- layout ---------- */
 .wrap { width: min(var(--max), 100% - 2 * var(--gutter)); margin-inline: auto; }
@@ -196,6 +209,13 @@ button { font: inherit; color: inherit; }
 .btn--ghost { background: transparent; color: var(--text); border-color: var(--line-2); }
 .btn--lg { min-height: 52px; padding: 0 var(--s-6); font-size: var(--fs-base); }
 .btn .ico { font-size: 20px; }
+/* the shutter: two curtains meet and part across a pressed primary button
+ * (motion.js). It sits over the words for 160 ms and never stops the click. */
+.btn { position: relative; overflow: hidden; }
+.btn__shutter { position: absolute; inset: 0; pointer-events: none; }
+.btn__shutter i { position: absolute; left: 0; right: 0; height: 51%; background: var(--ground); transform: scaleY(0); }
+.btn__shutter i:first-child { top: 0; transform-origin: 50% 0; }
+.btn__shutter i:last-child { bottom: 0; transform-origin: 50% 100%; }
 
 /* ---------- nav: a floating bar ---------- */
 /* Three columns, so the links sit on the bar's centre whatever the widths of

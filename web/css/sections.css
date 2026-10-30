@@ -64,25 +64,68 @@
 html:not(.js) .cmp__range, html:not(.js) .cmp__grip { display: none; }
 
 /* ---------- hero: the name of the thing, the one action, the real app ---------- */
-.hero { padding-top: calc(var(--nav-h) + clamp(var(--s-7), 7vw, var(--s-9))); overflow: hidden; }
+.hero { padding-top: calc(var(--nav-h) + clamp(var(--s-7), 6vw, var(--s-9))); }
 .hero__copy { display: flex; flex-direction: column; align-items: center; text-align: center; }
-.hero__copy .display { max-width: 14ch; }
+.hero__copy .display { margin-top: var(--s-5); max-width: 15ch; }
 .hero__sub { margin-top: var(--s-5); max-width: 34rem; font-size: clamp(var(--fs-base), 0.95rem + 0.35vw, var(--fs-lg)); line-height: 1.5; color: var(--dim); }
 .hero__cta { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--s-4) var(--s-6); margin-top: var(--s-6); }
 .hero__alt { display: inline-flex; align-items: center; min-height: 44px; font-size: var(--fs-md); color: var(--text-2); }
-/* the window: the real capture, a hairline edge and nothing else */
-.hero__shot {
-  width: min(1280px, 100% - 2 * var(--gutter)); margin: clamp(var(--s-7), 6vw, var(--s-9)) auto 0;
-}
-.hero__shot img { width: 100%; border-radius: var(--r-lg); outline: 1px solid rgba(255, 255, 255, 0.1); outline-offset: -1px; }
 @media (max-width: 600px) {
   .hero__cta { flex-direction: column; align-items: stretch; width: 100%; }
   .hero__cta .btn { width: 100%; }
   .hero__alt { justify-content: center; }
-  /* on a phone the window keeps its size and shows its photograph, not its panels */
-  .hero__shot { width: auto; margin-inline: var(--gutter) 0; overflow: hidden; border-radius: var(--r-lg) 0 0 var(--r-lg); }
-  .hero__shot img { width: 760px; max-width: none; border-radius: 0; }
 }
+
+/* ---------- the window: the real capture, with points on its parts ---------- */
+/* aperture.js lays an iris over it on load and opens it; spots.js draws each
+ * point's wire to its label. Without them the window and its points are there. */
+.shot { position: relative; width: min(1280px, 100% - 2 * var(--gutter)); margin: clamp(var(--s-7), 6vw, var(--s-9)) auto 0; }
+.shot img { width: 100%; border-radius: var(--r-lg); outline: 1px solid rgba(255, 255, 255, 0.1); outline-offset: -1px; }
+.shot__iris { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: var(--r-lg); pointer-events: none; }
+.shot__iris path { fill: var(--raised); stroke: color-mix(in srgb, var(--accent) 60%, transparent); stroke-width: 1px; }   /* the blades, a cyan edge each */
+.shot.is-iris .spot button { opacity: 0; }
+.spots { position: absolute; inset: 0; list-style: none; margin: 0; padding: 0; }
+.spot { position: absolute; left: var(--x); top: var(--y); }
+.spot button {
+  position: absolute; left: 0; top: 0; translate: -50% -50%;
+  display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: 50%;
+  border: 1px solid var(--accent); background: var(--veil); color: var(--accent); font-size: 16px; cursor: pointer;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
+  transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), scale var(--dur-1) var(--ease-out);
+}
+.spot.is-on button { background: var(--accent); color: var(--on-accent); }
+.spot button:active { scale: 0.94; }
+/* the label hangs off a wire, on the side with room */
+.spot__wire { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.spot__wire line { stroke: var(--accent); stroke-width: 1px; }
+.spot__label {
+  position: absolute; top: 0; z-index: 1; width: max-content; max-width: 16rem;
+  padding: var(--s-2) var(--s-3); border-radius: var(--r); background: var(--panel); border: 1px solid var(--line-2);
+  font-size: var(--fs-sm); line-height: 1.35; color: var(--text); pointer-events: none;
+  opacity: 0; transition: opacity var(--dur-1) var(--ease-out);
+}
+.spot[data-side="left"] .spot__label { right: var(--s-8); translate: 0 -50%; }
+.spot[data-side="right"] .spot__label { left: var(--s-8); translate: 0 -50%; }
+.spot[data-side="down"] .spot__label { top: var(--s-8); right: calc(-1 * var(--s-5)); }
+.spot.is-on .spot__label { opacity: 1; }
+.shot__readout { display: none; }
+/* on a phone the labels would cover the window: the one that is on is read out under it */
+@media (max-width: 700px) {
+  .spot__label, .spot__wire { display: none; }
+  .spot--wide { display: none; }   /* the title bar's two points sit too close at this width */
+  .spot button { width: 28px; height: 28px; font-size: 14px; box-shadow: none; }
+  .shot__readout { display: block; min-height: 2.6em; margin-top: var(--s-3); text-align: center; font-size: var(--fs-sm); color: var(--dim); }
+  .shot__readout.is-on { color: var(--text); }
+}
+
+/* ---------- stats: four real numbers ---------- */
+.stats { margin-top: clamp(var(--s-7), 6vw, var(--s-9)); }
+.stats__list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-5); list-style: none; padding: 0; }
+.stat { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--s-3); padding-top: var(--s-4); border-top: 1px solid var(--line); }
+.stat .ico { grid-row: span 2; font-size: 24px; color: var(--accent); margin-top: var(--s-1); }
+.stat b { font-family: var(--mono); font-weight: 400; font-stretch: 100%; font-size: clamp(1.4rem, 2.2vw, 2rem); line-height: 1.1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+.stat span { margin-top: var(--s-1); font-size: var(--fs-sm); color: var(--dim); }
+@media (max-width: 900px) { .stats__list { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--s-6); } }
 
 /* ---------- speed: one exposure drag, seven real renders ---------- */
 .speed__grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(var(--s-7), 5vw, var(--s-9)); align-items: center; }
@@ -92,7 +135,12 @@ html:not(.js) .cmp__range, html:not(.js) .cmp__grip { display: none; }
   color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap;
 }   /* a measurement, not a value Orion changed: the accent waits for the slider beside it */
 .speed__num small { margin-left: 0.18em; font-size: 0.3em; letter-spacing: 0; color: var(--dim); }
-.speed__num .dot { margin-inline: -0.22em; }   /* a mono full stop owns a whole cell */
+/* the readout, as a camera's LCD prints it: one cell per character, and
+ * motion.js rolls each digit up to its value the first time it is seen */
+.lcd__cell { display: inline-block; height: 0.9em; overflow: hidden; vertical-align: top; }
+.lcd__cell--dot { margin-inline: -0.22em; }   /* a mono full stop owns a whole cell */
+.lcd__reel { display: block; }
+.lcd__reel span { display: block; height: 0.9em; }
 .speed .h2 { margin-top: var(--s-6); }
 .speed__copy .small { margin-top: var(--s-4); max-width: var(--measure-sm); }
 .sweep { position: relative; --lo: 0.5556; --hi: 0.6667; --zero: 0.5556; }
@@ -131,6 +179,12 @@ html:not(.js) .sweep__panel { display: none; }
 .sweep__range:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--accent); }
 .sweep__range:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(--accent); }
 .sweep figcaption { margin-top: var(--s-3); }
+/* the histogram of the frame on screen, worked out from the seven renders
+ * themselves (histogram.js); each bar is a scaleY, so it moves on the compositor */
+.hist { display: flex; align-items: flex-end; gap: 1px; height: var(--s-8); margin-bottom: var(--s-3); padding-bottom: var(--s-2); border-bottom: 1px solid var(--line); }
+.hist i { flex: 1; height: 100%; background: color-mix(in srgb, var(--text) 42%, transparent); transform-origin: 50% 100%; transform: scaleY(0.02); }
+.hist i.is-clip { background: var(--status); }   /* a clipped end, as the app marks it */
+html:not(.js) .hist { display: none; }
 @media (max-width: 900px) { .speed__grid { grid-template-columns: 1fr; } }
 
 /* ---------- raw: one frame, as shot and developed, as wide as the page ---------- */
