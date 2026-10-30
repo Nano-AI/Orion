@@ -88,7 +88,7 @@ static partial class SelfTest {
             ((JsonObject)((JsonArray)state["layers"]!)[0]!)["exposureEv"] = 2f;
             new Sidecar { Develop = DevelopJson.Encode(state) }.Write(photo);
             using var s = Session.OpenEdited(photo);
-            if (s == null) return -1;
+            if (s == null || s.Unreadable != null) return double.NaN;   // the whole edit refused: never for one matte
             bool missing = MatteStore.IsMissing(s, matteId);
             s.Render(preview: false);
             double luma = MeanLuma(s.Read(Graph.Full));
@@ -97,6 +97,12 @@ static partial class SelfTest {
         double restored = Brightness(id), absent = Brightness("00000000-0000-0000-0000-000000000000");
         Check(restored > 0 && absent < 0 && restored > -absent * 1.15,
               $"a sidecar's matte is read back on open and brightens what it covers; a missing file is recorded ({restored:0.0} vs {-absent:0.0})");
+        // A truncated PNG (IHDR cut short), and an id that is not a UUID, cost their row and nothing else.
+        string truncated = "11111111-2222-3333-4444-555555555555";
+        File.WriteAllBytes(MatteStore.PathFor(photo, truncated), [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 5, 73, 72, 68, 82, 0, 0, 4, 0, 0, 0, 0, 0, 0]);
+        double bad = Brightness(truncated), odd = Brightness("../a");
+        Check(MatteStore.Decode(File.ReadAllBytes(MatteStore.PathFor(photo, truncated))) == null && bad < 0 && odd < 0,
+              $"a corrupt matte, or an id that is not a UUID, reads as a missing file and the photo's edit still opens ({bad:0.0}, {odd:0.0})");
         File.Delete(Sidecar.PathFor(photo));
     }
 
@@ -175,10 +181,13 @@ static partial class SelfTest {
         var s = engine.Session!;
         float asShotK = s.Get("temperature_k");
         engine.Set("exposure_ev", 0.5f);
+        float shadows = engine.Get("shadows");
+        engine.Set("shadows", 0.2f);   // a tone value: what `process` decides the meaning of
         engine.Set("temperature_k", asShotK + 900);
         var copied = PresetStore.Capture("Copied", [.. Enumerable.Range(0, PresetStore.Groups.Length)])!;
         var state = s.Capture(MaskGroup.Shared.Shapes);
         engine.Set("exposure_ev", 0);
+        engine.Set("shadows", shadows);
 
         // b has a sidecar with a rating and an edit the light group does not own.
         new Sidecar { Rating = 3, Develop = Encoding.UTF8.GetBytes("""{"tint":7,"exposureEv":-1}""") }.Write(b);
@@ -192,18 +201,28 @@ static partial class SelfTest {
         Pressing("Sync").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         var written = JsonNode.Parse(Sidecar.Read(b)!.Develop!)!.AsObject();
         Check(Sidecar.Read(b)!.Rating == 3 && DevelopJson.Float(written["tint"]) == 7 && DevelopJson.Float(written["exposureEv"]) == 0.5f
-              && written["temperatureK"] is null && written.Count == 8 && written.Select(p => p.Key).SequenceEqual(written.Select(p => p.Key).Order(StringComparer.Ordinal)),
-              "Sync writes only the light keys over b's sidecar, keys sorted, keeping its rating and its tint");
+              && written["temperatureK"] is null && written.Count == 9 && DevelopJson.Int(written["process"]) == DevelopJson.Int(state["process"])
+              && written.Select(p => p.Key).SequenceEqual(written.Select(p => p.Key).Order(StringComparer.Ordinal)),
+              "Sync writes only the light keys (and the source's process, b stating none) over b's sidecar, keys sorted, keeping its rating and its tint");
         Check(engine.Get("exposure_ev") == 0.5f && engine.Status == "Synced 1 other photo.", $"the open photo takes the groups too, and it is said ('{engine.Status}')");
         using (var opened = Session.OpenEdited(b))
-            Check(opened?.Get("exposure_ev") == 0.5f && opened.Get("tint") == 7, "b opens with the synced light and its own tint");
+            Check(opened?.Get("exposure_ev") == 0.5f && opened.Get("tint") == 7 && opened.Get("process") == s.Get("process"),
+                  "b opens with the synced light, under the source's tone bands, and its own tint");
 
         // No sidecar: the camera's white balance stands, not 5500 K and not the copy's (WB was not ticked).
         File.Delete(Sidecar.PathFor(b));
         var outcome = SyncSettings.Run(copied, state, new HashSet<int> { 1 });
         using (var fresh = Session.OpenEdited(b))
-            Check(outcome.Written == 1 && fresh?.Get("temperature_k") == asShotK && fresh.Get("exposure_ev") == 0.5f,
-                  "a photo with no sidecar keeps its as-shot white balance under a light sync");
+            Check(outcome.Written == 1 && fresh?.Get("temperature_k") == asShotK && fresh.Get("exposure_ev") == 0.5f
+                  && fresh.Get("process") == s.Get("process"),
+                  "a photo with no sidecar keeps its as-shot white balance and takes the source's tone bands under a light sync");
+        // A legacy edit with tone values of its own keeps its absent process: they mean the first bands.
+        var legacy = Encoding.UTF8.GetBytes("{\"shadows\":0.3}");
+        var kept = JsonNode.Parse(SyncSettings.Patched(legacy, state, SyncSettings.Keys(1).Where(k => k != "shadows"))!)!.AsObject();
+        Check(kept["process"] is null && DevelopJson.Float(kept["shadows"]) == 0.3f, "a legacy edit using its tone bands is not handed a process");
+        Check(SyncSettings.Sync(state, new HashSet<int> { 1 }, [b], _ => null, (_, _) => true) is { Written: 1, Failed.Count: 0 }
+              && SyncSettings.Sync(new JsonObject(), new HashSet<int> { 1 }, [b], _ => null, (_, _) => false) is { Written: 0, Failed.Count: 0 },
+              "nothing to write is skipped, not a failure");
 
         // A write that fails is counted and named; an edit that is not JSON is never overwritten.
         var failed = SyncSettings.Sync(state, new HashSet<int> { 1 }, [a, b], _ => null, (_, _) => false);

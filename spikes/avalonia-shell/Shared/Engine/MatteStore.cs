@@ -21,8 +21,10 @@ namespace OrionShell;
 /// yet, so a sweep here would delete mattes a version still names. An orphan
 /// costs about 30 KB; a deleted matte costs a finished edit.
 public static class MatteStore {
-    public static string PathFor(string photo, string id) =>
-        Path.Combine(Path.GetDirectoryName(photo) ?? "", $"{Path.GetFileNameWithoutExtension(photo)}.orion-matte-{id}.png");
+    /// Only a UUID names a matte: an id from a sidecar is never a path (`../x`), so anything else throws.
+    public static string PathFor(string photo, string id) => Guid.TryParse(id, out _)
+        ? Path.Combine(Path.GetDirectoryName(photo) ?? "", $"{Path.GetFileNameWithoutExtension(photo)}.orion-matte-{id}.png")
+        : throw new ArgumentException($"'{id}' is not a matte id", nameof(id));
 
     /// Writes a matte beside the photo and returns its new id. Throws IOException
     /// (or UnauthorizedAccessException) when it did not land: the caller must not
@@ -39,9 +41,14 @@ public static class MatteStore {
         return id;
     }
 
+    /// Null for any matte that will not read, whatever the reason: one bad file is
+    /// that row's "Missing file", never the whole photo's edit (Session.Restore).
     public static (float[] Alpha, int Width, int Height)? Read(string photo, string id) {
         try { return Decode(File.ReadAllBytes(PathFor(photo, id))); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+        catch (Exception e) {
+            Console.Error.WriteLine($"orion: the matte {id} beside {Path.GetFileName(photo)} will not read ({e.Message})");
+            return null;
+        }
     }
 
     // MARK: Which matte each engine slot holds
@@ -125,6 +132,7 @@ public static class MatteStore {
             var type = System.Text.Encoding.ASCII.GetString(png, at + 4, 4);
             var data = png.AsSpan(at + 8, n);
             if (type == "IHDR") {
+                if (n < 13) return null;
                 (width, height, depth) = (BinaryPrimitives.ReadInt32BigEndian(data), BinaryPrimitives.ReadInt32BigEndian(data[4..]), data[8]);
                 if (data[9] != 0 || data[12] != 0 || depth is not (8 or 16)) return null;
             } else if (type == "IDAT") idat.Write(data);

@@ -39,11 +39,18 @@ public static class SubjectMatte {
             if (picture is not { } p) return "Could not read the rendered picture.";
             var matte = wait ? Infer(p, kind) : await Task.Run(() => Infer(p, kind));
             if (engine.Session != s) return null;   // the photo changed under the model: nothing to fill
+            const string TooLarge = "That selection was too large for this photo.";
+            if (Native.orion_engine_max_matte_size(s.Handle, out uint mw, out uint mh) != 0 || matte.Width > mw || matte.Height > mh)
+                return TooLarge;
             // The file first: a write that fails fails the whole selection, so the
             // edit never names a matte that is not on disk (MatteStore.swift).
             string id = MatteStore.Write(matte.Alpha, matte.Width, matte.Height, s.Path);
             group.Add(4, m => (m.MatteId, m.MatteSource) = (id, kind.ToString()));
-            return MatteStore.IsMissing(s, id) ? "That selection was too large for this photo." : null;
+            if (!MatteStore.IsMissing(s, id)) return null;
+            // The engine refused it after all: neither the row nor the file stays.
+            group.Remove(group.Selected);
+            File.Delete(MatteStore.PathFor(s.Path, id));
+            return TooLarge;
         } catch (Failure e) {
             return e.Message;
         } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {

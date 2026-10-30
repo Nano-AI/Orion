@@ -103,8 +103,12 @@ enum SyncSettings {
               let sourceObj = try? JSONSerialization.jsonObject(with: sourceData)
                 as? [String: Any]
         else { return nil }
-        return patched(stored: stored, sourceObject: sourceObj,
-                       keys: groups.flatMap { keys(for: $0) })
+        // ⚠ Through `AgentSync.committed`, for its `process` rule: a target with
+        // no sidecar (absent = the first tone bands) would otherwise read the
+        // source's highlights under the older bands. No group owns the key;
+        // it is filled only where the target never stated one. Decision #363.
+        return AgentSync.committed(stored: stored, source: sourceObj,
+                                   keys: groups.flatMap { keys(for: $0) })
     }
 
     /// The key-level patch itself, over an already-encoded source.

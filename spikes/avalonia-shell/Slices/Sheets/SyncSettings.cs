@@ -31,16 +31,28 @@ static class SyncSettings {
         _ => [],
     };
 
+    /// The keys whose meaning `process` decides: absent means the first tone bands wherever one is nonzero.
+    static readonly string[] ToneGated = ["highlights", "shadows", "whites", "blacks", "layers"];
+
     /// The source's keys over one target's stored develop JSON, keys sorted.
-    /// Null when there is nothing to write, or when the stored blob is not a
-    /// JSON object: Swift would overwrite it with the patch alone and lose the
-    /// rest of that edit, so here it is left alone and counted as a failure.
+    /// Null when there is nothing to write. Throws FormatException when the
+    /// stored blob is not a JSON object: Swift would overwrite it with the patch
+    /// alone and lose the rest of that edit, so Sync leaves it and reports it.
+    ///
+    /// `process` rides along under AgentSync.swift's `committed` rule: only where
+    /// the target never stated one and has no tone values of its own to
+    /// reinterpret. Otherwise a photo with no sidecar would read the source's
+    /// highlights under the first tone bands, as absent means (EditHistory.swift).
     public static byte[]? Patched(byte[]? stored, JsonObject source, IEnumerable<string> keys) {
         var target = new JsonObject();
         if (stored != null) {
             try { target = JsonNode.Parse(stored) as JsonObject ?? throw new System.Text.Json.JsonException(); }
-            catch (System.Text.Json.JsonException) { return null; }
+            catch (System.Text.Json.JsonException) { throw new FormatException("the saved edit is not a JSON object"); }
         }
+        var list = keys.ToList();
+        if (list.Any(ToneGated.Contains) && !list.Contains("process") && target["process"] is null && !UsesToneBands(stored))
+            list.Add("process");
+        keys = list;
         bool any = false;
         foreach (var key in keys)
             if (source[key] is { } v) { target[key] = v.DeepClone(); any = true; }   // a key the source lacks is skipped, never nulled
@@ -48,6 +60,14 @@ static class SyncSettings {
         var sorted = new JsonObject();
         foreach (var (key, value) in target.OrderBy(p => p.Key, StringComparer.Ordinal)) sorted[key] = value?.DeepClone();
         return DevelopJson.Encode(sorted);
+    }
+
+    /// DevelopState.usesToneBands, on the target's own edit.
+    static bool UsesToneBands(byte[]? stored) {
+        if (stored == null || DevelopJson.Decode(stored) is not { } state) return false;
+        string[] tone = ["highlights", "shadows", "whites", "blacks"];
+        return tone.Any(k => DevelopJson.Float(state[k]) is { } v && v != 0)
+            || ((JsonArray)state["layers"]!).Any(l => tone.Any(k => DevelopJson.Float(l![k]) is { } v && v != 0));
     }
 
     /// What a sync did: writes that landed, and the photos that were not written.
@@ -68,7 +88,11 @@ static class SyncSettings {
         var failed = new List<string>();
         if (keys.Count == 0) return new(0, failed);
         foreach (var photo in photos) {
-            if (Patched(read(photo), source, keys) is { } data && write(photo, data)) written++;
+            byte[]? data;
+            try { data = Patched(read(photo), source, keys); }
+            catch (FormatException) { failed.Add(photo); continue; }
+            if (data == null) continue;   // nothing to write is not a failure
+            if (write(photo, data)) written++;
             else failed.Add(photo);
         }
         return new(written, failed);
@@ -112,6 +136,7 @@ static class SyncSettings {
     /// `runSync`: every other photo's sidecar, then the open photo through the edit path.
     public static Outcome Run(Preset copied, JsonObject state, IReadOnlySet<int> groups) {
         var engine = EngineModel.Shared;
+        Autosave.Shared.Flush();   // an owed write lands first, so nothing queued can land over the sync
         string? open = engine.Session?.Path;
         var outcome = Sync(state, groups, engine.Photos.Where(p => p != open).ToList());
         // Kept sessions and pictures hold the edits the sync just replaced: one opened later
