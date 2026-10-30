@@ -150,11 +150,22 @@ of the pattern as a pattern. It appears only as part of the social preview card
 
 ## Dawn (WebGPU)
 
-The cross-platform GPU layer (#317) is Dawn, statically linked as
-`libwebgpu_dawn.a`, built from source by `tools/build-dawn.sh` at commit
-`106704a9ac3fc21b1580ea85aea302ac17d416f1` (dawn.googlesource.com/dawn), Metal
-backend only. The library contains code from three projects; nothing else from
-Dawn's `third_party/` is compiled in (checked with `nm` on the built archive).
+The cross-platform GPU layer (#317) is Dawn, statically linked
+(`libwebgpu_dawn.a` on macOS and Linux, `webgpu_dawn.lib` on Windows), built
+from source by `tools/build-dawn.sh` at commit
+`106704a9ac3fc21b1580ea85aea302ac17d416f1` (dawn.googlesource.com/dawn), one
+backend per system: Metal on macOS, D3D12 on Windows, Vulkan on Linux (#376).
+
+What each library carries from Dawn's `third_party/` was read off the built
+archive: with `nm` on macOS, and on Windows and Linux by the "Dawn third-party
+audit" step of `.github/workflows/build.yml` (defined symbols by namespace, and
+the source paths the archive embeds; run 41071491173). On every system the
+library defines code from three projects only: Dawn and Tint, Abseil, and the
+webgpu-headers' declarations. Windows and Linux also compile in the headers
+listed under their systems below; no code of those projects' own libraries is
+defined in the archive.
+
+### Every system
 
 - **Dawn and Tint**: BSD 3-Clause License. Includes Dawn's own
   `partition_alloc` pointer shim. Notice from Dawn's `LICENSE` at the pinned commit:
@@ -198,6 +209,82 @@ projects' `LICENSE` files, following each copyright notice above:
     CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
     OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+### Windows (D3D12) and Linux (Vulkan), in addition
+
+- **RenderDoc in-application API header** (`renderdoc_app.h`, in Dawn's
+  `third_party/renderdoc/` at the pinned commit), compiled into both backends'
+  frame-capture hook. MIT License. Notice from its `LICENSE.md`:
+
+      Copyright (c) 2015-2025 Baldur Karlsson
+      Copyright (c) 2014 Crytek
+
+  followed by the MIT terms below.
+
+The D3D12 backend compiles against the Windows SDK's own headers; Dawn's copy
+of DirectX-Headers is not used, and nothing else from `third_party/` is in the
+Windows library.
+
+### Linux (Vulkan), in addition
+
+Headers only: no `spvtools::` or `vk*` symbol is defined in the archive.
+SPIRV-Tools is configured by Dawn's build for Tint's SPIR-V writer, but none of
+its code reaches the library.
+
+- **Vulkan-Headers** (commit `73814d006638aa00bd553215b054f0f02e457e22`):
+  Copyright 2015-2026 The Khronos Group Inc. Apache License 2.0 (a few files
+  also MIT); the full text travels as `licenses/Apache-2.0.txt`. No NOTICE file.
+- **Vulkan-Utility-Libraries** (commit `205badc9cf9ca28000fcea4b0addd50d75655c8c`):
+  Copyright 2023 The Khronos Group Inc., Copyright 2023 Valve Corporation,
+  Copyright 2023 LunarG, Inc. Apache License 2.0, as above. No NOTICE file.
+- **SPIRV-Headers** (commit `fbf86836a9b1966586faf7be7bb8a6440e156d62`):
+  Copyright (c) 2015-2024 The Khronos Group Inc., under the Khronos terms below.
+
+Terms of the MIT License, from RenderDoc's `LICENSE.md`, following its notice above:
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
+
+SPIRV-Headers' terms, from its `LICENSE` at the pinned commit:
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and/or associated documentation files (the
+    "Materials"), to deal in the Materials without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, sublicense, and/or sell copies of the Materials, and to
+    permit persons to whom the Materials are furnished to do so, subject to
+    the following conditions:
+
+    The above copyright notice and this permission notice shall be included
+    in all copies or substantial portions of the Materials.
+
+    MODIFICATIONS TO THIS FILE MAY MEAN IT NO LONGER ACCURATELY REFLECTS
+    KHRONOS STANDARDS. THE UNMODIFIED, NORMATIVE VERSIONS OF KHRONOS
+    SPECIFICATIONS AND HEADER INFORMATION ARE LOCATED AT
+       https://www.khronos.org/registry/
+
+    THE MATERIALS ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+    IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+    CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+    TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+    MATERIALS OR THE USE OR OTHER DEALINGS IN THE MATERIALS.
 
 ## Lens corrections from DNG opcodes
 
