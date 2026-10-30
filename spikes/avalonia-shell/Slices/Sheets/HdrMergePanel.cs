@@ -14,7 +14,9 @@ public sealed class HdrMergePanel : Border {
 
     readonly List<Candidate> _candidates;
     readonly StackPanel _rows = new() { Spacing = Space.Md + 2 };
+    readonly StackPanel _actions = new() { Orientation = Orientation.Horizontal, Spacing = Space.Sm + 2, HorizontalAlignment = HorizontalAlignment.Right };
     int _reference;
+    bool _merging;
 
     /// Closes the sheet. Set by whatever opened it.
     public Action? Dismiss { get; set; }
@@ -33,11 +35,7 @@ public sealed class HdrMergePanel : Border {
         if (Ineligibility(_candidates) is { } why) _rows.Children.Add(SheetKit.Note(why, Palette.Star));
         else Paint();
 
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Sm + 2, HorizontalAlignment = HorizontalAlignment.Right };
-        actions.Children.Add(SheetKit.Button("Cancel", () => Dismiss?.Invoke()));
-        // engine.hdrMerge, progress, cancel, then Library rescans:
-        // stub(#315): Engine.swift owns this until the logic moves below the facade
-        actions.Children.Add(SheetKit.Button("Merge", () => NotBuilt.Say("the HDR merge", "Engine.swift"), prominent: true));
+        Idle();
 
         Child = new StackPanel {
             Spacing = Space.Md + 2,
@@ -46,7 +44,7 @@ public sealed class HdrMergePanel : Border {
                 SheetKit.Note("The chosen frame sets the framing; the others are aligned to it and the result is " +
                               "written beside the originals as a new DNG.", Palette.Dim),
                 _rows,
-                actions,
+                _actions,
             },
         };
     }
@@ -66,9 +64,44 @@ public sealed class HdrMergePanel : Border {
                 Text = System.IO.Path.GetFileName(c.Path), FontSize = Faces.Label, VerticalAlignment = VerticalAlignment.Center,
                 FontFamily = Faces.Numeral, FontWeight = FontWeight.Medium, FontFeatures = Faces.Tabular,
             }]);
-            row.PointerPressed += (_, _) => { _reference = index; Paint(); };
+            row.PointerPressed += (_, _) => { if (!_merging) { _reference = index; Paint(); } };
             _rows.Children.Add(row);
         }
+    }
+
+    void Idle() {
+        _actions.Children.Clear();
+        _actions.Children.Add(SheetKit.Button("Cancel", () => Dismiss?.Invoke()));
+        _actions.Children.Add(SheetKit.Button("Merge", Merge, prominent: true));
+    }
+
+    /// runHdrMerge: what is owed to the open photo lands first (the merge reads files,
+    /// not the session), a progress bar and Stop while it runs, then the new DNG is
+    /// a library photo like any other: its folder rescanned around it, and opened.
+    async void Merge() {
+        if (_merging || Ineligibility(_candidates) != null) return;
+        _merging = true;
+        var paths = _candidates.Select(c => c.Path).ToList();
+        int reference = _reference;
+        string output = HdrMerge.OutputPath(paths[reference]);
+        Console.Error.WriteLine($"orion merge: start ref={reference} -> {output}");
+        Autosave.Shared.Flush();
+        var bar = new ProgressBar { Minimum = 0, Maximum = 1, Width = 300, MinHeight = 0, Height = 4, VerticalAlignment = VerticalAlignment.Center };
+        _actions.Children.Clear();
+        _actions.Children.AddRange([bar, SheetKit.Button("Stop", HdrMerge.Cancel)]);
+        using var poll = Avalonia.Threading.DispatcherTimer.Run(() => { bar.Value = HdrMerge.Progress ?? bar.Value; return true; },
+                                                                TimeSpan.FromMilliseconds(150));
+        string? failed = await HdrMerge.Run(paths, reference, output);
+        _merging = false;
+        Dismiss?.Invoke();
+        if (failed != null) {
+            Console.Error.WriteLine($"orion merge: failed: {failed}");
+            EngineModel.Shared.Say(failed);
+            return;
+        }
+        Console.Error.WriteLine($"orion merge: wrote {output}");
+        Library.LibraryFiles.OpenPhoto(output);
+        EngineModel.Shared.Say($"Merged {paths.Count} exposures into {System.IO.Path.GetFileName(output)}");
     }
 
     static Candidate Read(string path) =>

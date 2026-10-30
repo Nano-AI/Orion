@@ -13,6 +13,9 @@
             BorderBrush="{x:Static local:Palette.Line}" BorderThickness="0,0,0,1">
       <Grid x:Name="ToolbarHost"/>
     </Border>
+    <!-- RootView: the assistant column, a leading sibling of everything below the
+         toolbar; closed, it is not there at all (AssistantPanel.Toggle). -->
+    <Grid x:Name="AssistantHost" DockPanel.Dock="Left"/>
     <!-- OrionApp.swift: the gallery replaces the canvas, the tools and the strip
          in one piece; the toolbar stays. The develop face is hidden, not torn
          down, so leaving the gallery is free and never decodes. -->

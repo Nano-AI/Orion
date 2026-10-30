@@ -16,9 +16,12 @@ public sealed class DetailPanel : StackPanel {
     readonly Button _lutRemove;
     readonly TextBlock _lutError = Engraved.Note("", Palette.Star);
     readonly AdjustmentSlider _lutStrength = new("Strength", "lut_strength", 0, 1, baseValue: 1);
-    // stub(#315): Engine.swift owns this until the logic moves below the facade
-    //   (Engine.lutName: the facade knows a LUT's TITLE, not the file the person picked)
-    string _lutName = "";
+    /// Engine.lutName, which the session keeps (Session.LutName); one loaded
+    /// past the panel (a preset, the selftest) is named by its TITLE.
+    static string _lutName {
+        get => Engine.Session?.LutName is { Length: > 0 } name ? name : LutTitle();
+        set { if (Engine.Session is { } s) s.LutName = value; }
+    }
 
     static EngineModel Engine => EngineModel.Shared;
 
@@ -39,17 +42,12 @@ public sealed class DetailPanel : StackPanel {
             new AdjustmentSlider("Color", "denoise_color", 0, 4),
             new AdjustmentSlider("Smoothness", "denoise_smoothness", 0, 1)));
 
-        // spotHeal and spotRadius are what the next spot is placed with: the canvas's SpotModel holds both.
-        // The spots themselves are the overlay's alone: none reaches the engine until the shim writes
-        // OrionSpot (native, u4), so these keep the panel and the overlay in step, not the render.
+        // spotHeal, spotRadius and spotFeather are what the next spot is placed with: the canvas's SpotModel
+        // holds them, and the spots, which reach the engine and the sidecar (Engine+Spots.swift).
         var heal = new Segmented(["Heal", "Clone"], SpotModel.Heal ? 0 : 1);
         heal.Changed += i => SpotModel.Heal = i == 0;
-        _undoSpot = Develop.SmallButton("Undo spot", () => {
-            SpotModel.Spots.RemoveAt(SpotModel.Spots.Count - 1);
-            SpotModel.Selected = Math.Min(SpotModel.Selected, SpotModel.Spots.Count - 1);
-            CanvasState.Touch();
-        });
-        _clearSpots = Develop.SmallButton("Clear", () => { SpotModel.Spots.Clear(); SpotModel.Selected = -1; CanvasState.Touch(); });
+        _undoSpot = Develop.SmallButton("Undo spot", SpotModel.RemoveLast);
+        _clearSpots = Develop.SmallButton("Clear", SpotModel.Clear);
         Children.Add(new SectionPlate("Spots",
             "Turn on Place spots, then drag on the photo: press where the dust is and pull to choose what covers it. " +
             "Drag either circle afterwards to move it — solid is the spot, dashed is where the replacement comes from. " +
@@ -58,8 +56,7 @@ public sealed class DetailPanel : StackPanel {
             "sides, because it is a single number for the whole disc.",
             Develop.Row(8, [heal], _spotCount),
             Develop.LocalSlider("Size", 0.004f, 0.12f, (float)SpotModel.Radius, 3, v => SpotModel.Radius = v),
-            // SpotPlacement carries no feather yet (u4): Softness moves nothing.
-            Develop.LocalSlider("Softness", 0, 1, 0.5f, 2),
+            Develop.LocalSlider("Softness", 0, 1, (float)SpotModel.Feather, 2, v => SpotModel.Feather = v),
             Develop.Row(8, [new ToolButton(CanvasTool.Spot, "bandage", "Place spots", "Placing — drag on the photo",
                                            help: "Press on the photo to place a spot, then drag out its source")]),
             Develop.Row(8, [_undoSpot, _clearSpots])));
@@ -111,9 +108,8 @@ public sealed class DetailPanel : StackPanel {
             new AdjustmentSlider("Masking", "sharpen_masking", 0, 1)));
 
         CanvasState.Changed += ShowSpots;   // the overlay places, moves and removes through CanvasState.Touch
-        // A kept session keeps its LUT (#318): coming back to the photo, name it, so Remove is there.
-        // ponytail: a LUT without a TITLE still reads as none here; a facade "is one loaded" call fixes it.
-        Engine.Opened += () => { (_lutName, _lutError.Text) = (LutTitle(), null); ShowLut(); };
+        // A kept session keeps its LUT and its name (#318): coming back to the photo, Remove is there.
+        Engine.Opened += () => { _lutError.Text = null; ShowLut(); };
         ShowSpots();
         ShowLut();
     }

@@ -118,6 +118,7 @@ static partial class SelfTest {
         SidecarChecks();
         MatteChecks();      // before LibraryChecks, which leaves the photo list on its own deleted folder
         LibraryChecks();
+        ParityChecks();
         if (_stubs.Count > 0) Console.WriteLine($"selftest: session seams not built yet (stage 1b): {string.Join(", ", _stubs)}");
 
         Console.WriteLine($"selftest: {_passed} checks passed, {_failed} failed");

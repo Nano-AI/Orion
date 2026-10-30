@@ -30,9 +30,12 @@ static partial class ExportRun {
         return S.Options(w, h) with { Rating = rating, Metadata = ExportSettings.Metadatas[S.Metadata].Code };
     }
 
-    static string? Write(nint engine, string path, int rating) =>
-        orion_engine_export(engine, path, Options(engine, rating)) == 0 ? null
+    /// With the photographer's watermark, when it is on (WatermarkRaster.Marked).
+    static string? Write(nint engine, string path, int rating) {
+        SheetsNative.orion_engine_image_size(engine, out uint w, out uint h);
+        return WatermarkRaster.Marked(Options(engine, rating), S.Dimensions(w, h), o => orion_engine_export(engine, path, o)) == 0 ? null
             : Marshal.PtrToStringUTF8(Native.orion_last_error(engine)) ?? "the engine refused it";
+    }
 
     static IStorageProvider? Picker => App.Window?.StorageProvider is { CanSave: true } p ? p : null;
 

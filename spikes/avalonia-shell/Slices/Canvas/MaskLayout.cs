@@ -90,8 +90,8 @@ readonly record struct SpringBack(double Velocity, double Response = 0.3) {
     public bool Settled(double t) => t > 0 && Math.Abs(Value(t)) < 0.002;
 }
 
-/// One spot in frame coordinates; radius is a fraction of the frame's width.
-sealed record SpotPlacement(Point Destination, Point Source, double Radius, bool Heal);
+/// One spot in frame coordinates; radius is a fraction of the frame's width, feather its softness.
+sealed record SpotPlacement(Point Destination, Point Source, double Radius, bool Heal, double Feather = 0.5);
 
 /// The mask, spot and brush half of app/CanvasLayout.swift. No view lives here:
 /// where handles are, what a press grabs and what a drag means.

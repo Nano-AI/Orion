@@ -20,7 +20,9 @@ static partial class EditHistory {
     const int Depth = 50;
     static readonly TimeSpan Coalesce = TimeSpan.FromSeconds(0.6);
     /// View state the crop tab writes, not edits: Swift keeps them out of DevelopState.
-    static readonly HashSet<string> NotEdits = ["crop_preview", "preview_x", "preview_y", "preview_size"];
+    /// And spot_count, which the spots row below carries with the spots themselves:
+    /// written back by name after SpotModel.Replace, a stale count undid the restore.
+    static readonly HashSet<string> NotEdits = ["crop_preview", "preview_x", "preview_y", "preview_size", "spot_count"];
     static readonly (string Name, int Index)[] Slots = EngineModel.Fields
         .Where(f => !NotEdits.Contains(f.Name))
         .SelectMany(f => Enumerable.Range(0, f.Length).Select(i => (f.Name, i))).ToArray();
@@ -62,8 +64,8 @@ static partial class EditHistory {
     public static float[] Snapshot() => [.. Slots.Select(s => E.Get(s.Name, s.Index)), .. Curves(), .. Spots()];
 
     /// The spots, which no field reaches: their count, then up to ORION_MAX_SPOTS rows of
-    /// destination, source, radius and heal. Without them a spot placed or moved never undid (commitSpotEdit).
-    const int MaxSpots = 64, SpotRow = 6;
+    /// destination, source, radius, heal and feather. Without them a spot placed or moved never undid (commitSpotEdit).
+    const int MaxSpots = 64, SpotRow = 7;
 
     static float[] Spots() {
         var row = new float[1 + MaxSpots * SpotRow];
@@ -71,7 +73,7 @@ static partial class EditHistory {
         row[0] = Math.Min(spots.Count, MaxSpots);
         for (int i = 0; i < row[0]; i++) {
             var s = spots[i];
-            float[] values = [(float)s.Destination.X, (float)s.Destination.Y, (float)s.Source.X, (float)s.Source.Y, (float)s.Radius, s.Heal ? 1 : 0];
+            float[] values = [(float)s.Destination.X, (float)s.Destination.Y, (float)s.Source.X, (float)s.Source.Y, (float)s.Radius, s.Heal ? 1 : 0, (float)s.Feather];
             values.CopyTo(row, 1 + i * SpotRow);
         }
         return row;
@@ -80,7 +82,7 @@ static partial class EditHistory {
     static void RestoreSpots(float[] state) {
         int at = Slots.Length + CurveChannels * CurveRow;
         SpotModel.Replace(Enumerable.Range(0, (int)state[at]).Select(i => at + 1 + i * SpotRow).Select(r =>
-            new SpotPlacement(new Point(state[r], state[r + 1]), new Point(state[r + 2], state[r + 3]), state[r + 4], state[r + 5] != 0)).ToList());
+            new SpotPlacement(new Point(state[r], state[r + 1]), new Point(state[r + 2], state[r + 3]), state[r + 4], state[r + 5] != 0, state[r + 6])).ToList());
     }
 
     /// Four channels, each its point count then up to sixteen x, y pairs.
@@ -140,7 +142,8 @@ static partial class EditHistory {
 
     /// A render settled: if the state is not the one history is standing on, record it.
     static void Settle() {
-        if (E.Interacting || E.Handle == 0) return;
+        // A proposal on the canvas is engine.apply, which never records (ProposalWatcher).
+        if (E.Interacting || E.Handle == 0 || Chrome.ChromeStubs.DocumentEditsLocked) return;
         var state = Snapshot();
         var masks = MaskRows();
         if (_position < 0) { Reset(new Entry("Opened", state, masks, DateTime.Now)); return; }

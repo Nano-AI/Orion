@@ -83,7 +83,7 @@ static class GalleryMode {
     /// view that is not showing and saying nothing is worse than doing nothing.
     /// True when the key was the gallery's.
     public static bool Handle(KeyEventArgs e) {
-        if (!On || e.Handled || e.Source is TextBox || e.KeyModifiers.HasFlag(KeyModifiers.Meta)
+        if (!On || e.Handled || e.Source is TextBox || Chrome.AssistantPanel.Owns(e) || e.KeyModifiers.HasFlag(KeyModifiers.Meta)
             || e.KeyModifiers.HasFlag(KeyModifiers.Control)) return false;
         switch (e.Key) {
             case Key.Escape: case Key.G: Leave(); return true;

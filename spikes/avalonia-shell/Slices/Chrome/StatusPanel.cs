@@ -21,7 +21,7 @@ public sealed class StatusPanel : Border {
         BorderBrush = Palette.Line;
         BorderThickness = new Thickness(0, 1, 0, 0);
         Padding = new Thickness(Space.Pad, 8);
-        Child = new StackPanel { Spacing = 8, Children = { _message, Keys() } };
+        Child = new StackPanel { Spacing = 8, Children = { new ProposalFooter(), _message, Keys() } };
 
         EngineModel.Shared.PropertyChanged += (_, _) => Refresh();   // Timing, Tool, Current: every render and open
         Autosave.Shared.Changed += Refresh;                          // a write failed, or landed after failing

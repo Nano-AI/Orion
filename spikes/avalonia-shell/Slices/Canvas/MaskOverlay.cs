@@ -70,7 +70,7 @@ public sealed class MaskOverlay : Panel, ICustomHitTest {
     }
 
     static MaskGroup G => MaskGroup.Shared;
-    static bool Showing => CanvasState.Tab == "Mask";
+    static bool Showing => CanvasState.Tab == "Mask" && !Chrome.ChromeStubs.DocumentEditsLocked;
     static bool IsBrush => G.Drawing == 3 || (G.Drawing == 0 && G.Current?.Kind == 3);
     PictureMap Map => CanvasState.Map(Bounds.Size);
     MaskPlacement? Shape => _shown ?? (G.Current is { Kind: 1 or 2 } m ? MaskPlacement.Of(m) : null);
