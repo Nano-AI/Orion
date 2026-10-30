@@ -206,6 +206,7 @@ if(ORION_DAWN)
         # D3D12 on Windows, Vulkan on Linux. Dawn's installed package names the
         # system libraries its backends need.
         target_sources(orion_engine PRIVATE src/gpu/DawnNative.cpp)
+        find_package(Threads REQUIRED GLOBAL)   # DawnTargets names Threads::Threads and finds it not
         find_package(Dawn CONFIG REQUIRED GLOBAL PATHS ${ORION_DAWN_DIR} NO_DEFAULT_PATH)
         target_link_libraries(orion_engine PRIVATE dawn::webgpu_dawn)
     endif()

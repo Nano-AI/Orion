@@ -275,8 +275,18 @@ void testDawnParityGpu() {
     // of samples in millions — the two compilers round a transcendental
     // differently — and every other kernel is bit-identical. (With Dawn's
     // robustness on, llfRemapH and nlmLuma also moved one step.)
+    //
+    // ⚠ GitHub's macOS runners render on "Apple Paravirtual device", a virtual
+    // GPU, where the same two kernels move two steps (0.001953) and the whole
+    // graph's output one 1/2048 (measured, CI run of 2026-10-30, #376). That
+    // device gets its own measured bar, said in the output; real Apple silicon
+    // keeps the one above.
+    const bool virtualGpu = metal->info().name.find("Paravirtual") != std::string::npos;
+    const double step = (virtualGpu ? 2.0 : 1.0) / 1024.0;
+    const double chainBar = virtualGpu ? 1.0 / 2048.0 : 0.0;
+    if (virtualGpu) std::printf("  on %s: the virtual GPU's measured bars\n", metal->info().name.c_str());
     const std::map<std::string, double> kAllowed = {
-        {"colorGrade", 1.0 / 1024.0}, {"developLinear", 1.0 / 1024.0}};
+        {"colorGrade", step}, {"developLinear", step}};
 
     std::map<std::string, Seen> seen;
     std::map<std::string, std::unique_ptr<gpu::Library>> libs;
@@ -331,7 +341,8 @@ void testDawnParityGpu() {
     char line[96];
     std::snprintf(line, sizeof line, "worst %.6f over three edits, screen and wide", chain);
     std::printf("  whole graph, Dawn against Metal: %s\n", line);
-    report(chain == 0.0, "the whole develop graph on Dawn matches Metal's output exactly", line);
+    report(chain <= chainBar, virtualGpu ? "the whole develop graph on Dawn matches Metal's output within the virtual GPU's bar"
+                                         : "the whole develop graph on Dawn matches Metal's output exactly", line);
 
     // Every kernel the build makes must at least compile on Dawn, including
     // any no graph above reaches (llfRemapDown has no node today).
