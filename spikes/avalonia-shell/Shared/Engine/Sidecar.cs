@@ -17,17 +17,24 @@ public sealed class Sidecar {
     public string? Label;
     /// The develop JSON, or null when the file carries none.
     public byte[]? Develop;
-    /// `orion:Develop` is there but is not base64. Swift reads that as "no
-    /// edit" and would let the next autosave write over it; here it is
-    /// unreadable, so nothing does.
-    public bool DevelopUnreadable;
+    /// Why the file is there and cannot be read (permissions, an I/O error,
+    /// an `orion:Develop` that is not base64), or null. Nothing ever writes
+    /// over such a sidecar: Swift reads a bad blob as "no edit" and would.
+    public string? Unreadable;
 
     public static string PathFor(string photo) => Path.ChangeExtension(photo, ".xmp");
 
-    /// Null when there is no sidecar, or it cannot be read as text.
+    /// Null only when there is no sidecar. One that exists and will not read
+    /// comes back with Unreadable set, never as "none".
     public static Sidecar? Read(string photo) {
         string text;
-        try { text = File.ReadAllText(PathFor(photo), Encoding.UTF8); } catch (IOException) { return null; } catch (UnauthorizedAccessException) { return null; }
+        try {
+            text = File.ReadAllText(PathFor(photo), Encoding.UTF8);
+        } catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException) {
+            return null;
+        } catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException) {
+            return new Sidecar { Unreadable = e.Message };
+        }
         var s = new Sidecar();
         if (Value("xmp:Rating", text) is { } r && int.TryParse(r, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int rating)) {
             s.Rejected = rating < 0;
@@ -35,7 +42,7 @@ public sealed class Sidecar {
         }
         s.Label = Value("xmp:Label", text);
         if (Value("orion:Develop", text) is { } encoded) {
-            try { s.Develop = Convert.FromBase64String(encoded); } catch (FormatException) { s.DevelopUnreadable = true; }
+            try { s.Develop = Convert.FromBase64String(encoded); } catch (FormatException) { s.Unreadable = "orion:Develop is not base64"; }
         }
         return s;
     }
@@ -63,7 +70,7 @@ public sealed class Sidecar {
     /// develop writer must never cost a rating, nor a rating the edit.
     public static bool Merge(string photo, Action<Sidecar> change) {
         var s = Read(photo) ?? new Sidecar();
-        if (s.DevelopUnreadable) return Fail(photo, "its saved edits cannot be read, and are left untouched");
+        if (s.Unreadable != null) return Fail(photo, $"it cannot be read ({s.Unreadable}), and is left untouched");
         change(s);
         return s.Write(photo);
     }

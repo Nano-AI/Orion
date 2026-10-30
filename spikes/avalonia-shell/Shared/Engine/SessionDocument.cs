@@ -30,8 +30,9 @@ public sealed partial class Session {
 
     void Restore() {
         var sidecar = Sidecar.Read(Path);
+        float asShotK = Get("temperature_k"), asShotTint = Get("tint");   // the shim opened at the camera's
         try {
-            if (sidecar?.DevelopUnreadable == true) throw new FormatException("orion:Develop is not base64");
+            if (sidecar?.Unreadable is { } why) throw new FormatException(why);
             if (sidecar?.Develop is not { } bytes) { Document = Capture(); return; }
             var state = DevelopJson.Decode(bytes) ?? throw new FormatException("orion:Develop is not JSON");
             // A sidecar Sync wrote onto an untouched photo carries no white balance: the camera's stands.
@@ -42,16 +43,23 @@ public sealed partial class Session {
             Apply(state);
             Document = state;          // the carry for the capture: names, matte ids, spots
             Document = Capture();
-        } catch (Exception e) when (e is FormatException or ArgumentException or InvalidOperationException) {
+        } catch (Exception e) {
+            // Anything at all: this runs on the cache's prefetch task, and a sidecar must never fault it.
+            // A half-applied edit is put back to the as-shot look, so what shows is a photo and not a guess.
             Unreadable = $"Orion could not read the saved edits for {System.IO.Path.GetFileName(Path)} ({e.Message}). " +
                          "They have been left on disk untouched; editing now will not save.";
-            Console.Error.WriteLine("orion: restore failed — " + Unreadable);
+            Console.Error.WriteLine($"orion: restore failed ({e.GetType().Name}) — " + Unreadable);
+            Document = null;
+            var asShot = DevelopJson.Defaults();
+            (asShot["temperatureK"], asShot["tint"]) = (asShotK, asShotTint);
+            try { Apply(asShot); } catch (Exception reset) { Console.Error.WriteLine("orion: the as-shot reset failed too — " + reset.Message); }
         }
     }
 
     /// Every field of `state` into this session's adjustments. Does not render.
     public void Apply(JsonObject state) {
         foreach (var (key, value) in state) {
+            if (!DevelopJson.Known.Contains(key)) continue;   // a newer build's key: carried, not applied
             if (Scalar(key, value)) Set(Snake(key), DevelopJson.Float(value)!.Value);
             else if (DevelopJson.Floats(value) is { } band && NumberArrays.Contains(key))
                 for (int i = 0; i < band.Count; i++) Set(Snake(key), band[i], i);
@@ -114,7 +122,10 @@ public sealed partial class Session {
             layers.Add(l);
         }
         s["layers"] = layers;
-        s["spots"] = carry["spots"]!.DeepClone();
+        // Engine.assign keeps ORION_MAX_SPOTS, as it keeps eight mask rows (ReadMaskGroup's cap).
+        s["spots"] = new JsonArray(((JsonArray)carry["spots"]!).Take(MaxSpots).Select(p => p!.DeepClone()).ToArray());
+        // A newer build's keys ride through: Swift's own encoder would drop them, this does not.
+        foreach (var (key, value) in carry) if (!DevelopJson.Known.Contains(key)) s[key] = value?.DeepClone();
 
         var curve = new JsonObject();
         for (int c = 0; c < 4; c++)
@@ -124,6 +135,7 @@ public sealed partial class Session {
         return s;
     }
 
+    const int MaxSpots = 64;   // ORION_MAX_SPOTS
     static readonly string[] Channels = ["master", "red", "green", "blue"];
     static readonly HashSet<string> NumberArrays = ["gradeShadow", "gradeMidtone", "gradeHighlight", "hueShift", "satShift", "lumShift"];
 

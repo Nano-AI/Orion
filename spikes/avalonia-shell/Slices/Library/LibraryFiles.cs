@@ -32,7 +32,7 @@ static class LibraryFiles {
         var list = RawsIn(Path.GetDirectoryName(path)!);
         int i = list.FindIndex(p => p == path);
         if (i < 0) { list = [path]; i = 0; }
-        E.Load(list);
+        if (!E.Load(list)) return;   // the open photo's edit will not save: it stays (canLeavePhoto)
         E.Open(i);
         if (GalleryMode.On) GalleryMode.SetFocus(L.Open);
     }
@@ -47,7 +47,7 @@ static class LibraryFiles {
     public static void OpenFolder(string folder) {
         var list = RawsIn(folder);
         if (list.Count == 0) { E.Say($"no raw photos in {Path.GetFileName(folder)}"); return; }
-        E.Load(list);
+        if (!E.Load(list)) return;   // the open photo's edit will not save: it stays (canLeavePhoto)
         if (L.Visible.FirstOrDefault() is { } first) E.Open(first.Index);
         if (GalleryMode.On) GalleryMode.SetFocus(L.Open);
     }
@@ -82,8 +82,9 @@ static class LibraryFiles {
         string? current = E.Current >= 0 ? E.Photos[E.Current] : null;
         string? canvasSurvivor = Survivor(current), focusSurvivor = Survivor(GalleryMode.Focus?.Path);
         // Written before anything moves: a coalesced write landing after the trash would
-        // leave a sidecar beside a raw that is gone (runTrash's autosave.stop()).
-        Autosave.Shared.Flush();
+        // leave a sidecar beside a raw that is gone (runTrash's autosave.stop()). One that will not
+        // write keeps the open photo, unmoved, as canLeavePhoto does.
+        if (!Autosave.Shared.FlushBeforeLeaving() && current != null && goes.Contains(current)) return Autosave.Shared.LastFailure;
 
         var trashed = new List<string>();
         var failures = new List<string>();

@@ -46,6 +46,13 @@ public static class DevelopJson {
     static readonly string[] MaskStrings = ["matteId", "matteSource", "name"];   // String?, omitted when nil
     /// DevelopState's Int32 fields; every other number is a Float.
     public static readonly HashSet<string> IntKeys = ["process", "rotateQuarters", "maskSpace", "localTintAxis"];
+    /// DevelopState's keys. Anything else in a sidecar is a newer build's, carried through a save untouched.
+    public static readonly HashSet<string> Known = Defaults().Select(p => p.Key).ToHashSet();
+    /// Read, never written (the decoder's legacy cases): these are not a newer build's and are dropped on save, as Swift drops them.
+    static readonly HashSet<string> LegacyKeys = [
+        "denoiseColour", "localExposureEv", "localContrast", "localSaturation", "localWarmth", "localTint",
+        "maskKind", "maskInvert", "maskCentreX", "maskCentreY", "maskAngle", "maskLength", "maskRadiusX", "maskRadiusY",
+        "maskFeather", "maskRoundness", "brushRadius", "brushFlow", "brushHardness", "brushStroke"];
 
     public static JsonObject Defaults() => Parse(DefaultsText, LayerText);
     public static JsonObject DefaultLayer() => (JsonObject)JsonNode.Parse(LayerText)!;
@@ -114,6 +121,8 @@ public static class DevelopJson {
             s["localTintAxis"] = 1;
         }
         if (Curve(c["curve"]) is { } curve) s["curve"] = curve;
+        // Top-level keys only: a newer field inside a mask row or a layer is dropped, as Swift drops it.
+        foreach (var (key, value) in c) if (!Known.Contains(key) && !LegacyKeys.Contains(key)) s[key] = value?.DeepClone();
         return s;
     }
 

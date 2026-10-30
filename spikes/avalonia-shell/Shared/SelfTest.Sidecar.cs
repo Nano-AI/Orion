@@ -101,9 +101,15 @@ static partial class SelfTest {
                   && !File.Exists(Sidecar.PathFor(photo) + ".orion-tmp"),
                   "writing the edit keeps the rating and the escaped label, and leaves no temporary file");
             File.WriteAllText(Sidecar.PathFor(photo), "<x xmp:Rating=\"-1\" orion:Develop=\"!!\"/>");
-            Check(Sidecar.Read(photo) is { Rejected: true, Rating: 0, DevelopUnreadable: true }
+            Check(Sidecar.Read(photo) is { Rejected: true, Rating: 0, Unreadable: not null }
                   && !Sidecar.Merge(photo, s => s.Develop = [1]) && File.ReadAllText(Sidecar.PathFor(photo)).Contains("!!"),
                   "-1 reads as rejected; an edit that is not base64 is never written over");
+            // Present but unreadable is not absent: a rename would replace it, so Merge must refuse.
+            label.Write(photo);
+            File.SetUnixFileMode(Sidecar.PathFor(photo), UnixFileMode.None);
+            bool refused = Sidecar.Read(photo) is { Unreadable: not null } && !Sidecar.Merge(photo, s => s.Develop = [1]);
+            File.SetUnixFileMode(Sidecar.PathFor(photo), UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            Check(refused && Sidecar.Read(photo) is { Rating: 3, Develop: null }, "a sidecar that exists but cannot be read is never written over");
         } finally {
             Directory.Delete(dir, recursive: true);
         }
@@ -130,6 +136,40 @@ static partial class SelfTest {
         File.WriteAllText(Sidecar.PathFor(photo), new Sidecar { Develop = "not json"u8.ToArray() }.Text());
         using (var bad = Session.OpenEdited(photo))
             Check(bad?.Unreadable != null && bad.Get("exposure_ev") == 0, "an edit that is not JSON opens the photo as shot and says so");
+
+        // Corrupt in ways the JSON parser accepts: none may throw out of the open (the cache's prefetch
+        // task would fault), each opens as shot, unreadable. The last one is otherwise valid.
+        string[] corrupt = [
+            """{"exposureEv":1,"exposureEv":2}""",
+            """{"exposureEv":1,"maskComponents":[{"kind":2,"kind":3}]}""",
+            """{"exposureEv":1,"layers":[{"tint":0.5,"tint":0.2}]}""",
+            """{"exposureEv":1,"futureKnob":1,"futureKnob":2}""",
+        ];
+        foreach (var json in corrupt) {
+            File.WriteAllText(Sidecar.PathFor(photo), new Sidecar { Develop = Encoding.UTF8.GetBytes(json) }.Text());
+            Session? opened = null;
+            Exception? thrown = null;
+            try { opened = Session.OpenEdited(photo); } catch (Exception e) { thrown = e; }
+            Check(thrown == null && opened is { Unreadable: not null } && opened.Get("exposure_ev") == 0,
+                  $"a corrupt edit opens as shot and unreadable, never throwing ({json}{(thrown != null ? $": {thrown.GetType().Name}" : "")})");
+            opened?.Dispose();
+        }
+
+        // A sidecar that exists and cannot be read opens unreadable, never as "no edit".
+        File.WriteAllText(Sidecar.PathFor(photo), new Sidecar { Develop = "{\"exposureEv\":1}"u8.ToArray() }.Text());
+        File.SetUnixFileMode(Sidecar.PathFor(photo), UnixFileMode.None);
+        using (var locked = Session.OpenEdited(photo))
+            Check(locked is { Unreadable: not null, Document: null }, "a sidecar it may not read opens unreadable, so autosave stays off");
+        File.SetUnixFileMode(Sidecar.PathFor(photo), UnixFileMode.UserRead | UnixFileMode.UserWrite);
+
+        // A newer build's key rides through a save; a legacy key is read and not written back.
+        File.WriteAllText(Sidecar.PathFor(photo), new Sidecar { Develop = """{"exposureEv":0.5,"futureKnob":{"a":[1,2]},"denoiseColour":2}"""u8.ToArray() }.Text());
+        using (var newer = Session.OpenEdited(photo)) {
+            var saved = newer?.Capture();
+            Check(saved != null && JsonNode.DeepEquals(saved["futureKnob"], JsonNode.Parse("""{"a":[1,2]}""")) && !saved.ContainsKey("denoiseColour")
+                  && DevelopJson.Float(saved["denoiseColor"]) == 2 && newer!.Get("exposure_ev") == 0.5f,
+                  "an unknown key from a newer build is kept on save; a legacy key is not written back");
+        }
         File.Delete(Sidecar.PathFor(photo));
     }
 
@@ -173,10 +213,38 @@ static partial class SelfTest {
         Check(a.IsDirty && a.LastFailure != null && a.LastFailure.Contains("one"), "a failed write is kept and named on the status line");
         a.Begin("two", State(0));
         Check(a.IsDirty && writes.Count == 1, "a switch still owes the failed write");
+        a.Note(State(5));   // an edit on the next photo while the disk is still gone
+        Check(a.IsDirty && a.LastFailure != null && a.LastFailure.Contains("one"), "an edit on another photo does not clear the complaint");
         disk = true;
         a.Flush();
         Check(!a.IsDirty && a.LastFailure == null && writes[^1].Path == "one" && (float)writes[^1].State["exposureEv"]! == 4,
-              "the retry lands under the photo it belongs to, and the complaint clears");
+              "the retry lands under the photo it belongs to, never replaced by the next photo's edit, and the complaint clears");
+        a.Note(State(5));
+        a.Flush();
+        Check(writes[^1].Path == "two" && (float)writes[^1].State["exposureEv"]! == 5, "the next photo's edit then saves under its own name");
+
+        // canLeavePhoto: while the open photo's edit will not write, nothing leaves it.
+        var engine = EngineModel.Shared;
+        string locked = Directory.CreateTempSubdirectory("orion-locked-").FullName;
+        try {
+            string owed = Path.Combine(locked, "owed.ARW");
+            File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+            Autosave.Shared.Begin(owed, State(0));
+            Autosave.Shared.Note(State(1));
+            Autosave.Shared.Flush();
+            int at = engine.Current;
+            bool left = engine.Open(at) || engine.Next() || engine.Previous() || engine.Load(engine.Photos.ToList());
+            Check(!left && engine.Current == at && Autosave.Shared.LastFailure != null && engine.Status == Autosave.Shared.LastFailure,
+                  $"a photo whose edit will not save cannot be left, and the status line says why ('{engine.Status}')");
+            File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            Check(Autosave.Shared.FlushBeforeLeaving() && File.Exists(Sidecar.PathFor(owed)) && Autosave.Shared.LastFailure == null,
+                  "once the folder is writable again the owed edit lands");
+            engine.Say("");
+        } finally {
+            Autosave.Shared.Stop();
+            File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            Directory.Delete(locked, recursive: true);
+        }
 
         // The real thing: a rated sidecar with no edit, an edit through Autosave, a reopen.
         new Sidecar { Rating = 4, Label = "Green" }.Write(photo);

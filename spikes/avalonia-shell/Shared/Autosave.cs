@@ -64,6 +64,12 @@ public sealed class Autosave {
             if (_pending?.Path == _target) { _pending = null; SetFailure(null); }
             return;
         }
+        // A write still owed to another photo is never replaced: it is tried first, and while it
+        // fails this photo's edit waits for the next note (the engine refuses to leave meanwhile).
+        if (_pending is { } other && other.Path != _target) {
+            Flush();
+            if (_pending != null) return;
+        }
         _pending = (_target, state, text);
         if (_scheduled) return;
         _scheduled = true;
@@ -81,6 +87,12 @@ public sealed class Autosave {
         _pending = null;
         SetFailure(null);
         if (job.Path == _target) _saved = job.Text;   // a late write for a photo already left teaches nothing about this one
+    }
+
+    /// Editor.canLeavePhoto's half: write what is owed, and say whether it landed.
+    public bool FlushBeforeLeaving() {
+        Flush();
+        return !IsDirty;
     }
 
     void SetFailure(string? why) {
