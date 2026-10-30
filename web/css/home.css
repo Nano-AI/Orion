@@ -14,7 +14,13 @@
 .sky { position: absolute; inset: 0 0 auto 0; height: 720px; overflow: hidden; pointer-events: none; -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent); mask-image: linear-gradient(to bottom, #000 60%, transparent); }
 .sky i { position: absolute; left: calc(50% - 720px); top: 0; width: 1px; height: 1px; border-radius: 50%; background: transparent; color: #fff; animation: twinkle 5s ease-in-out infinite; }
 .sky i:nth-child(2) { animation-delay: -2.5s; animation-duration: 7s; color: var(--accent); }
-@keyframes twinkle { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.9; } }
+@keyframes twinkle { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+/* comets: a streak with a white head and a cyan tail, crossing the sky now and then; site.js moves each one between passes */
+.sky b { position: absolute; top: 12%; left: 18%; width: 320px; height: 3px; border-radius: 2px; opacity: 0; transform: rotate(26deg); transform-origin: right center;
+  background: linear-gradient(90deg, transparent, var(--accent) 55%, #fff); filter: drop-shadow(0 0 6px #fff) drop-shadow(0 0 14px var(--accent)); animation: comet 6s linear infinite; }
+.sky b:nth-of-type(2) { top: 34%; left: 58%; width: 240px; animation-delay: 2s; animation-duration: 7s; }
+.sky b:nth-of-type(3) { top: 6%; left: 40%; width: 280px; animation-delay: 4s; animation-duration: 6.5s; }
+@keyframes comet { 0%, 100% { opacity: 0; translate: 0 0; } 4% { opacity: 1; } 24% { opacity: 1; } 30% { opacity: 0; translate: 900px 439px; } }
 /* the mark drifts, the headline comes into focus once */
 @keyframes drift { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 .hero .hero__mark { animation: rise 700ms var(--ease-out) both, drift 6s ease-in-out 700ms infinite; }
@@ -35,21 +41,18 @@
 .hero__copy > :nth-child(5) { animation-delay: 280ms; }
 .stage__window { animation: rise 900ms var(--ease-out) 320ms both; }
 
-/* ---------- the plate: one of Orion's own photographs, rounded, the window on it ---------- */
-.stage { position: relative; width: min(1250px, 100% - 2 * var(--gutter)); margin: clamp(40px, 4vw, 56px) auto 0; padding: clamp(24px, 4.5vw, 56px) 0; border-radius: clamp(16px, 1.7vw, 24px); overflow: hidden; background: var(--panel); box-shadow: var(--ring); }
-.stage__back { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 45%; filter: brightness(0.72) saturate(1.2); }
-.stage::after {   /* a little weight at the foot of the plate, so the window's shadow has something to fall on */
+/* ---------- the stage: full width, a living light behind the window, no edges ---------- */
+.stage { position: relative; width: 100%; margin: clamp(40px, 4vw, 56px) auto 0; padding: clamp(32px, 6vw, 96px) 0; overflow: hidden; }
+.stage::after {   /* the light fades into the ground above and below, so the stage has no edge */
   content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(to bottom, rgba(11, 11, 12, 0) 55%, rgba(11, 11, 12, 0.45) 100%);
+  background: linear-gradient(to bottom, var(--ground) 0%, transparent 28%, transparent 72%, var(--ground) 100%);
 }
-/* the light: cyan and gold, blurred, drifting behind the window; the plate carries a cyan glow out into the ground */
-.stage { box-shadow: var(--ring), 0 0 160px -20px color-mix(in srgb, var(--accent) 45%, transparent); }
-.stage__light { position: absolute; inset: -20%; pointer-events: none; mix-blend-mode: screen; filter: blur(60px); opacity: 0.85;
-  background: radial-gradient(40% 50% at 30% 40%, color-mix(in srgb, var(--accent) 80%, transparent), transparent 70%), radial-gradient(35% 45% at 72% 65%, color-mix(in srgb, var(--status) 70%, transparent), transparent 70%);
-  animation: roam 22s ease-in-out infinite; }
-@keyframes roam { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 33% { transform: translate(6%, -5%) rotate(8deg); } 66% { transform: translate(-5%, 6%) rotate(-6deg); } }
-.stage__in { position: relative; z-index: 1; width: min(76%, 100% - 2 * var(--s-5)); margin-inline: auto; transform: perspective(1400px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform 400ms var(--ease-out); transform-style: preserve-3d; }
-@media (max-width: 760px) { .stage__in { width: calc(100% - 2 * var(--s-4)); } }
+/* the aurora: cyan, gold and a deep blue, blurred, roaming; shared with the close */
+.aurora { position: absolute; inset: -30%; pointer-events: none; filter: blur(70px); opacity: 0.95; will-change: transform;
+  background: radial-gradient(34% 44% at 26% 44%, var(--accent) 0%, transparent 70%), radial-gradient(28% 38% at 74% 60%, var(--status) 0%, transparent 70%), radial-gradient(40% 50% at 54% 26%, #2f55e0 0%, transparent 70%), radial-gradient(26% 34% at 48% 80%, color-mix(in srgb, var(--accent) 60%, #2f55e0) 0%, transparent 70%);
+  animation: roam 26s ease-in-out infinite; }
+@keyframes roam { 0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); } 33% { transform: translate(5%, -4%) rotate(7deg) scale(1.08); } 66% { transform: translate(-5%, 5%) rotate(-6deg) scale(0.96); } }
+.stage__in { position: relative; z-index: 1; width: min(1200px, 100% - 2 * var(--gutter)); margin-inline: auto; transform: perspective(1400px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform 400ms var(--ease-out); transform-style: preserve-3d; }
 .stage__window { position: relative; aspect-ratio: 8 / 5; border-radius: var(--r); overflow: hidden; background: var(--panel); box-shadow: var(--shadow-window), var(--ring); }
 .stage__window img { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
 .stage__window img:nth-child(4) { opacity: 1; }   /* 0 EV, until the slider moves */
@@ -129,9 +132,8 @@ html:not(.js) .cmp__range, html:not(.js) .cmp__grip { display: none; }
 @media (max-width: 600px) { .build { grid-template-columns: 1fr; } .build__later { grid-column: auto; } }
 
 /* ---------- close: the ask, over the pier ---------- */
-.close { position: relative; display: grid; align-items: end; min-height: min(80svh, 720px); margin-top: var(--section); overflow: hidden; }
-.close__photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 60% 50%; }
-.close::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(to top, rgba(11, 11, 12, 0.92) 0%, rgba(11, 11, 12, 0.35) 48%, transparent 72%), linear-gradient(to bottom, var(--ground) 0%, transparent 24%); }
+.close { position: relative; display: grid; align-items: center; min-height: min(80svh, 720px); margin-top: var(--section); overflow: hidden; }
+.close::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(to bottom, var(--ground) 0%, transparent 30%, transparent 70%, var(--ground) 100%); }
 .close__copy { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; text-align: center; padding-block: var(--section) clamp(var(--s-7), 8vh, var(--s-8)); }
 .close .btn { margin-top: var(--s-5); }
 .close .mono { margin-top: var(--s-4); color: var(--text-2); }
@@ -139,6 +141,4 @@ html:not(.js) .cmp__range, html:not(.js) .cmp__grip { display: none; }
 /* ---------- alive below the fold: things rise in as they arrive, the pier drifts ---------- */
 .js .reveal { opacity: 0; transform: translateY(18px); transition: opacity 700ms var(--ease-out), transform 900ms var(--ease-out); }
 .js .reveal.is-in { opacity: 1; transform: none; }
-@keyframes kenburns { from { transform: scale(1); } to { transform: scale(1.08); } }
-.close__photo { animation: kenburns 40s linear infinite alternate; }
 @media (prefers-reduced-motion: reduce) { .js .reveal { opacity: 1; transform: none; } }

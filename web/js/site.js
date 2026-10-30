@@ -178,10 +178,15 @@
     sky.className = 'sky'; sky.setAttribute('aria-hidden', 'true');
     for (let layer = 0; layer < 2; layer++) {
       const dots = [];
-      for (let i = 0; i < 70; i++) dots.push(`${Math.round(Math.random() * 1600 - 80)}px ${Math.round(Math.random() * 720)}px 0 ${Math.random() < 0.15 ? 1 : 0}px`);
+      for (let i = 0; i < 70; i++) dots.push(`${Math.round(Math.random() * 1600 - 80)}px ${Math.round(Math.random() * 720)}px 0 ${Math.random() < 0.3 ? 1 : 0}px`);
       const d = document.createElement('i');
       d.style.boxShadow = dots.join(',');
       sky.append(d);
+    }
+    if (!still) for (let i = 0; i < 3; i++) {   // three comets; each pass starts somewhere new
+      const c = document.createElement('b');
+      c.addEventListener('animationiteration', () => { c.style.top = `${5 + Math.random() * 45}%`; c.style.left = `${Math.random() * 70}%`; });
+      sky.append(c);
     }
     hero.prepend(sky);
   }
