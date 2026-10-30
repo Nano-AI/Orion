@@ -168,7 +168,7 @@ public sealed partial class Session {
     /// Engine+MaskMigration.swift: a sidecar from before frame anchoring holds
     /// display-space mask numbers beside the geometry they were relative to,
     /// and converts on the way in (#203). One refusal keeps every row as written.
-    unsafe void ToFrameSpace(JsonObject state) {
+    internal unsafe void ToFrameSpace(JsonObject state) {
         if (DevelopJson.Int(state["maskSpace"]) != 0) return;
         float F(string k) => DevelopJson.Float(state[k])!.Value;
         var g = new Native.MaskLegacyGeometry {

@@ -126,7 +126,7 @@ static partial class SelfTest {
             probe.Note(s.Capture());
             Check(!probe.IsDirty, $"{Path.GetFileName(file)}: opening it owes no write");
             var want = DevelopJson.Decode(Sidecar.Read(photo)!.Develop!)!;
-            want["maskSpace"] = 1;   // converted on the way in
+            s.ToFrameSpace(want);   // a legacy mask converts on the way in, under this photo's own orientation
             var got = s.Capture();
             var diff = Differences(want, got, "").ToList();
             Check(s.Unreadable == null && diff.Count == 0,
