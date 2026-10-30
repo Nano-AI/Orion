@@ -113,6 +113,8 @@ static partial class SelfTest {
     /// which counts Metal's private textures where RSS does not: ri_phys_footprint
     /// of rusage_info_v0, 16 bytes of uuid and seven uint64s in.
     static unsafe long Footprint() {
+        // No phys_footprint off macOS; the working set holds what CI's CPU GPU drivers allocate (#376).
+        if (!OperatingSystem.IsMacOS()) return Environment.WorkingSet;
         byte* info = stackalloc byte[512];
         return proc_pid_rusage(Environment.ProcessId, 0, info) == 0 ? *(long*)(info + 72) : 0;
     }

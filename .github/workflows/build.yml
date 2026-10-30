@@ -46,15 +46,21 @@ jobs:
           curl -fsSL "https://github.com/shader-slang/slang/releases/download/v$SLANG_VERSION/slang-$SLANG_VERSION-linux-x86_64.tar.gz" \
             | tar -xz -C third_party/slang
 
+      # Restore and save apart, so a later failing step still keeps a 40-minute build.
       - name: Dawn (cached)
         id: dawn
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: third_party/dawn-build
           key: dawn-linux-${{ hashFiles('tools/build-dawn.sh') }}
       - name: Dawn (build)
         if: steps.dawn.outputs.cache-hit != 'true'
         run: tools/build-dawn.sh && rm -rf third_party/dawn-src
+      - if: steps.dawn.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: third_party/dawn-build
+          key: ${{ steps.dawn.outputs.cache-primary-key }}
 
       - name: Configure and build
         run: |
@@ -93,7 +99,7 @@ jobs:
     defaults:
       run: { shell: bash }
     env:
-      VCPKG_ROOT: ${{ github.workspace }}/../vcpkg
+      ORION_VCPKG: ${{ github.workspace }}/../vcpkg   # not VCPKG_ROOT, which msvc-dev-cmd points at Visual Studio's
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/../vcpkg-cache
     steps:
       - uses: actions/checkout@v4
@@ -104,11 +110,12 @@ jobs:
 
       - name: vcpkg at the manifest's baseline
         run: |
-          git clone --depth 1 --branch 2026.10.16 https://github.com/microsoft/vcpkg "$VCPKG_ROOT"
-          "$VCPKG_ROOT/bootstrap-vcpkg.bat" -disableMetrics
+          git clone --depth 1 --branch 2026.10.16 https://github.com/microsoft/vcpkg "$ORION_VCPKG"
+          "$ORION_VCPKG/bootstrap-vcpkg.bat" -disableMetrics
           mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
       - name: vcpkg packages (cached)
-        uses: actions/cache@v4
+        id: vcpkg
+        uses: actions/cache/restore@v4
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
           key: vcpkg-win-${{ hashFiles('vcpkg.json') }}
@@ -120,23 +127,35 @@ jobs:
             "https://github.com/shader-slang/slang/releases/download/v$SLANG_VERSION/slang-$SLANG_VERSION-windows-x86_64.zip"
           7z x -bd -othird_party/slang "$RUNNER_TEMP/slang.zip" >/dev/null
 
+      # Restore and save apart, so a later failing step still keeps a 40-minute build.
       - name: Dawn (cached)
         id: dawn
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: third_party/dawn-build
           key: dawn-windows-${{ hashFiles('tools/build-dawn.sh') }}
       - name: Dawn (build)
         if: steps.dawn.outputs.cache-hit != 'true'
         run: tools/build-dawn.sh && rm -rf third_party/dawn-src
+      - if: steps.dawn.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: third_party/dawn-build
+          key: ${{ steps.dawn.outputs.cache-primary-key }}
 
       - name: Configure and build
         run: |
+          unset VCPKG_ROOT
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl \
-            -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+            -DCMAKE_TOOLCHAIN_FILE="$ORION_VCPKG/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_TARGET_TRIPLET=x64-windows-release -DORION_SHELL_DIR="$SHELL_DIR"
           cmake --build build
+      - if: always() && steps.vcpkg.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: ${{ steps.vcpkg.outputs.cache-primary-key }}
 
       - name: orion-tests (Dawn on D3D12, WARP)
         run: |
@@ -180,15 +199,21 @@ jobs:
           curl -fsSL "https://github.com/shader-slang/slang/releases/download/v$SLANG_VERSION/slang-$SLANG_VERSION-macos-aarch64.tar.gz" \
             | tar -xz -C third_party/slang
 
+      # Restore and save apart, so a later failing step still keeps a 40-minute build.
       - name: Dawn (cached)
         id: dawn
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: third_party/dawn-build
           key: dawn-macos-${{ hashFiles('tools/build-dawn.sh') }}
       - name: Dawn (build)
         if: steps.dawn.outputs.cache-hit != 'true'
         run: tools/build-dawn.sh && rm -rf third_party/dawn-src
+      - if: steps.dawn.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: third_party/dawn-build
+          key: ${{ steps.dawn.outputs.cache-primary-key }}
 
       # Not the Swift app: the Avalonia shell is the app (#24).
       - name: Configure and build
