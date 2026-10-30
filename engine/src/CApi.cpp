@@ -104,9 +104,10 @@ OrionStatus orion_engine_create(OrionEngine** out) {
         createError().clear();
         return ORION_OK;
     } catch (const std::exception& e) {
-        createError() = e.what();
+        // The copy can throw bad_alloc when create failed from OOM; it must not escape.
+        try { createError() = e.what(); } catch (...) {}
     } catch (...) {
-        createError() = "unknown error";
+        try { createError() = "unknown error"; } catch (...) {}
     }
     return ORION_ERR_INTERNAL;
 }
