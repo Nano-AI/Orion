@@ -1,5 +1,6 @@
-// The Dawn backend's textures (#375): upload, readback, and the platform's
-// share that lets a shell draw an RGBA8 result with no copy (Dawn.h).
+// The Dawn backend's textures (#375): upload, readback, the platform's share
+// that lets a shell draw an RGBA8 result with no copy (Dawn.h), and the staging
+// buffers of an asynchronous readback (#386).
 
 #include "gpu/Dawn.h"
 
@@ -73,6 +74,9 @@ struct DawnTexture final : Texture::Impl {
 
     void* raw() const noexcept override { return tex.Get(); }
     void* displayHandle() const noexcept override { return share ? share->handle() : nullptr; }
+    void* sharedHandle() const noexcept override { return share ? share->ntHandle() : nullptr; }
+    void beginShared() override { if (share) share->begin(); }
+    void endShared() override { if (share) share->end(); }
 };
 
 wgpu::TextureUsage usageFor(PixelFormat) {
@@ -83,7 +87,82 @@ wgpu::TextureUsage usageFor(PixelFormat) {
            wgpu::TextureUsage::RenderAttachment;
 }
 
+/// One of a Readback's staging buffers (#386): the copy is submitted and the
+/// map requested at `start`, and nothing waits for either until asked.
+struct DawnStaging final : Readback::Slot {
+    std::shared_ptr<Context> ctx;
+    wgpu::Buffer  buffer;
+    std::size_t   capacity = 0, row = 0, pitch = 0;
+    std::uint32_t height = 0;
+    wgpu::Future  future{};
+    bool pending = false, mapped = false, ok = false;
+
+    ~DawnStaging() override {
+        try { release(); } catch (...) {}   // the callback holds `this`: let it run first
+    }
+
+    void start(const Texture& t, std::uint32_t width, std::uint32_t h) override {
+        auto* d = dynamic_cast<const DawnTexture*>(&t.impl());
+        if (!d) throw std::runtime_error("a Metal texture was read back on a Dawn device");
+        if (width == 0 || h == 0) throw std::runtime_error("Dawn readback: empty");
+        ErrorScope scope(*ctx);
+        row    = width * d->bpp;
+        pitch  = (row + 255) / 256 * 256;   // a buffer copy's rows sit on 256 bytes
+        height = h;
+        if (pitch * h > capacity) {   // grows only: no allocation a frame
+            wgpu::BufferDescriptor bd{.usage = wgpu::BufferUsage::MapRead | wgpu::BufferUsage::CopyDst,
+                                      .size = pitch * h};
+            buffer   = ctx->device.CreateBuffer(&bd);
+            capacity = pitch * h;
+        }
+        wgpu::TexelCopyTextureInfo from{.texture = d->tex};
+        wgpu::TexelCopyBufferInfo to{.layout = {.bytesPerRow = static_cast<std::uint32_t>(pitch),
+                                                .rowsPerImage = h},
+                                     .buffer = buffer};
+        wgpu::Extent3D size{width, h, 1};
+        wgpu::CommandEncoder enc = ctx->device.CreateCommandEncoder();
+        enc.CopyTextureToBuffer(&from, &to, &size);
+        wgpu::CommandBuffer cmd = enc.Finish();
+        ctx->queue.Submit(1, &cmd);
+        future = buffer.MapAsync(wgpu::MapMode::Read, 0, pitch * h, wgpu::CallbackMode::WaitAnyOnly,
+                                 [this](wgpu::MapAsyncStatus st, wgpu::StringView) {
+                                     ok = st == wgpu::MapAsyncStatus::Success;
+                                 });
+        pending = true;
+        scope.check("Dawn readback");
+    }
+
+    bool landed(bool wait) override {
+        if (!pending) return mapped;
+        const auto st = ctx->instance.WaitAny(future, wait ? UINT64_MAX : 0);
+        if (st == wgpu::WaitStatus::TimedOut) return false;
+        pending = false;
+        if (st != wgpu::WaitStatus::Success || !ok) throw std::runtime_error("Dawn readback: map failed");
+        mapped = true;
+        return true;
+    }
+
+    void copy(void* dst, std::size_t bytesPerRow) const override {
+        const auto* src = static_cast<const std::uint8_t*>(buffer.GetConstMappedRange(0, pitch * height));
+        if (!src) throw std::runtime_error("Dawn readback: not mapped");
+        for (std::uint32_t r = 0; r < height; ++r)
+            std::memcpy(static_cast<std::uint8_t*>(dst) + r * bytesPerRow, src + r * pitch, row);
+    }
+
+    void release() override {
+        if (pending) ctx->instance.WaitAny(future, UINT64_MAX);   // a map cannot be cancelled under us
+        if (pending || mapped) buffer.Unmap();
+        pending = mapped = false;
+    }
+};
+
 }  // namespace
+
+std::unique_ptr<Readback::Slot> makeStaging(std::shared_ptr<Context> ctx) {
+    auto s = std::make_unique<DawnStaging>();
+    s->ctx = std::move(ctx);
+    return s;
+}
 
 std::unique_ptr<Texture::Impl> makeTexture(std::shared_ptr<Context> ctx, std::uint32_t width,
                                            std::uint32_t height, PixelFormat format) {
@@ -102,6 +181,19 @@ std::unique_ptr<Texture::Impl> makeTexture(std::shared_ptr<Context> ctx, std::ui
     }
     scope.check("Dawn texture allocation");
     if (!t->tex) throw std::runtime_error("Dawn texture allocation failed");
+    t->view = t->tex.CreateView();
+    return t;
+}
+
+std::unique_ptr<Texture::Impl> makeSharedTexture(std::shared_ptr<Context> ctx, std::uint32_t width,
+                                                 std::uint32_t height) {
+    auto t = std::make_unique<DawnTexture>();
+    t->ctx = std::move(ctx);
+    ErrorScope scope(*t->ctx);
+    t->bpp = 4;
+    t->share = shareForInterop(*t->ctx, width, height, usageFor(PixelFormat::RGBA8Unorm), t->tex);
+    scope.check("Dawn shared texture");
+    if (!t->share || !t->tex) return nullptr;
     t->view = t->tex.CreateView();
     return t;
 }

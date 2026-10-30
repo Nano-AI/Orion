@@ -44,6 +44,19 @@ public static unsafe partial class Native {
     [LibraryImport(Lib)]
     public static partial int shim_read(nint shim, int which, byte* dst, int capacity, out int w, out int h);
 
+    /// The canvas's copy of a render, `level` halvings down, queued on the GPU (#386). Its ticket; 0 = nothing to copy.
+    [LibraryImport(Lib)]
+    public static partial ulong shim_copy_begin(nint shim, int which, int level, out int w, out int h);
+
+    /// Windows: the copy into the D3D11 texture ANGLE imports by NT handle (#386). 0 = none here; orion_last_error says why.
+    [LibraryImport(Lib)]
+    public static partial int shim_share(nint shim, int which, int level, out nint handle, out int generation, out int w, out int h);
+
+    /// The newest copy that has landed: dst null asks its size, dst copies it. Its ticket; 0 = none, or no room;
+    /// -1 = a copy failed and is gone (orion_last_error).
+    [LibraryImport(Lib)]
+    public static partial long shim_copy_take(nint shim, int wait, byte* dst, int rowBytes, int capacity, out int w, out int h);
+
     // native/present.mm: the picture handed to Avalonia on the GPU (SharedPicture).
     [LibraryImport(Lib)]
     public static partial nint present_create();

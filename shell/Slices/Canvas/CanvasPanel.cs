@@ -24,6 +24,7 @@ public sealed class CanvasPanel : Panel {
     readonly StackPanel _state;
     readonly Drawn _picture;
     readonly SharedPicture _shared = new();   // under _picture: the canvas draws over it
+    readonly CopiedPicture _copied = new();   // where _shared does not hold the picture (#386)
     readonly Halvings _shown = new(), _original = new();
     int _version;   // the shown bitmap is reused render after render: same object, new pixels
     Point? _anchor;
@@ -45,6 +46,9 @@ public sealed class CanvasPanel : Panel {
                                   Children = { _note, _choices } };
         Children.AddRange([_shared, _picture, _garden, _welcome, _state]);
         _shared.Arrived += _picture.InvalidateVisual;
+        _copied.Arrived += () => { _version++; _picture.InvalidateVisual(); };
+        // Before the first draw says how wide the picture is: the first copy is not the whole render.
+        SizeChanged += (_, e) => _copied.Seed(e.NewSize.Width * (TopLevel.GetTopLevel(this)?.RenderScaling ?? 1));
         CanvasState.Changed += Refresh;
         CompareState.Moved += _picture.InvalidateVisual;   // a divider drag repaints the picture and nothing else
         EngineModel.Shared.Shown.Changed += () => { _version++; Refresh(); };   // the picture: only through this seam
@@ -128,7 +132,7 @@ public sealed class CanvasPanel : Panel {
         var dest = new Rect(whole.X + uv.X * whole.Width, whole.Y + uv.Y * whole.Height,
                             uv.Width * whole.Width, uv.Height * whole.Height);
         double pixels = dest.Width * scaling;   // the shown picture's width on screen, in device pixels
-        // The render straight from the GPU when the shared surface holds it (#317), else the CPU copy.
+        // The render straight from the GPU when the shared surface holds it (#317), else its screen-sized copy (#386).
         // ponytail: the crop tool's turned clip takes the CPU copy (CompositionVisual.Clip is internal); a mask over the visual lifts that.
         bool shared = _shared.Place(CropEdit.Previewing ? null : engine.Shown, dest, mode, pixels);
 
@@ -141,8 +145,9 @@ public sealed class CanvasPanel : Panel {
                 var outside = new CombinedGeometry(GeometryCombineMode.Exclude, new RectangleGeometry(whole), new RectangleGeometry(dest));
                 using (c.PushGeometryClip(outside)) c.DrawImage(under, new Rect(under.Size), whole);
             }
-            if (!shared && engine.Shown.Bitmap is { } picture) {
-                var shown = _shown.For(picture, _version, pixels);
+            if (!shared && (_copied.For(engine.Shown, pixels, engine.Interacting) ?? engine.Shown.Bitmap) is { } picture) {
+                // A copy taken in this very draw is new pixels in the same bitmap: its version too.
+                var shown = _shown.For(picture, HashCode.Combine(_version, _copied.Version), pixels);
                 c.DrawImage(shown, new Rect(shown.Size), dest);
             }
             if (CompareState.Showing && CompareState.Original is { } original) {

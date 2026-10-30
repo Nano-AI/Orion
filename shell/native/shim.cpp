@@ -360,21 +360,68 @@ int shim_render_region(Shim* s, float x, float y, float w, float h, int out_w, i
     return st == ORION_OK ? 3 : st == ORION_ERR_BAD_ARG ? 0 : -1;
 }
 
+// shim_render's answer (1 preview, 2 full, 3 region) in the facade's numbering
+// (0 full, 1 preview, 2 region), -1 for nothing rendered (0) or a failed region
+// (-1). Two numberings on purpose: the shim's 0 is "no picture" (Graph.None in
+// C#), which the facade's 0 cannot also mean.
+static int facade_graph(int which) { return which == 1 ? 1 : which == 3 ? 2 : which == 2 ? 0 : -1; }
+
 // Copies the last render into `dst` as RGBA8. Call with dst == NULL to get the
 // size. `which` is what shim_render returned. Through the facade's readback,
 // which every backend has (#376); present.mm is the zero-copy path on macOS.
 int shim_read(Shim* s, int which, uint8_t* dst, int capacity, int* w, int* h) {
-    // shim_render's answer (1 preview, 2 full, 3 region) in the facade's numbering
-    // (0 full, 1 preview, 2 region). Two numberings on purpose: the shim's 0 is
-    // "no picture" (Graph.None in C#), which the facade's 0 cannot also mean.
-    if (which < 1 || which > 3) return 0;   // nothing rendered (0), or a failed region (-1)
-    const int graph = which == 1 ? 1 : which == 3 ? 2 : 0;
+    const int graph = facade_graph(which);
+    if (graph < 0) return 0;
     uint32_t rw = 0, rh = 0;
     if (orion_engine_read_pixels(s->engine, graph, nullptr, 0, &rw, &rh) != ORION_OK || !rw || !rh) return 0;
     *w = int(rw);
     *h = int(rh);
     if (!dst) return 1;
     return orion_engine_read_pixels(s->engine, graph, dst, uint32_t(std::max(capacity, 0)), &rw, &rh) == ORION_OK;
+}
+
+// The canvas's copy of the last render of `which`, `level` halvings down,
+// queued on the GPU and not waited for (orion_engine_display_begin, #386).
+// Its ticket, 0 when there is nothing to copy.
+uint64_t shim_copy_begin(Shim* s, int which, int level, int* w, int* h) {
+    const int graph = facade_graph(which);
+    uint32_t rw = 0, rh = 0;
+    uint64_t ticket = 0;
+    if (graph < 0 || orion_engine_display_begin(s->engine, graph, level, &rw, &rh, &ticket) != ORION_OK) return 0;
+    *w = int(rw);
+    *h = int(rh);
+    return ticket;
+}
+
+// The newest copy that has landed, as orion_engine_display_take: dst NULL asks
+// its size, dst copies it. Its ticket; 0 when none has landed or dst had no
+// room; -1 when a copy failed (a lost device, a refused map): it is gone, and
+// nothing is in flight for it any more. orion_last_error says why.
+int64_t shim_copy_take(Shim* s, int wait, uint8_t* dst, int row_bytes, int capacity, int* w, int* h) {
+    uint32_t rw = 0, rh = 0;
+    uint64_t ticket = 0;
+    if (row_bytes < 0 || capacity < 0) return 0;
+    const OrionStatus st = orion_engine_display_take(s->engine, wait, dst, uint32_t(row_bytes), uint32_t(capacity),
+                                                     &rw, &rh, &ticket);
+    if (st == ORION_ERR_INTERNAL) return -1;
+    if (st != ORION_OK) return 0;
+    *w = int(rw);
+    *h = int(rh);
+    return int64_t(ticket);
+}
+
+// Windows (#386): the last render of `which`, `level` halvings down, into the
+// D3D11 texture Avalonia's ANGLE imports by NT handle (orion_engine_display_share).
+// 1 with the handle, its generation (new whenever the texture is: import it
+// again) and size; 0 where there is none, and orion_last_error says why.
+int shim_share(Shim* s, int which, int level, void** handle, int* generation, int* w, int* h) {
+    const int graph = facade_graph(which);
+    uint32_t rw = 0, rh = 0;
+    if (graph < 0 || orion_engine_display_share(s->engine, graph, level, handle, generation, &rw, &rh) != ORION_OK)
+        return 0;
+    *w = int(rw);
+    *h = int(rh);
+    return 1;
 }
 
 // The camera's embedded JPEG, for the filmstrip.

@@ -176,20 +176,43 @@ sealed partial class App {
         Console.WriteLine($"bench memory after browsing back and forth: {Memory()}, peak footprint {peak:0} MB · {Kept}");
 
         float start = engine.Get("exposure_ev");
-        foreach (bool preview in new[] { true, false }) {
-            var renders = new List<double>();
-            var copies = new List<double>();
-            if (preview) engine.BeginInteraction();
-            for (int i = 0; i < 60; i++) {
-                engine.Set("exposure_ev", -1 + 2 * i / 59f);
-                if (i >= 5) { renders.Add(engine.Last.Render); copies.Add(engine.Last.Copy); }
-            }
-            engine.EndInteraction();
-            renders.Sort(); copies.Sort();
-            Console.WriteLine($"bench {(preview ? "preview" : "full   ")}: engine median {renders[renders.Count / 2]:0.0} ms " +
-                              $"(p90 {renders[renders.Count * 9 / 10]:0.0}), copy median {copies[copies.Count / 2]:0.0} ms");
-        }
+        foreach (bool preview in new[] { true, false }) Drag(engine, preview);
         engine.Set("exposure_ev", start);
+    }
+
+    /// 60 ticks of an exposure drag, each followed by the frame the canvas draws
+    /// (a forced headless render tick): the engine's time, this thread's time
+    /// copying the picture, process CPU (all threads) and how many renders the
+    /// drawn picture trails the engine (#386).
+    static void Drag(EngineModel engine, bool preview) {
+        var renders = new List<double>();
+        var copies = new List<double>();
+        int behind = 0, behindMax = 0;
+        TimeSpan cpu0 = default;
+        if (preview) engine.BeginInteraction();
+        for (int i = 0; i < 60; i++) {
+            if (i == 5) cpu0 = Process.GetCurrentProcess().TotalProcessorTime;
+            double copied = CanvasSlice.CopiedPicture.Milliseconds;
+            engine.Set("exposure_ev", -1 + 2 * i / 59f);
+            Dispatcher.UIThread.RunJobs();
+            Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+            if (i < 5) continue;
+            renders.Add(engine.Last.Render);
+            copies.Add(engine.Last.Copy + CanvasSlice.CopiedPicture.Milliseconds - copied);
+            behind += CanvasSlice.CopiedPicture.Behind;
+            behindMax = Math.Max(behindMax, CanvasSlice.CopiedPicture.Behind);
+        }
+        double cpu = (Process.GetCurrentProcess().TotalProcessorTime - cpu0).TotalMilliseconds;
+        var shown = engine.Session?.Size(engine.Shown.Graph);
+        string Shown = $"{engine.Shown.Graph} {shown?.Width}×{shown?.Height}";
+        engine.EndInteraction();
+        renders.Sort(); copies.Sort();
+        int n = renders.Count;
+        Console.WriteLine($"bench {(preview ? "preview" : "full   ")}: {Shown} drawn at {CanvasSlice.CopiedPicture.Size} · engine median {renders[n / 2]:0.0} ms " +
+                          $"(p90 {renders[n * 9 / 10]:0.0}), copy median {copies[n / 2]:0.00} ms (p90 {copies[n * 9 / 10]:0.00}) · " +
+                          $"process CPU {cpu / n:0.0} ms a frame · canvas behind the engine: mean {(double)behind / n:0.0}, " +
+                          $"max {behindMax} renders · copies begun {CanvasSlice.CopiedPicture.Begun}, taken {CanvasSlice.CopiedPicture.Taken}");
     }
 
     [DllImport("libc")]

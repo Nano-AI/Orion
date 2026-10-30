@@ -122,6 +122,7 @@ int main() {
     testLinearDngBaselineExposure();
     testLinearDngEngineOpen();
     testFacadeSessionSeams();
+    testDisplayCopyGpu();
     testMergeExposureMaths();
     testMergeReconstruction();
     testMergeDeghostAndCoverage();

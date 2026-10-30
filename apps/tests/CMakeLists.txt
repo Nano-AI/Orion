@@ -19,6 +19,7 @@ add_executable(orion-tests
     tests_linear.cpp
     tests_effects.cpp
     tests_display.cpp
+    tests_display_copy.cpp
     tests_highlights.cpp
     tests_fusion.cpp
     tests_fusion_wiring.cpp
@@ -54,6 +55,8 @@ if(WIN32)
     # The 8 MB main-thread stack macOS and Linux give: Windows' 1 MB overflows
     # on entry to testDngRoundTrip, whose frames live on the stack (#376).
     target_link_options(orion-tests PRIVATE /STACK:8388608)
+    # tests_display_copy.cpp reads the shared texture back as ANGLE would (#386).
+    target_link_libraries(orion-tests PRIVATE d3d11 dxgi)
 endif()
 
 if(APPLE)

@@ -40,6 +40,12 @@ public:
     static std::unique_ptr<Texture> create(Device&, std::uint32_t width,
                                            std::uint32_t height, PixelFormat,
                                            bool linear = false);
+    /// An RGBA8 texture another graphics API on this machine opens by handle
+    /// (#386): on Windows a D3D11 texture behind a DXGI NT handle and a keyed
+    /// mutex, which Avalonia's ANGLE imports. Null where there is none: macOS
+    /// shares every RGBA8 texture through an IOSurface instead, Linux not yet.
+    static std::unique_ptr<Texture> createShared(Device&, std::uint32_t width,
+                                                 std::uint32_t height);
     ~Texture();
     Texture(const Texture&)            = delete;
     Texture& operator=(const Texture&) = delete;
@@ -71,6 +77,13 @@ public:
     /// IOSurface so a Metal view can alias it (#375); any other format answers
     /// null and a shell falls back to `download`.
     [[nodiscard]] void* displayHandle() const noexcept;
+
+    /// A `createShared` texture's handle (a Windows HANDLE); null for any other.
+    [[nodiscard]] void* sharedHandle() const noexcept;
+    /// Around this device's use of a `createShared` texture: between them the
+    /// keyed mutex is Orion's, outside them the other API's. No-ops on any other.
+    void beginShared();
+    void endShared();
 
     struct Impl;   // backend-private
     [[nodiscard]] Impl& impl() const noexcept { return *impl_; }
@@ -162,6 +175,10 @@ public:
 
     void commitAndWait();
 
+    /// Submits and returns at once: what is committed later on this device runs
+    /// after it, a `Readback` included (#386). Metal waits anyway.
+    void commit();
+
     /// GPU-side duration of the committed work. Valid after commitAndWait().
     /// On Dawn, the wall time from submit to completion, which includes the
     /// wait's own latency (no timestamp queries yet).
@@ -171,6 +188,53 @@ public:
 
 private:
     std::unique_ptr<Impl> impl_;
+};
+
+/// A texture copied to the CPU without waiting for it (#386), for a canvas that
+/// cannot draw the texture itself. `begin` queues the copy behind everything
+/// committed before it and returns; `newest` names the newest copy that has
+/// landed, `take` copies it out. Three copies may be in flight; a fourth
+/// `begin` reuses a landed one nobody took, or waits for the oldest.
+/// On Metal `begin` copies at once: there the window draws the texture itself
+/// (present.mm), and only tests and the headless shell read back.
+class Readback {
+public:
+    struct Slot;    // backend-private: one staging buffer (Backend.h)
+    struct Entry;
+
+    explicit Readback(Device&);
+    /// These buffers instead of the device's: a test's, one that fails.
+    explicit Readback(std::vector<std::unique_ptr<Slot>> slots);
+    ~Readback();
+    Readback(const Readback&)            = delete;
+    Readback& operator=(const Readback&) = delete;
+
+    /// Queues a copy of `t`'s top-left width x height. Returns its ticket, from 1.
+    std::uint64_t begin(const Texture& t, std::uint32_t width, std::uint32_t height);
+
+    /// The newest copy that has landed since the last `take`: its ticket and
+    /// size, or 0 when none has. Held for `take`; older landed copies are
+    /// dropped. `wait` first waits for the last begun copy to land. A copy
+    /// that failed (a lost device, a map refused) is freed and thrown, once:
+    /// the next call carries on without it.
+    std::uint64_t newest(bool wait, std::uint32_t& width, std::uint32_t& height);
+
+    /// What `newest` last named and nobody took yet, without looking again.
+    std::uint64_t held(std::uint32_t& width, std::uint32_t& height) const noexcept;
+
+    /// Copies the copy `newest` named into rows of `bytesPerRow` and frees it.
+    /// False when `newest` named none (or a `begin` since reused it).
+    bool take(void* dst, std::size_t bytesPerRow);
+
+    /// Frees every buffer and whatever is in flight; tickets keep counting, so a
+    /// copy begun after it is never mistaken for one from before (#386).
+    void release();
+
+private:
+    Device*       device_ = nullptr;   // remakes the buffers after `release`; null for given slots
+    std::vector<std::unique_ptr<Entry>> entries_;
+    Entry*        held_    = nullptr;   // what `newest` named
+    std::uint64_t tickets_ = 0, taken_ = 0;
 };
 
 }  // namespace orion::gpu

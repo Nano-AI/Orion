@@ -29,6 +29,9 @@ struct Texture::Impl {
                           std::uint32_t height) const = 0;
     virtual void* raw() const noexcept = 0;
     virtual void* displayHandle() const noexcept = 0;
+    virtual void* sharedHandle() const noexcept { return nullptr; }
+    virtual void beginShared() {}
+    virtual void endShared() {}
 };
 
 struct Library::Impl {
@@ -50,6 +53,8 @@ struct CommandBuffer::Impl {
                           const void* params, std::size_t paramBytes,
                           std::uint32_t width, std::uint32_t height) = 0;
     virtual void commitAndWait() = 0;
+    /// Without the wait where the backend can (#386); Metal's readback is synchronous.
+    virtual void commit() { commitAndWait(); }
     double gpuMs = 0.0;
 };
 
@@ -64,6 +69,23 @@ struct Device::Impl {
     virtual std::unique_ptr<Library::Impl> library(const std::string& path) = 0;
     virtual std::unique_ptr<Kernel::Impl>  kernel(Library&, const std::string& entryPoint) = 0;
     virtual std::unique_ptr<CommandBuffer::Impl> commandBuffer() = 0;
+    /// A staging buffer for `Readback`, or null for a synchronous copy (Metal).
+    virtual std::unique_ptr<Readback::Slot> staging() { return nullptr; }
+    /// Texture::createShared's, or null where the backend has none (Metal).
+    virtual std::unique_ptr<Texture::Impl> sharedTexture(std::uint32_t, std::uint32_t) { return nullptr; }
+};
+
+/// One staging buffer of a `Readback` (#386).
+struct Readback::Slot {
+    virtual ~Slot() = default;
+    /// Queues the copy of `t`'s top-left width x height into this buffer.
+    virtual void start(const Texture& t, std::uint32_t width, std::uint32_t height) = 0;
+    /// Whether that copy has landed; `wait` blocks until it has.
+    virtual bool landed(bool wait) = 0;
+    /// The landed copy into rows of `bytesPerRow`.
+    virtual void copy(void* dst, std::size_t bytesPerRow) const = 0;
+    /// Done with it: free for the next `start`.
+    virtual void release() = 0;
 };
 
 std::unique_ptr<Device::Impl> makeMetalDevice();

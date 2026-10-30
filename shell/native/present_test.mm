@@ -8,7 +8,7 @@
 //   3. a second present waits on the GPU for the consumer: the producer stays
 //      unsignalled and the surface keeps frame 1 until the consumer signals
 //   4. the engine's next render waits for that pending present to read
-//   5. CPU per frame: present_frame against shim_read
+//   5. CPU per frame: present_frame against shim_read and shim_copy (#386)
 #import <Foundation/Foundation.h>
 #import <IOSurface/IOSurfaceObjC.h>
 #import <Metal/Metal.h>
@@ -29,6 +29,8 @@ void shim_close(Shim*);
 int shim_set(Shim*, const char*, int, float);
 int shim_render(Shim*, int, double*);
 int shim_read(Shim*, int, uint8_t*, int, int*, int*);
+uint64_t shim_copy_begin(Shim*, int, int, int*, int*);
+int64_t shim_copy_take(Shim*, int, uint8_t*, int, int, int*, int*);
 Present* present_create(void);
 void present_destroy(Present*);
 void* present_producer(Present*);
@@ -159,10 +161,19 @@ int main(int argc, char** argv) {
         check(surfaceBytes(f1.io) == r2 && render(s, 1) != r2, "the surface holds frame 2, not the render made after it");
         release(f2);
 
-        // 5. CPU per frame, this thread: hand-off against readback.
+        // 5. The canvas's copy where there is no hand-off (#386), and CPU per frame,
+        // this thread: hand-off against readback against that copy.
+        {
+            int w = 0, h = 0;
+            const uint64_t t = shim_copy_begin(s, 2, 0, &w, &h);
+            Bytes copy(size_t(w) * h * 4);
+            check(t != 0 && shim_copy_take(s, 1, copy.data(), w * 4, int(copy.size()), &w, &h) == int64_t(t) &&
+                      copy == render(s, 2),
+                  "the display copy at level 0 is the CPU readback byte for byte");
+        }
         std::printf("      CPU per frame on the calling thread, mean of 30 (wall in brackets):\n");
         for (auto [which, level, name] : {std::tuple{1, 0, "preview"}, {2, 0, "full"}, {2, 2, "full at fit (level 2)"}}) {
-            double pc = 0, pw = 0, rc = 0, rw = 0;
+            double pc = 0, pw = 0, rc = 0, rw = 0, cc = 0, cw = 0;
             Bytes buf = render(s, which);
             int w, h;
             for (int i = 0; i < 30; i++) {
@@ -173,8 +184,13 @@ int main(int argc, char** argv) {
                 c0 = threadMs(); t0 = std::chrono::steady_clock::now();
                 shim_read(s, which, buf.data(), int(buf.size()), &w, &h);
                 rc += threadMs() - c0; rw += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+                c0 = threadMs(); t0 = std::chrono::steady_clock::now();   // begun and waited for: the copy at rest
+                shim_copy_begin(s, which, level, &w, &h);
+                shim_copy_take(s, 1, buf.data(), w * 4, int(buf.size()), &w, &h);
+                cc += threadMs() - c0; cw += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
             }
-            std::printf("      %-22s present_frame %.3f ms (%.3f)   shim_read %.3f ms (%.3f)\n", name, pc / 30, pw / 30, rc / 30, rw / 30);
+            std::printf("      %-22s present_frame %.3f ms (%.3f)   shim_read %.3f ms (%.3f)   shim_copy %.3f ms (%.3f)\n",
+                        name, pc / 30, pw / 30, rc / 30, rw / 30, cc / 30, cw / 30);
         }
         present_destroy(p);
         shim_close(s);

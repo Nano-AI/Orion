@@ -355,6 +355,12 @@ void Engine::releaseRenderMemory() noexcept {
     if (develop_) develop_->graph().releaseOutputs();
     if (preview_) preview_->graph().releaseOutputs();
     if (region_)  region_->graph().releaseOutputs();
+    if (display_) display_->release();   // the kernel stays compiled
+}
+
+pipe::DisplayCopy& Engine::displayCopy() {
+    if (!display_) display_ = std::make_unique<pipe::DisplayCopy>(*device_, res::shaderDir());
+    return *display_;
 }
 
 void Engine::setBrushStroke(int component, const float* xy,

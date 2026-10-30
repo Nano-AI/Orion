@@ -82,6 +82,7 @@ std::unique_ptr<Texture::Impl> makeTexture(std::shared_ptr<Context>, std::uint32
 std::unique_ptr<Library::Impl> makeLibrary(std::shared_ptr<Context>, const std::string& path);
 std::unique_ptr<Kernel::Impl>  makeKernel(Library&, const std::string& entryPoint);
 std::unique_ptr<CommandBuffer::Impl> makeCommandBuffer(std::shared_ptr<Context>);
+std::unique_ptr<Readback::Slot> makeStaging(std::shared_ptr<Context>);
 
 // ── The platform half ──────────────────────────────────────────────────────
 
@@ -92,6 +93,8 @@ struct Platform {
     /// Bounds checks on every texture access unless ORION_DAWN_ROBUST says
     /// otherwise. Off on Metal only, where the engine was measured (#375).
     bool robust;
+    /// Asked for where the adapter has them: what `shareForInterop` needs (#386).
+    std::vector<wgpu::FeatureName> optional = {};
 };
 Platform platform();
 
@@ -102,6 +105,10 @@ void describe(Context& ctx, const wgpu::Limits& limits);
 struct DisplayShare {
     virtual ~DisplayShare() = default;
     virtual void* handle() const noexcept = 0;
+    /// `shareForInterop`'s: the handle another API opens, and Dawn's turn at it.
+    virtual void* ntHandle() const noexcept { return nullptr; }
+    virtual void begin() {}
+    virtual void end() {}
 };
 
 /// Makes `tex` as a shareable RGBA8 texture and returns its share, or returns
@@ -110,5 +117,14 @@ struct DisplayShare {
 std::unique_ptr<DisplayShare> shareForDisplay(Context& ctx, std::uint32_t width,
                                               std::uint32_t height, wgpu::TextureUsage usage,
                                               wgpu::Texture& tex);
+
+/// Makes `tex` an RGBA8 texture another API opens by handle (Texture::createShared):
+/// a D3D11 texture with an NT handle and a keyed mutex on Windows (#386). Null,
+/// and `tex` left alone, where the platform has none or the device lacks the features.
+std::unique_ptr<DisplayShare> shareForInterop(Context& ctx, std::uint32_t width,
+                                              std::uint32_t height, wgpu::TextureUsage usage,
+                                              wgpu::Texture& tex);
+std::unique_ptr<Texture::Impl> makeSharedTexture(std::shared_ptr<Context>, std::uint32_t width,
+                                                 std::uint32_t height);
 
 }  // namespace orion::gpu::dawn

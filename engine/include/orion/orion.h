@@ -615,10 +615,49 @@ void* orion_engine_preview_texture(const OrionEngine* engine);
  * region. dst NULL asks only the size; capacity is in bytes. The CPU copy a
  * shell makes where it has no texture it can draw: headless, a renderer with
  * no interop, and Windows and Linux, which have no zero-copy hand-off yet
- * (decision #376). The wide RGBA16F output is converted, clamped to 0..1. */
+ * (decision #376). The wide RGBA16F output is converted, clamped to 0..1, on
+ * the GPU (#386). Waits for the copy: a canvas takes orion_engine_display_*. */
 OrionStatus orion_engine_read_pixels(const OrionEngine* engine, int graph,
                                      uint8_t* dst, uint32_t capacity,
                                      uint32_t* out_width, uint32_t* out_height);
+
+/* The display copy (decision #386): the canvas's CPU copy of a render, at the
+ * size it shows, without waiting for the GPU. Begin queues one behind the
+ * last render of `graph` (as orion_engine_read_pixels) and returns at once
+ * with its size and ticket (1, 2, ... per engine, still counting after
+ * release_render_memory, which drops any copy in flight). On the GPU it is `level` 2x2 halvings of the picture,
+ * the size present.mm's chain gives: level 0 the picture as it is, level k
+ * one halving rounding up then k - 1 rounding down, clamped where a side
+ * would reach 1, as RGBA8. Three may be in flight; a fourth waits for the
+ * oldest. BAD_ARG: a NULL pointer, a graph outside 0-2 or not rendered,
+ * a negative level. */
+OrionStatus orion_engine_display_begin(OrionEngine* engine, int graph, int level,
+                                       uint32_t* out_width, uint32_t* out_height,
+                                       uint64_t* out_ticket);
+
+/* The newest begun copy that has landed and was not taken: its size and
+ * ticket, out_ticket 0 when none has. dst NULL only asks, and keeps it;
+ * dst copies that same one, rows of row_bytes, and takes it, dropping any
+ * older (a canvas shows the newest and never queues). wait != 0 first waits
+ * for the last begun copy to land. BAD_ARG: a NULL out pointer, or no room
+ * (row_bytes < width * 4, capacity short), in which case it stays kept. */
+OrionStatus orion_engine_display_take(OrionEngine* engine, int wait, uint8_t* dst,
+                                      uint32_t row_bytes, uint32_t capacity,
+                                      uint32_t* out_width, uint32_t* out_height,
+                                      uint64_t* out_ticket);
+
+/* Windows only (decision #386): the same copy, not read back but written into
+ * a D3D11 texture behind a DXGI NT handle and a keyed mutex, which a
+ * compositor on the same adapter opens (Avalonia's ANGLE, D3D11TextureNtHandle)
+ * and reads while holding key 0, as Orion writes it holding key 0. Queued
+ * behind the render; the call itself waits only while the reader holds the
+ * mutex. out_handle is the engine's (never close it), valid until a later
+ * call answers a new out_generation: import that one again. INTERNAL, with
+ * orion_last_error saying why, where there is no such texture (macOS, Linux,
+ * an adapter without the feature): read back instead. BAD_ARG as
+ * orion_engine_display_begin. */
+OrionStatus orion_engine_display_share(OrionEngine* engine, int graph, int level, void** out_handle,
+                                       int* out_generation, uint32_t* out_width, uint32_t* out_height);
 
 /* The engine's id<MTLDevice>, so the view can share it. */
 void* orion_engine_metal_device(const OrionEngine* engine);

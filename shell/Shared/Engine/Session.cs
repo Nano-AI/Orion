@@ -127,6 +127,36 @@ public sealed partial class Session : IDisposable {
         }
     }
 
+    /// Queues the canvas's copy of the last render of `graph`, `level` halvings
+    /// down, on the GPU, and does not wait for it (#386). Its ticket; 0 when there
+    /// is nothing to copy.
+    public ulong BeginCopy(Graph graph, int level) =>
+        graph is Graph.None or Graph.Failed ? 0 : Native.shim_copy_begin(Shim, (int)graph, level, out _, out _);
+
+    /// The newest copy that has landed, written straight into `bitmap`. A copy of
+    /// another size goes into a new bitmap, which replaces (and disposes) the old
+    /// one only once it holds the copy. `wait`: for the last one begun. Its
+    /// ticket; 0 when none has landed; -1 when a copy failed (LastError).
+    public unsafe long TakeCopy(bool wait, ref WriteableBitmap? bitmap) {
+        long asked = Native.shim_copy_take(Shim, wait ? 1 : 0, null, 0, 0, out int w, out int h);
+        if (asked <= 0) return asked;
+        var into = bitmap?.PixelSize == new PixelSize(w, h) ? bitmap
+                 : new WriteableBitmap(new PixelSize(w, h), new Vector(96, 96), PixelFormat.Rgba8888, AlphaFormat.Opaque);
+        long ticket;
+        using (var fb = into.Lock())
+            ticket = Native.shim_copy_take(_shim, 0, (byte*)fb.Address, fb.RowBytes, fb.RowBytes * h, out _, out _);
+        if (into == bitmap) return ticket;
+        if (ticket <= 0) { into.Dispose(); return ticket; }
+        bitmap?.Dispose();
+        bitmap = into;
+        return ticket;
+    }
+
+    /// Windows: the last render of `graph`, `level` halvings down, into the D3D11
+    /// texture SharedPicture's ANGLE import reads (#386). 0 where there is none.
+    public int Share(Graph graph, int level, out nint handle, out int generation, out int w, out int h) =>
+        Native.shim_share(Shim, (int)graph, level, out handle, out generation, out w, out h);
+
     /// The last render of `graph` as tightly packed RGBA bytes, with no bitmap
     /// and so no Avalonia platform: what `Orion --agent` measures and crops.
     public unsafe byte[]? Rgba(Graph graph, out int w, out int h) {
