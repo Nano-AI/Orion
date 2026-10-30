@@ -50,6 +50,11 @@ target_include_directories(orion-tests PRIVATE ${CMAKE_SOURCE_DIR}/engine/src ${
 target_compile_definitions(orion-tests PRIVATE ORION_SHADER_DIR="${ORION_SHADER_DIR}"
             ORION_DATA_DIR="${CMAKE_SOURCE_DIR}/data")
 target_link_libraries(orion-tests PRIVATE Orion::Engine)
+if(WIN32)
+    # The 8 MB main-thread stack macOS and Linux give: Windows' 1 MB overflows
+    # on entry to testDngRoundTrip, whose frames live on the stack (#376).
+    target_link_options(orion-tests PRIVATE /STACK:8388608)
+endif()
 
 if(APPLE)
     # The export tests read files back with ImageIO, the second reader on purpose.
