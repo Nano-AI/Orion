@@ -84,8 +84,8 @@ static partial class SelfTest {
               && StackSheet.Ineligibility([C("B"), C("A")]) == "These photos come from different cameras: A, B."
               && StackSheet.Ineligibility([C("A"), C("A"), C("")]) == null, "the stack refuses one frame or two cameras");
         Check(Commands.Find("stack") is { Built: true, Title: "Stack photos…" }, "\"stack\" is a registered, built command");
-        Check(StackSheet.AutoRejection(2) == "None" && StackSheet.AutoRejection(6) == "Percentile"
-              && StackSheet.AutoRejection(7) == "Winsorized" && StackSheet.AutoRejection(21) == "Linear fit",
+        Check(StackSheet.AutoRejection(3) == "None" && StackSheet.AutoRejection(4) == "Winsorized"
+              && StackSheet.AutoRejection(20) == "Winsorized" && StackSheet.AutoRejection(21) == "Linear fit",
               "Auto names what the engine picks for the count (Rejection.cpp autoRejection)");
         Check(StackCalibration.Count(3, 5) == "3 darks · 5 flats" && StackCalibration.Count(1, 0) == "1 dark"
               && StackCalibration.Count(0, 1) == "1 flat" && StackCalibration.Count(0, 0) == "none",

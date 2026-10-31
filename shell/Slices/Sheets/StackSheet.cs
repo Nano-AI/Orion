@@ -191,5 +191,5 @@ public sealed class StackSheet : Border {
             ? Stack.Mode.Stars : Stack.Mode.Noise;
 
     /// What the engine's Auto picks for `frames` (engine/src/stack/Rejection.cpp autoRejection).
-    internal static string AutoRejection(int frames) => Rejections[frames < 3 ? 0 : frames <= 6 ? 1 : frames <= 20 ? 3 : 4];
+    internal static string AutoRejection(int frames) => Rejections[frames <= 3 ? 0 : frames <= 20 ? 3 : 4];
 }

@@ -49,8 +49,9 @@ void testStackRejection() {
     section("stack: automatic method by frame count");
     using orion::stack::autoRejection;
     CHECK(autoRejection(2)  == Rejection::None);
-    CHECK(autoRejection(3)  == Rejection::Percentile);
-    CHECK(autoRejection(6)  == Rejection::Percentile);
+    CHECK(autoRejection(3)  == Rejection::None);
+    CHECK(autoRejection(4)  == Rejection::Winsorized);
+    CHECK(autoRejection(6)  == Rejection::Winsorized);
     CHECK(autoRejection(7)  == Rejection::Winsorized);
     CHECK(autoRejection(9)  == Rejection::Winsorized);
     CHECK(autoRejection(10) == Rejection::Winsorized);
@@ -87,6 +88,27 @@ void testStackRejection() {
     section("stack: one satellite among seven frames");
     checkNear(run(noisy(7, 7, 10.0f), Rejection::Winsorized), 1.0, 0.01, "winsorized drops a lone outlier at n=7");
     checkNear(run(noisy(7, 7, 10.0f), Rejection::Auto), 1.0, 0.01, "auto drops it too");
+
+    section("stack: a satellite on dark sky among four to six frames");
+    {
+        // Sky 0.02 with noise as large as the sky itself (a dark sky's sigma/mean ~ 1), a trail 0.5
+        // above it in one frame. Percentile's window is 20 % / 10 % of the median — narrower than
+        // the noise — so it rejects nothing it should and keeps the trail; winsorized does not.
+        for (int n = 4; n <= 6; ++n) {
+            int autoKept = 0, pctKept = 0;
+            for (unsigned seed = 1; seed <= 1000; ++seed) {
+                std::mt19937 rng(seed);
+                std::normal_distribution<float> g(0.02f, 0.02f);
+                std::vector<float> v(std::size_t(n), 0.0f);
+                for (float& x : v) x = g(rng);
+                v[0] = 0.52f;
+                autoKept += run(v, Rejection::Auto) - 0.02f > 0.05f;
+                pctKept += run(v, Rejection::Percentile) - 0.02f > 0.05f;
+            }
+            std::printf("    n=%d: trail kept by auto (winsorized) %d, by percentile %d, of 1000\n", n, autoKept, pctKept);
+            report(autoKept == 0, "auto rejects a dark-sky trail at n=" + std::to_string(n), std::to_string(autoKept));
+        }
+    }
 
     struct Case { Rejection r; int n; const char* name; };
     const Case cases[] = {{Rejection::Percentile, 5, "percentile"},

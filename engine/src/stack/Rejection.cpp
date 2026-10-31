@@ -117,10 +117,10 @@ Pass passFor(Rejection r) noexcept {
 }  // namespace
 
 Rejection autoRejection(int frames) noexcept {
-    if (frames < 3)  return Rejection::None;
-    if (frames <= 6) return Rejection::Percentile;
-    // Sigma is manual only: 3σ clipping cannot reject a lone outlier below ~10
-    // frames (σ = d·√(n−1)/n), where winsorizing can. research/stacking.md §2.
+    if (frames <= 3) return Rejection::None;
+    // Winsorized from 4: percentile's window (20 % / 10 % of the median) is narrower than a dark
+    // sky's noise and keeps a satellite trail on most pixels at 4-6 frames; winsorized rejects it
+    // (tests_stack_rejection). Percentile and sigma are manual only. research/stacking.md §2.
     return frames <= 20 ? Rejection::Winsorized : Rejection::LinearFit;
 }
 
