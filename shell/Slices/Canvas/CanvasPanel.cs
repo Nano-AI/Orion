@@ -22,6 +22,8 @@ public sealed class CanvasPanel : Panel {
                                        TextWrapping = TextWrapping.Wrap, MaxWidth = 360 };
     readonly StackPanel _choices = new() { Orientation = Orientation.Horizontal, Spacing = Space.Sm, HorizontalAlignment = HorizontalAlignment.Center };
     readonly StackPanel _state;
+    readonly BeltLoader _loader = new() { HorizontalAlignment = HorizontalAlignment.Center };
+    CanvasState.Scene? _was;   // the scene last shown, so arriving in one starts its motion once
     readonly Drawn _picture;
     readonly SharedPicture _shared = new();   // under _picture: the canvas draws over it
     readonly CopiedPicture _copied = new();   // where _shared does not hold the picture (#386)
@@ -43,7 +45,7 @@ public sealed class CanvasPanel : Panel {
                                                              ? "next-photo" : "previous-photo")) { Focusable = false },
         ]);
         _state = new StackPanel { Spacing = Space.Md, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-                                  Children = { _note, _choices } };
+                                  Children = { _loader, _note, _choices } };
         Children.AddRange([_shared, _picture, _garden, _welcome, _state]);
         _shared.Arrived += _picture.InvalidateVisual;
         _copied.Arrived += () => { _version++; _picture.InvalidateVisual(); };
@@ -55,6 +57,9 @@ public sealed class CanvasPanel : Panel {
         EngineModel.Shared.PropertyChanged += (_, e) => {
             if (e.PropertyName is nameof(EngineModel.Current) or nameof(EngineModel.Timing)) Refresh();
         };
+        // Over the welcome, the garden's nodes light up under the pointer.
+        PointerMoved += (_, e) => { if (_garden.IsVisible) _garden.Pointer = e.GetPosition(_garden); };
+        PointerExited += (_, _) => _garden.Pointer = null;
         if (CanvasState.Alone("canvas")) CanvasScenes.Canvas();
         Refresh();
     }
@@ -64,12 +69,40 @@ public sealed class CanvasPanel : Panel {
         _garden.IsVisible = _welcome.IsVisible = scene == CanvasState.Scene.Welcome;
         _state.IsVisible = scene is CanvasState.Scene.Loading or CanvasState.Scene.Failed;
         _choices.IsVisible = scene == CanvasState.Scene.Failed;
+        _loader.IsVisible = scene == CanvasState.Scene.Loading;
+        if (scene != _was) Arrive(scene);
         var engine = EngineModel.Shared;
         if (_state.IsVisible) {
             _note.Text = scene == CanvasState.Scene.Loading ? $"Decoding {engine.CurrentName}" : Failure(engine);
             _note.Foreground = scene == CanvasState.Scene.Loading ? Palette.Dim : Palette.Text;
         }
         _picture.InvalidateVisual();   // same bitmap, new pixels
+    }
+
+    /// A scene's motion, started once as the canvas arrives in it: the welcome
+    /// rises in and its garden starts drifting; the loader starts its light.
+    /// Both stop when their scene goes. Under Reduce Motion, Motion.Run runs a
+    /// frame or two and stops, so everything simply appears.
+    void Arrive(CanvasState.Scene scene) {
+        _was = scene;
+        if (scene == CanvasState.Scene.Loading) {
+            _loader.Reset();
+            Motion.Run(_loader, dt => { _loader.Advance(dt); return CanvasState.Now == CanvasState.Scene.Loading; });
+        }
+        if (scene != CanvasState.Scene.Welcome) return;
+        Motion.Run(_garden, dt => { _garden.Advance(dt); return CanvasState.Now == CanvasState.Scene.Welcome; });
+        var rows = _welcome.Children.ToArray();
+        foreach (var row in rows) { row.Opacity = 0; row.RenderTransform = new TranslateTransform(0, 10); }
+        double t = 0;
+        Motion.Run(_welcome, dt => {
+            t += dt;
+            for (int i = 0; i < rows.Length; i++) {
+                double e = OrionShell.Motion.EaseOut.Ease(Math.Clamp((t - i * 0.07) / 0.5, 0, 1));
+                rows[i].Opacity = e;
+                ((TranslateTransform)rows[i].RenderTransform!).Y = 10 * (1 - e);
+            }
+            return t < 0.5 + rows.Length * 0.07;
+        });
     }
 
     /// What failed, as far as the shell can tell without the engine's word for it.

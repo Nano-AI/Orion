@@ -9,9 +9,9 @@ queue in `STATUS.md` offered **already-shipped work as the next story three
 times**, and the third time the reason was that #112 — the decision that closed
 the queue item — had never been written down at all.
 
-⚠ **Declared gaps: 22, 23, 24, 377, 378, 379, 386, 387.** 386 and 387 are taken by
-branches still open on 2026-10-30 (#388 was written on `web/redesign` beside them);
-drop them from this list when those rows land. No row was ever written for 22–24 —
+⚠ **Declared gaps: 22, 23, 24, 377, 378, 379, 387.** 387 is the rejected round-three
+site, left on `web/round3`. 389 (Velopack) and 391 (stacking) are on open branches;
+390 was a site POC that was dropped, so declare it when 391 lands. No row was ever written for 22–24 —
 checked with `git log -S` over this file's whole history. ⚠ The tree does cite
 `#22`/`#24`, about forty times (engine and tests included), but as **GitHub
 issues 22 and 24**, against the "issue N" spelling CLAUDE.md asks for;

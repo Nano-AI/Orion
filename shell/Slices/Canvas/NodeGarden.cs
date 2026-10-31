@@ -19,8 +19,18 @@ sealed class NodeGarden : Control {
     const double W = 376, H = 396, Scale = 1.5, R = 2.4;
     static readonly Geometry Links = Build(LinkData, 4), Nodes = Build(NodeData, 2);
     static readonly IPen Thread = new Pen(Palette.Hover, 0.9, lineCap: PenLineCap.Round);
+    static readonly Point[] Points = Parse(NodeData);
+    // Ten steps of the accent, so a frame allocates no brushes.
+    static readonly IBrush[] Glow = [.. Enumerable.Range(1, 10).Select(i => new Avalonia.Media.Immutable.ImmutableSolidColorBrush(((ISolidColorBrush)Palette.Accent).Color, i / 10.0))];
+    double _t;
+
+    /// Where the pointer is over the welcome, or null: the nodes under it light up.
+    public Point? Pointer { get; set; }
 
     public NodeGarden() => IsHitTestVisible = false;
+
+    /// One frame of the drifting light.
+    public void Advance(double dt) { _t += dt; InvalidateVisual(); }
 
     public override void Render(DrawingContext c) {
         // Centred, so the window's middle is the tile's middle at any size.
@@ -33,6 +43,30 @@ sealed class NodeGarden : Control {
                     c.DrawGeometry(null, Thread, Links);
                     c.DrawGeometry(Palette.Line, null, Nodes);
                 }
+        // Two lights over the garden: one drifting slowly on its own, one under the pointer.
+        // Only the nodes inside a light are drawn again, in the accent, so a frame stays cheap.
+        var drift = new Point(Bounds.Width * (0.5 + 0.34 * Math.Cos(_t * 0.11)), Bounds.Height * (0.5 + 0.3 * Math.Sin(_t * 0.157)));
+        for (double y = y0; y < Bounds.Height; y += h)
+            for (double x = x0; x < Bounds.Width; x += w)
+                foreach (var p in Points) {
+                    var at = new Point(x + p.X * Scale, y + p.Y * Scale);
+                    double a = Math.Max(Light(at, drift, 300) * 0.5, Pointer is { } q ? Light(at, q, 170) * 0.85 : 0);
+                    if (a < 0.05) continue;
+                    double r = R * Scale * (1 + 0.4 * a);
+                    c.DrawEllipse(Glow[Math.Clamp((int)(a * 10), 0, 9)], null, at, r, r);
+                }
+    }
+
+    /// 1 at the light's centre, falling smoothly to 0 at its radius.
+    static double Light(Point at, Point centre, double radius) {
+        double d = Math.Sqrt((at.X - centre.X) * (at.X - centre.X) + (at.Y - centre.Y) * (at.Y - centre.Y)) / radius;
+        return d >= 1 ? 0 : (1 - d) * (1 - d);
+    }
+
+    static Point[] Parse(string data) {
+        var v = data.Split((char[])[' ', ',', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries)
+                    .Select(t => double.Parse(t, CultureInfo.InvariantCulture)).ToArray();
+        return [.. Enumerable.Range(0, v.Length / 2).Select(i => new Point(v[2 * i], v[2 * i + 1]))];
     }
 
     /// Segments (four numbers each) or dots (two).
