@@ -169,6 +169,7 @@ static partial class AgentCli {
 
     internal static JsonObject Commit(string raw, string state) {
         var decoded = Normal(File.ReadAllBytes(state));
+        if (!File.Exists(raw)) throw new Failure($"no such file: {raw}");   // a sidecar for nothing, as sync refuses (#DEC-fs)
         if (!Autosave.ToSidecar(raw, decoded)) throw new Failure($"could not write the sidecar for {raw}");
         return new JsonObject { ["sidecar"] = Sidecar.PathFor(raw) };
     }
@@ -178,6 +179,7 @@ static partial class AgentCli {
     /// rating including 0: `flag --rating 0` must not un-reject a photo.
     static JsonObject Flag(string raw, int? rating, bool? reject) {
         if (rating == null && reject == null) throw new Usage("flag needs --rating or --reject");
+        if (!File.Exists(raw)) throw new Failure($"no such file: {raw}");
         bool wrote = Sidecar.Merge(raw, s => {
             if (rating is { } r) { s.Rating = Math.Clamp(r, 0, 5); if (r > 0) s.Rejected = false; }
             if (reject is { } x) { s.Rejected = x; if (x) s.Rating = 0; }

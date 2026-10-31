@@ -533,6 +533,23 @@ test("current_photo returns the contents of current.json", async () => {
   }
 });
 
+// Where the app writes it off macOS: .NET's ApplicationData, which honours XDG_CONFIG_HOME (#DEC-fs).
+test("current_photo finds current.json under XDG_CONFIG_HOME", { skip: process.platform === "darwin" || process.platform === "win32" }, async () => {
+  const config = path.join(tmpDir, "xdg");
+  const current = { photo: "/shoot/b.arw", folder: "/shoot", updated: "2026-09-14T00:00:00Z" };
+  await fs.mkdir(path.join(config, "Orion"), { recursive: true });
+  await fs.writeFile(path.join(config, "Orion", "current.json"), JSON.stringify(current));
+  const saved = process.env.XDG_CONFIG_HOME;
+  process.env.XDG_CONFIG_HOME = config;
+  try {
+    const result = await client.callTool({ name: "current_photo", arguments: {} });
+    assert.deepEqual(JSON.parse((result.content as Array<{ text?: string }>)[0].text!), current);
+  } finally {
+    if (saved === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = saved;
+  }
+});
+
 test("current_photo with a missing current.json is a non-error hint, not a tool error", async () => {
   process.env.ORION_CURRENT = path.join(tmpDir, "does-not-exist.json");
   try {

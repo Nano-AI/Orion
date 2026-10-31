@@ -59,8 +59,8 @@ static partial class Trash {
                                                                    Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
                 return null;
             }
-            // stub(#315): .NET has no trash on Linux; the freedesktop.org Trash spec is the port. Never a delete instead.
-            return "moving to the Trash is not built on this system";
+            if (OperatingSystem.IsLinux()) return FreedesktopTrash.Move(path);   // .NET has none: the freedesktop.org spec (#DEC-fs)
+            return "moving to the Trash is not built on this system";   // never a delete instead
         } catch (Exception e) {
             return e.Message;
         }

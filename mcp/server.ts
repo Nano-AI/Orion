@@ -49,8 +49,16 @@ const regionArg = (r: number[] | undefined) => (r ? ["--region", r.join(",")] : 
 
 // current.json is written atomically by Orion on every photo change:
 // {"photo": "/abs/path.ARW" | null, "folder": "/abs/dir" | null, "updated": "<ISO 8601>"}
-const currentPath = () =>
-  process.env.ORION_CURRENT ?? path.join(os.homedir(), "Library/Application Support/Orion/current.json");
+// In the app's folder, found as shell/Shared/AppFolder.cs finds it: Application Support on
+// macOS, else .NET's ApplicationData - %APPDATA% on Windows, XDG_CONFIG_HOME (if absolute)
+// or ~/.config elsewhere (#DEC-fs).
+const appFolder = () => {
+  if (process.platform === "darwin") return path.join(os.homedir(), "Library/Application Support/Orion");
+  if (process.platform === "win32") return path.join(process.env.APPDATA ?? path.join(os.homedir(), "AppData/Roaming"), "Orion");
+  const xdg = process.env.XDG_CONFIG_HOME;
+  return path.join(xdg && path.isAbsolute(xdg) ? xdg : path.join(os.homedir(), ".config"), "Orion");
+};
+const currentPath = () => process.env.ORION_CURRENT ?? path.join(appFolder(), "current.json");
 
 async function readCurrent(): Promise<{ photo: string | null; folder: string | null } | null> {
   try {
