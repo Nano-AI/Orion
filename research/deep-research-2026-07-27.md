@@ -127,6 +127,14 @@ I       = c_J + Σ_j w_j          (exact reconstruction)
 
 Translation-invariant, which is what stops shrinkage producing ringing.
 
+**Implementation note, GPU memory (#406).**
+Orion adds the reconstruction fine to coarse: `((s_0 + s_1) + s_2) + s_3 + c_J`, where `s_j` is the shrunk `w_j`.
+It is the same sum in the other order.
+Run residual first, every level `c_1..c_J` had to exist before the first shrink, so the input and four full-resolution levels were alive at once; fine to coarse, scale `j` reads only `c_j`, `c_{j+1}` and the sum so far, and when the memory rule makes a render frugal each level is freed as its last reader runs.
+The shrink kernel takes two flags for the ends (the finest starts the sum from zero, the coarsest adds `c_J`); 0 is the published order.
+Storage stays RGBA16F: three quantities per texel (WebGPU and Metal have no three-channel storage format), and the running sum stays at the precision it had.
+Only the half-float rounding of the running sum differs: max 1.5e-3 on a 256 x 256 card (`testDenoiseOrderGpu`); on a 42 MP ARW with Luminance, Color, non-local means and Smoothness, 16-bit max 832 and mean 11.9, 8-bit max 4 and mean 0.05.
+
 ### Shrinkage
 
 ```

@@ -32,7 +32,9 @@ add_library(orion_engine STATIC
     src/raw/RawImage.cpp
     src/raw/NoiseProfile.cpp
     src/gpu/TexturePool.cpp
+    src/gpu/VramFree.cpp
     src/pipe/Pipeline.cpp
+    src/pipe/PipelineMemory.cpp
     src/pipe/DevelopPipeline.cpp
     src/pipe/DevelopCapture.cpp
     src/pipe/DevelopLocal.cpp
@@ -95,6 +97,8 @@ target_compile_definitions(orion_engine
 )
 
 add_dependencies(orion_engine orion_shaders)
+# VramFree.cpp loads the driver's NVML at run time where there is one (#406).
+target_link_libraries(orion_engine PRIVATE ${CMAKE_DL_LIBS})
 
 if(APPLE)
     # ARC for the Objective-C++ translation units. The C++ ones never see ObjC.

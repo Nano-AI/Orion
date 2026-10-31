@@ -12,6 +12,7 @@
 #include "raw/RawImage.h"
 #include "util/ImageWriter.h"
 
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -294,6 +295,9 @@ private:
     [[nodiscard]] const pipe::DevelopPipeline& measured();
     /// After an export past fit, the full graph's outputs go back again.
     void renderForExport();   // the full graph for a read, given back if it fails part way (#401)
+    /// The full graph once more after `giveBack`, lean (#392), and if the card
+    /// still refuses, the message naming the effect, need and free (#406).
+    double renderLean(const std::function<void()>& giveBack);
     void rereleaseFull() noexcept;
     Region                                 regionView_{};
     /// What `setAdjustments` last pushed, for the region graph's own apply.

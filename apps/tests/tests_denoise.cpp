@@ -37,8 +37,10 @@ struct Starlet {
                                            orion::gpu::PixelFormat::RGBA16Float);
     }
 
+    /// Fine to coarse with the sum's two ends flagged, as the graph runs it
+    /// (#406), unless `coarseFirst`: the published order, the residual first.
     template <class Shape>
-    Frame run(const Frame& input, Shape shape) {
+    Frame run(const Frame& input, Shape shape, bool coarseFirst = false) {
         auto c0 = make();
         c0->upload(input.data(), std::size_t(w) * 4 * sizeof(__fp16));
         std::vector<std::unique_ptr<orion::gpu::Texture>> blurs, shrinks;
@@ -52,7 +54,8 @@ struct Starlet {
                         &bp, sizeof bp, w, h);
             cb.commitAndWait();
         }
-        for (int j = 3; j >= 0; --j) {
+        for (int k = 0; k < 4; ++k) {
+            const int j = coarseFirst ? 3 - k : k;
             orion::pipe::params::AtrousShrink sp{};
             sp.size[0] = w; sp.size[1] = h;
             sp.scaleNorm = kScaleNorm[j];
@@ -60,14 +63,21 @@ struct Starlet {
             shape(sp);
             const auto* fine = (j == 0) ? c0.get() : blurs[std::size_t(j - 1)].get();
             const auto* coarse = blurs[std::size_t(j)].get();
-            const auto* accum = (j == 3) ? coarse : shrinks[std::size_t(j + 1)].get();
+            const orion::gpu::Texture* accum = coarse;
+            if (coarseFirst) {
+                if (j != 3) accum = shrinks[std::size_t(j + 1)].get();
+            } else {
+                sp.ends = (j == 0 ? orion::pipe::params::kShrinkFirst : 0) |
+                          (j == 3 ? orion::pipe::params::kShrinkLast : 0);
+                if (j != 0) accum = shrinks[std::size_t(j - 1)].get();
+            }
             orion::gpu::CommandBuffer cb(device);
             cb.dispatch(*shrink, {fine, coarse, accum, coarse, shrinks[std::size_t(j)].get()},
                         &sp, sizeof sp, w, h);
             cb.commitAndWait();
         }
         Frame out(std::size_t(w) * h * 4);
-        shrinks[0]->download(out.data(), std::size_t(w) * 4 * sizeof(__fp16), w, h);
+        shrinks[coarseFirst ? 0 : 3]->download(out.data(), std::size_t(w) * 4 * sizeof(__fp16), w, h);
         return out;
     }
 };
@@ -340,13 +350,16 @@ void testDenoiseDetailZeroIsShippedGpu() {
     // would be four full-resolution passes for nothing. ⚠ The second tick, not
     // the first: the pool frees a blur after its last read once, and the
     // first tick after that rebuilds it (decision #219, `Pipeline::maybeFree`).
+    // Only while the memory rule lets the render cache, which this small frame
+    // always does (#406); a frugal render frees them as read.
     auto tick = moved;
     tick.denoiseDetail = 0.75f;
     d.apply(tick); d.render();
     std::set<std::string> ran;
     for (const auto& n : d.graph().lastRun())
         if (n.executed) ran.insert(n.name);
-    report(!ran.count("denoise:blur 0") && ran.count("denoise:shrink 0"),
+    report(!d.graph().lastPlan().frugalMode && !ran.count("denoise:blur 0") &&
+               ran.count("denoise:shrink 0"),
            "a Detail move reruns the shrinks and not the blurs");
     d.apply(explicitZero); d.render();
     report(pixels(d) == never, "Detail 0 pushed explicitly renders byte-identical");
@@ -740,4 +753,52 @@ void testDenoiseSmoothnessGpu() {
     report(render(0.0f) == p0, "Smoothness 0 pushed explicitly renders byte-identical");
     (void)render(1.0f, 0.0f);
     report(!upRan(), "Color 0 runs nothing, whatever Smoothness says");
+}
+
+/// The graph sums the scales fine to coarse, so a scale needs only its two
+/// levels and the sum so far (#406); the published reconstruction adds them
+/// coarse to fine from the residual. The same sum in another order: only the
+/// half-float rounding of the running sum may differ.
+void testDenoiseOrderGpu() {
+    section("Denoise: fine to coarse is the published sum (GPU)");
+    auto device = deviceOrReport();
+    if (!device) return;
+    constexpr std::uint32_t kW = 256, kH = 256;
+    std::mt19937 rng(406);
+    std::normal_distribution<float> gauss(0.0f, 0.04f);
+    Frame input(std::size_t(kW) * kH * 4);
+    for (std::uint32_t y = 0; y < kH; ++y)
+        for (std::uint32_t x = 0; x < kW; ++x) {
+            const std::size_t i = std::size_t(y) * kW + x;
+            const float base = (x < kW / 2 ? 0.15f : 0.7f) + 0.1f * float((x / 3 + y / 5) & 1);
+            for (int c = 0; c < 3; ++c) input[i * 4 + c] = __fp16(base * (0.8f + 0.2f * c) + gauss(rng));
+            input[i * 4 + 3] = 1;
+        }
+    Starlet chain(*device, kW, kH);
+    const auto shape = [](orion::pipe::params::AtrousShrink& sp) {
+        sp.noiseA = 0.002f; sp.noiseB = 0.0016f;
+        sp.strengthLuma = 1.5f; sp.strengthChroma = 2.0f;
+        sp.detail = 0.5f; sp.texture = 0.5f;
+    };
+    const Frame streamed = chain.run(input, shape);
+    const Frame published = chain.run(input, shape, true);
+    double worst = 0.0, sum = 0.0;
+    for (std::size_t i = 0; i < input.size(); ++i) {
+        if (i % 4 == 3) continue;
+        const double d = std::abs(double(streamed[i]) - double(published[i]));
+        worst = std::max(worst, d);
+        sum += d;
+    }
+    std::printf("  fine to coarse against coarse to fine: max %.2e, mean %.2e\n", worst,
+                sum / double(input.size() * 3 / 4));
+    // Four half-float roundings of a running sum near 1: a few ulps (2^-10).
+    report(worst <= 4.0 / 1024.0, "the two orders agree to half-float rounding",
+           "worst " + std::to_string(worst));
+    const auto zero = [](orion::pipe::params::AtrousShrink&) {};
+    const Frame identity = chain.run(input, zero);
+    double back = 0.0;
+    for (std::size_t i = 0; i < input.size(); ++i)
+        if (i % 4 != 3) back = std::max(back, std::abs(double(identity[i]) - double(input[i])));
+    report(back <= 4.0 / 1024.0, "and at zero strength it reconstructs the input",
+           "worst " + std::to_string(back));
 }

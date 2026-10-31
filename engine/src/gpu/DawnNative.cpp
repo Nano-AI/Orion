@@ -36,6 +36,8 @@ void describe(Context& c, const wgpu::Limits& limits) {
     c.adapter.GetInfo(&ai);
     const std::string device(ai.device.data ? ai.device.data : "",
                              ai.device.data ? ai.device.length : 0);
+    c.vendorId = ai.vendorID;
+    c.deviceId = ai.deviceID;
     c.info = DeviceInfo{
         .name                  = "Dawn on " + device,
         .recommendedWorkingSet = 0,   // not reported by WebGPU

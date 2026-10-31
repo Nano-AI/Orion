@@ -167,6 +167,13 @@ shared target, and Orion's DAG gives every node its own output texture — the
 accumulating form would need one node per (γ, level) pair chained in series,
 which is *more* nodes and more bandwidth, not less. See "packing" below.
 
+**Implementation note, GPU memory (#406).**
+No change to the algorithm, the formats or the output: on a 42 MP ARW the 16-bit render with clarity is byte-identical before and after.
+The storage was already as small as the quantities allow: the luminance, its Gaussian levels and the collapsed levels are single-channel R16F, and each RGBA16F remap texture carries four γ levels, four quantities per texel.
+What changed is lifetime, and only when a render's planned peak would pass the memory budget (`Pipeline::decideMemory`, the one rule): then every level is freed at its last reader rather than kept as a cache, since the chain reruns whole whenever any of it is dirty, and the graph gives idle textures back to the driver before it allocates another working plane.
+Where the plan fits, the levels are cached as before, and a clarity tick costs what it did (about 16 ms at 24 MP).
+A 42 MP frame with clarity peaks at 1,871 MiB (synthetic 7952 x 5304), where the first render had run out of a 3 GB card and its lean retry peaked at 1,855 MiB.
+
 ---
 
 ## What Orion does, and where it departs

@@ -37,6 +37,12 @@ struct MetalDevice final : Device::Impl {
     std::unique_ptr<CommandBuffer::Impl> commandBuffer() override {
         return makeMetalCommandBuffer((__bridge void*)queue);
     }
+    // The working set Metal recommends, less what this device holds (#406).
+    std::uint64_t freeBytes() const noexcept override {
+        const std::uint64_t want = device.recommendedMaxWorkingSetSize;
+        const std::uint64_t held = device.currentAllocatedSize;
+        return want > held ? want - held : 0;
+    }
 };
 
 }  // namespace

@@ -49,7 +49,8 @@ sealed partial class App {
                 case "drag": DragScenario(m, preview: true); DragScenario(m, preview: false); break;
                 case "render": RenderScenario(m); break;
                 case "export": ExportScenario(m); break;
-                default: throw new ArgumentException($"no bench scenario '{name}' (open, swap, drag, render, export; the pan is --bench --pan, Unattended.Pan.cs)");
+                case "side-by-side": SideBySideScenario(m); break;
+                default: throw new ArgumentException($"no bench scenario '{name}' (open, swap, drag, render, export, side-by-side; the pan is --bench --pan, Unattended.Pan.cs)");
             }
             Native.orion_engine_gpu_memory(EngineModel.Shared.Handle, out ulong gpu);
             m["gpu_engine_mib"] = gpu / 1048576.0;
@@ -270,6 +271,31 @@ sealed partial class App {
         m["render_full_failed_count"] = failed ? 1 : 0;
         if (failed) Console.Error.WriteLine($"bench render: no full render ({Describe()})");
         Heartbeat.Frame();
+    }
+
+    /// Two photos side by side (#400), linked, at fit and then at 100%: two
+    /// engines holding their pictures at once, the case a 42 MP pair ran out on
+    /// with 3 GB free (#406). The card's peak is the tool's (nvidia-smi); this
+    /// counts what failed and how long each settled.
+    static void SideBySideScenario(Dictionary<string, double> m) {
+        if (EngineModel.Shared.Photos.Count < 2) throw new InvalidOperationException("side by side needs two photos");
+        var beat = new Heartbeat();
+        var (left, right) = (SideBySide.Left, SideBySide.Right);
+        bool Rested(SideBySide.Side s) => !s.View.Live && s.Session != null && !s.Stale && s.Preview != null &&
+                                          (s.Problem != null || !s.View.PastFit || s.Rendered == s.Wanted);
+        var sw = Stopwatch.StartNew();
+        SideBySide.Enter(wait: true);
+        bool fit = beat.Until(() => Rested(left) && Rested(right), 60);
+        m["sbs_fit_ms"] = sw.Elapsed.TotalMilliseconds;
+        SideBySide.Activate(right);
+        SideBySide.ActualSize();
+        sw.Restart();
+        bool actual = beat.Until(() => left.View.PastFit && right.View.PastFit && Rested(left) && Rested(right), 60);
+        m["sbs_actual_ms"] = sw.Elapsed.TotalMilliseconds;
+        int failed = (fit ? 0 : 1) + (actual ? 0 : 1) + (left.Problem != null ? 1 : 0) + (right.Problem != null ? 1 : 0);
+        m["sbs_failed_count"] = failed;
+        if (failed > 0)
+            Console.Error.WriteLine($"bench side-by-side: fit {fit}, 100% {actual}; left: {left.Problem ?? "fine"}; right: {right.Problem ?? "fine"}");
     }
 
     /// The photo on screen written as the export sheet writes it, at the

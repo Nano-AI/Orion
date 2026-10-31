@@ -6,13 +6,33 @@
 #include "ResourcePaths.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
+#include <functional>
 #include <stdexcept>
 #include <algorithm>
 #include <variant>
 #include <vector>
 
 namespace orion {
+
+namespace {
+
+/// The last resort's words (#406): which effect the card refused, what the
+/// graph needs at once and what the card gave it before refusing, both
+/// counting the graph's own resident plates. Keeps "out of GPU memory", which
+/// the shell keys its shedding on.
+gpu::OutOfMemory outOfMemory(const pipe::DevelopPipeline& graph, std::uint64_t free) {
+    const auto gb = [](std::uint64_t b) {
+        char text[32];
+        std::snprintf(text, sizeof text, "%.1f GB", double(b) / 1e9);
+        return std::string(text);
+    };
+    return gpu::OutOfMemory("out of GPU memory: rendering " + graph.failedEffect() +
+                            " needs " + gb(graph.neededBytes()) + ", " + gb(free) + " free");
+}
+
+}  // namespace
 
 Engine::Engine() : device_(gpu::Device::create()) {
     // Eager, so hdrMergeProgress/hdrMergeCancel from another thread never
@@ -63,6 +83,8 @@ void Engine::setHeadless(bool on) noexcept {
 }
 
 void Engine::openRaw(const std::string& path) {
+    // A refusal's ceiling belongs to the photo that met it (#406).
+    device_->forgetOutOfMemory();
     // Either a mosaic or a demosaiced linear DNG — a merged HDR frame comes
     // back through this same door, which is the point of writing one.
     auto decoded = raw::decode(path);
@@ -449,15 +471,21 @@ double Engine::render() {
     try {
         ms = develop_->render();
     } catch (const gpu::OutOfMemory&) {
-        // ⚠ What runs out is the cache, not the render: kept for slider latency
-        // (#161), every output an edit has ever enabled stays (2.7 GB at 24 MP
-        // after dehaze and NLM went on and off once), where one render alone
-        // frees each at its last reader. So once more from empty, and from then
-        // on that frugal way, as headless does (#312): slower ticks on a card
-        // this photo does not fit, rather than no picture (#392).
+        // ⚠ What ran out was the plan's guess at the card (#392): Dawn cannot
+        // say what is free, so until a refusal the rule budgets to 2.5 GB.
+        // The refusal set the device's ceiling, so once more from empty is
+        // planned to it, frugal where the cache will not fit (#406). Lean, one
+        // render, only if that fails too.
         giveBack();
-        develop_->graph().setReleaseEveryRender(true);
-        try { ms = develop_->render(); } catch (...) { giveBack(); throw; }
+        try {
+            ms = develop_->render();
+        } catch (const gpu::OutOfMemory&) {
+            giveBack();
+            ms = renderLean(giveBack);
+        } catch (...) {
+            giveBack();
+            throw;
+        }
     } catch (...) {
         giveBack();
         throw;
@@ -773,17 +801,57 @@ void Engine::exportImage(const std::string& path, const util::ExportOptions& opt
 }
 
 void Engine::renderForExport() {
-    try {
-        develop_->render();
-    } catch (...) {
-        // Out of memory part way, the graph keeps every texture it did get, and
-        // past fit no region frees them again (they are already "released"):
-        // at 42 MP beside a desktop, a size estimate that failed so left 2.2 GB
-        // behind and every region after it out of memory (#401). Give it back.
+    // Out of memory part way, the graph keeps every texture it did get, and
+    // past fit no region frees them again (they are already "released"):
+    // at 42 MP beside a desktop, a size estimate that failed so left 2.2 GB
+    // behind and every region after it out of memory (#401). Give it back.
+    const auto giveBack = [&] {
         develop_->graph().releaseOutputs();
         device_->reclaim();
         fullReleased_ = true;
         fullCurrent_ = false;
+    };
+    // Out of memory, once more planned to the ceiling the refusal set, then
+    // lean, as the canvas's render does (#392, #406): an export fails only
+    // where the canvas would, and says why the same way.
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        try {
+            develop_->render();
+            return;
+        } catch (const gpu::OutOfMemory&) {
+            giveBack();
+        } catch (...) {
+            giveBack();
+            throw;
+        }
+    }
+    renderLean(giveBack);
+}
+
+double Engine::renderLean(const std::function<void()>& giveBack) {
+    // One render, not the photo's from then on (#392's lean retry was sticky
+    // because the cache refilled; the memory rule now plans each render to the
+    // ceiling the refusal set, #406). The headless engine stays lean (#312).
+    struct Restore {
+        pipe::Pipeline& graph;
+        bool was;
+        ~Restore() { graph.setReleaseEveryRender(was); }
+    } restore{develop_->graph(), headless_};
+    develop_->graph().setReleaseEveryRender(true);
+    // What the card can give this graph: the most the retry reached, less
+    // what the rest of the process held when it started.
+    device_->resetPeak();
+    const std::uint64_t start = device_->peakBytes();
+    const std::uint64_t others = start - std::min<std::uint64_t>(
+        start, develop_->graph().allocatedBytes());
+    try {
+        return develop_->render();
+    } catch (const gpu::OutOfMemory&) {
+        const std::uint64_t reached = device_->peakBytes();
+        giveBack();
+        throw outOfMemory(*develop_, reached - std::min(reached, others));
+    } catch (...) {
+        giveBack();
         throw;
     }
 }

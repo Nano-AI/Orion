@@ -28,6 +28,9 @@ int main() {
     testBindingCount();
     testDisabledCacheReleaseGpu();
     testReleaseEveryRenderGpu();
+    testGpuBudget42MpGpu();
+    testWarmGraphMatchesFreshGpu();
+    testMemoryRuleGpu();
     testDawnParityGpu();
     testEveryKernelCompilesOnDawnGpu();
 
@@ -59,6 +62,7 @@ int main() {
     testDenoiseDetailGpu();
     testDenoiseDetailZeroIsShippedGpu();
     testDenoiseMaskedGpu();
+    testDenoiseOrderGpu();
     testNlmGpu();
     testTextureGpu();
     testDenoiseSmoothnessGpu();

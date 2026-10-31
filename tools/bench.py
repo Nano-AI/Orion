@@ -54,6 +54,7 @@ SCENARIOS = {
     "pan": ("pan", "first", False, "a hand dragging the photo at 100%, region and whole-graph edits (`--bench --pan`, Unattended.Pan.cs)"),
     "render": ("render", "first", False, "the first full-resolution render, and the card's memory peak"),
     "export": ("export", "first", False, "the photo exported as the export sheet does, at its defaults"),
+    "side-by-side": ("side-by-side", "photos", False, "the first two photos side by side, linked, at fit then 100%: both engines' memory at once"),
     "engine": ("engine", "first", False, "orion-bench: the engine alone on the shipping graph"),
 }
 

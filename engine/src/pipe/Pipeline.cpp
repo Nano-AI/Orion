@@ -140,15 +140,10 @@ void Pipeline::compile(std::uint32_t width, std::uint32_t height) {
 
     dirty_.assign(n, true);
 
-    // Cached once, here, because the graph's wiring never changes after this
-    // point: `render()` acts on "who reads me last" every call, so it cannot
-    // afford to re-derive it the way `peakLiveBytes()` — a report, not a
-    // schedule — still does from `computeLastUseSteps()` on demand.
-    const auto lastUse = computeLastUseSteps();
-    lastReader_.assign(static_cast<std::size_t>(n), 0);
-    for (std::size_t i = 0; i < lastUse.size(); ++i) {
-        lastReader_[i] = order_[lastUse[i]];
-    }
+    // Cached, because `render()` acts on "who reads me last" every call, and
+    // re-derived only when a node is switched (#406), the one thing after this
+    // point that changes it; `peakLiveBytes()`, a report, derives it on demand.
+    computeLastReaders();
     everFreed_.assign(static_cast<std::size_t>(n), false);
 
     compiled_ = true;
@@ -168,6 +163,7 @@ void Pipeline::setEnabled(int nodeId, bool enabled) {
     if (nodeId < 0 || nodeId >= static_cast<int>(nodes_.size())) return;
     if (nodes_[nodeId].enabled == enabled) return;
     nodes_[nodeId].enabled = enabled;
+    lastReadersStale_ = true;
     if (!enabled && compiled_) {
         // A disabled node is bypassed by resolve(), including pinned reads.
         // Keep active caches warm, but do not retain a filter the user removed.
@@ -317,19 +313,36 @@ std::vector<std::size_t> Pipeline::computeLastUseSteps() const {
     // by `render()`'s pool (`compile()` caches this once as `lastReader_`)
     // and `peakLiveBytes()`'s cost estimate — one analysis, not two that
     // could quietly drift apart.
+    //
+    // ⚠ **Over the graph as it is enabled now, reads resolved past disabled
+    // nodes (#406)**, as `bindings` binds them. Counted statically, a texture
+    // whose last reader was switched off was never freed, since that reader
+    // never runs: with no lens correction the denoise output, with no fusion
+    // the clarity output, a full-resolution plane each, held for the graph's
+    // life. `render()` recomputes this when a node is switched (`setEnabled`).
     std::vector<std::size_t> lastUse(nodes_.size(), 0);
     for (std::size_t step = 0; step < order_.size(); ++step) {
         const int id = order_[step];
         if (id < 0 || static_cast<std::size_t>(id) >= nodes_.size()) continue;
+        const Node& node = nodes_[static_cast<std::size_t>(id)];
+        if (!node.enabled) continue;   // never dispatched, so it reads nothing
         lastUse[static_cast<std::size_t>(id)] =
             std::max(lastUse[static_cast<std::size_t>(id)], step);
-        for (int in : nodes_[static_cast<std::size_t>(id)].inputs) {
-            if (in >= 0 && static_cast<std::size_t>(in) < nodes_.size()) {
-                lastUse[static_cast<std::size_t>(in)] = step;
+        for (int in : node.inputs) {
+            const int from = in == kSource ? kSource : resolve(in);
+            if (from >= 0 && static_cast<std::size_t>(from) < nodes_.size()) {
+                lastUse[static_cast<std::size_t>(from)] = step;
             }
         }
     }
     return lastUse;
+}
+
+void Pipeline::computeLastReaders() {
+    const auto lastUse = computeLastUseSteps();
+    lastReader_.assign(nodes_.size(), 0);
+    for (std::size_t i = 0; i < lastUse.size(); ++i) lastReader_[i] = order_[lastUse[i]];
+    lastReadersStale_ = false;
 }
 
 std::size_t Pipeline::nodeBytes(int id) const noexcept {
@@ -348,7 +361,7 @@ bool Pipeline::isPinnedOrTerminal(int n) const noexcept {
     return false;
 }
 
-void Pipeline::ensure(int id, gpu::CommandBuffer* batch) {
+void Pipeline::ensure(int id) {
     if (id < 0 || static_cast<std::size_t>(id) >= outputs_.size()) return;
     if (outputs_[static_cast<std::size_t>(id)]) return;   // already there
 
@@ -356,12 +369,12 @@ void Pipeline::ensure(int id, gpu::CommandBuffer* batch) {
     if (!node.enabled) return;   // never dispatched; resolve() steers past it
 
     for (int in : node.inputs) {
-        if (in != kSource) ensure(resolve(in), batch);
+        if (in != kSource) ensure(resolve(in));
     }
-    computeOne(id, batch);
+    computeOne(id);
 }
 
-void Pipeline::computeOne(int id, gpu::CommandBuffer* batch) {
+void Pipeline::computeOne(int id) {
     const std::size_t idx = static_cast<std::size_t>(id);
     const Node& node = nodes_[idx];
 
@@ -375,15 +388,25 @@ void Pipeline::computeOne(int id, gpu::CommandBuffer* batch) {
     // working size once rotation or crop is in play.
     const std::uint32_t w = node.outWidth  ? node.outWidth  : width_;
     const std::uint32_t h = node.outHeight ? node.outHeight : height_;
-    ownedOutputs_[idx] = pool_.acquire(w, h, node.format);
+    // Frugal, the pool gives a working plane's worth of idle memory back
+    // before it allocates (`decideMemory`, #406).
+    if (frugal_ && !pool_.holds(w, h, node.format) && pool_.idleBytes() >= givePlane())
+        giveBack();
+    try {
+        ownedOutputs_[idx] = pool_.acquire(w, h, node.format);
+    } catch (const gpu::OutOfMemory&) {
+        failedNode_ = id;           // for the message that names the effect
+        device_.noteOutOfMemory();  // and the ceiling the next plan budgets to (#406)
+        throw;
+    }
     outputs_[idx] = ownedOutputs_[idx].get();
 
     const std::vector<const gpu::Texture*> textures = bindings(id);
 
     lastRun_[idx].executed = true;
 
-    if (batch) {
-        batch->dispatch(*kernels_[idx], textures,
+    if (batch_) {
+        batch_->dispatch(*kernels_[idx], textures,
                         node.params.empty() ? nullptr : node.params.data(),
                         node.params.size(), w, h);
     } else {
@@ -429,20 +452,13 @@ void Pipeline::releaseIfDone(int reader) {
 
 void Pipeline::maybeFree(int n, int reader) {
     if (n < 0 || static_cast<std::size_t>(n) >= nodes_.size()) return;
-    // ponytail: `lastReader_` counts disabled nodes, so a texture whose last
-    // reader is switched off is never freed — that reader never dispatches, so
-    // this early-out is never reached with a matching `reader`. It stays
-    // resident for the graph's life instead of going back to the pool. A leak
-    // of *reuse*, not of memory: it is bounded, it is one texture per such
-    // node, and nothing reads a stale pointer. Upgrade path if the residency
-    // number starts mattering: make `computeLastUseSteps` skip disabled nodes
-    // and recompute `lastReader_` in `setEnabled` rather than once in
-    // `compile()`. Not done because enabled-ness moves per frame and the
-    // headline was 13861 -> 1560 MiB without it (#219).
     if (lastReader_[static_cast<std::size_t>(n)] != reader) return;
     // Once, ever - see the header - unless a headless caller asked for every
-    // render to give its textures back (#312).
-    if (everFreed_[static_cast<std::size_t>(n)] && !releaseEveryRender_) return;
+    // render to give its textures back (#312). A frugal render frees every
+    // output but its keep set (#406).
+    if (!releaseEveryRender_ &&
+        (frugal_ ? keep_[static_cast<std::size_t>(n)] : everFreed_[static_cast<std::size_t>(n)]))
+        return;
     if (isPinnedOrTerminal(n)) return;
 
     auto& owned = ownedOutputs_[static_cast<std::size_t>(n)];
@@ -450,6 +466,28 @@ void Pipeline::maybeFree(int n, int reader) {
     outputs_[static_cast<std::size_t>(n)] = nullptr;
     pool_.release(std::move(owned));
     everFreed_[static_cast<std::size_t>(n)] = true;
+}
+
+void Pipeline::giveBack() {
+    if (batch_) {
+        batch_->commitAndWait();
+        submittedMs_ += batch_->gpuMilliseconds();
+    }
+    pool_.shrink();
+    device_.reclaim();
+    if (batch_) batch_ = std::make_unique<gpu::CommandBuffer>(device_);
+}
+
+void Pipeline::setTransient(const std::vector<int>& nodeIds) {
+    for (int id : nodeIds) {
+        if (id >= 0 && static_cast<std::size_t>(id) < nodes_.size())
+            nodes_[static_cast<std::size_t>(id)].transient = true;
+    }
+}
+
+void Pipeline::setCostWeight(int nodeId, float weight) {
+    if (nodeId >= 0 && static_cast<std::size_t>(nodeId) < nodes_.size())
+        nodes_[static_cast<std::size_t>(nodeId)].costWeight = weight;
 }
 
 void Pipeline::releaseOutputs() noexcept {
@@ -463,6 +501,62 @@ void Pipeline::releaseOutputs() noexcept {
     std::fill(everFreed_.begin(), everFreed_.end(), false);
 }
 
+void Pipeline::runDirty() {
+    // ⚠ What a dirty node holds is never read again: every consumer of a dirty
+    // node is dirty too (`markDownstreamDirty`). Handed back now rather than
+    // when the node reruns, the stale tail of the graph (the display and
+    // linear planes, the effect's own output) is no longer held while an effect's
+    // chain upstream of it runs, which is what a clarity tick peaked on (#406).
+    // Into the pool: the node's rerun takes the same texture back. Never the
+    // picture, which keeps its texture from render to render; a pinned node
+    // only when the render is frugal, since its readers outside the graph read
+    // after the render, never during it (a white-balance move held the stale
+    // demosaic and profile planes, 644 MiB at 42 MP, through the whole pass).
+    for (int id : order_) {
+        const std::size_t idx = static_cast<std::size_t>(id);
+        if (dirty_[idx] && nodes_[idx].enabled && ownedOutputs_[idx] &&
+            !(frugal_ ? id == order_.back() : isPinnedOrTerminal(id))) {
+            outputs_[idx] = nullptr;
+            pool_.release(std::move(ownedOutputs_[idx]));
+        }
+    }
+    if (frugal_) {
+        // A cached output this render does not read and the rule does not
+        // keep goes back before anything is allocated (#406).
+        std::vector<bool> resident(nodes_.size());
+        for (std::size_t i = 0; i < nodes_.size(); ++i) resident[i] = ownedOutputs_[i] != nullptr;
+        const auto read = readThisRender(resident);
+        for (std::size_t i = 0; i < nodes_.size(); ++i) {
+            if (resident[i] && !read[i] && !keep_[i] && !isPinnedOrTerminal(int(i))) {
+                outputs_[i] = nullptr;
+                pool_.release(std::move(ownedOutputs_[i]));
+            }
+        }
+        // Nothing is encoded yet, so the give-back costs one reclaim.
+        if (pool_.idleBytes() > 0) giveBack();
+    }
+    for (int id : order_) {
+        const Node& node = nodes_[static_cast<std::size_t>(id)];
+        if (!(dirty_[static_cast<std::size_t>(id)] && node.enabled)) continue;
+
+        // Whatever this dispatch is about to read must exist first - pulling
+        // back anything the pool already reclaimed. A no-op for every input
+        // that is still resident, which is the ordinary case once a graph is
+        // warm. See `ensure()`'s comment for why recomputing one is safe.
+        for (int in : node.inputs) {
+            if (in != kSource) ensure(resolve(in));
+        }
+        computeOne(id);
+        // ⚠ Lean, a texture handed back is memory given back *now*. Kept in
+        // the pool it is still allocated, and even destroyed, Dawn and Metal
+        // hold a texture until the submit that used it is done: in one batch
+        // every intermediate stays, the sum of them all rather than the most
+        // alive at once. At 42 MP a lean render went from 2.5 GB to 1.9 (#399).
+        // A later node of the same shape allocates afresh; that is the price.
+        if (releaseEveryRender_ && pool_.idleBytes() > 0) giveBack();
+    }
+}
+
 double Pipeline::render() {
     if (!compiled_) throw std::runtime_error("render before compile()");
 
@@ -473,48 +567,46 @@ double Pipeline::render() {
     lastRun_.assign(nodes_.size(), NodeTiming{});
     for (std::size_t i = 0; i < nodes_.size(); ++i) lastRun_[i].name = nodes_[i].name;
 
+    if (lastReadersStale_) computeLastReaders();
+    decideMemory();
+    failedNode_ = -1;
+    submittedMs_ = 0.0;
+    batch_.reset();
+    if (!profiling_) batch_ = std::make_unique<gpu::CommandBuffer>(device_);
+
+    // A render that throws part way drops its unsubmitted batch here, not at
+    // the next render: what it encoded holds every texture it bound (#406).
     double total = 0.0;
-    std::unique_ptr<gpu::CommandBuffer> batch;
-    if (!profiling_) batch = std::make_unique<gpu::CommandBuffer>(device_);
-
-    for (int id : order_) {
-        const Node& node = nodes_[static_cast<std::size_t>(id)];
-        if (!(dirty_[static_cast<std::size_t>(id)] && node.enabled)) continue;
-
-        // Whatever this dispatch is about to read must exist first — pulling
-        // back anything the pool already reclaimed. A no-op for every input
-        // that is still resident, which is the ordinary case once a graph is
-        // warm. See `ensure()`'s comment for why recomputing one is safe.
-        for (int in : node.inputs) {
-            if (in != kSource) ensure(resolve(in), batch.get());
+    try {
+        runDirty();
+        total = submittedMs_;
+        if (batch_) {
+            batch_->commitAndWait();
+            total += batch_->gpuMilliseconds();
         }
-        computeOne(id, batch.get());
-        if (releaseEveryRender_ && pool_.idleBytes() > 0) {
-            // ⚠ Lean, a texture handed back is memory given back *now*. Kept in
-            // the pool it is still allocated, and even destroyed, Dawn and Metal
-            // hold a texture until the submit that used it is done: in one batch
-            // every intermediate stays, the sum of them all rather than the most
-            // alive at once. So the batch so far goes, then the pool, then the
-            // memory: at 42 MP a lean render went from 2.5 GB to 1.9 (#399).
-            // A later node of the same shape allocates afresh; that is the price.
-            if (batch) {
-                batch->commitAndWait();
-                total += batch->gpuMilliseconds();
-            }
-            pool_.shrink();
-            device_.reclaim();
-            if (batch) batch = std::make_unique<gpu::CommandBuffer>(device_);
-        }
+    } catch (...) {
+        batch_.reset();
+        throw;
     }
-
-    if (batch) {
-        batch->commitAndWait();
-        total += batch->gpuMilliseconds();
+    if (batch_) {
+        batch_.reset();
     } else {
         // Profiling: every dispatch above already timed itself.
         for (const auto& t : lastRun_) total += t.ms;
     }
     std::fill(dirty_.begin(), dirty_.end(), false);
+    // Frugal, the cache after the render is the keep set and the pinned
+    // outputs, nothing else, even where an output's last reader was clean and
+    // did not run this time (#406). Into the pool: the next render's plan
+    // counts it, and a frugal one gives it back before it allocates.
+    if (frugal_) {
+        for (std::size_t i = 0; i < nodes_.size(); ++i) {
+            if (ownedOutputs_[i] && !keep_[i] && !isPinnedOrTerminal(int(i))) {
+                outputs_[i] = nullptr;
+                pool_.release(std::move(ownedOutputs_[i]));
+            }
+        }
+    }
     if (trimPool_) {
         // Reuse released textures within this transition's render, then return
         // the leftovers to Metal. Ordinary slider ticks never trim the pool.
@@ -577,7 +669,11 @@ std::size_t Pipeline::intermediateBytes() const noexcept {
 }
 
 std::size_t Pipeline::allocatedBytes() const noexcept {
-    std::size_t total = intermediateBytes() + pool_.idleBytes();
+    return intermediateBytes() + pool_.idleBytes() + auxBytes();
+}
+
+std::size_t Pipeline::auxBytes() const noexcept {
+    std::size_t total = 0;
     for (const auto& t : aux_) { if (t) total += t->sizeBytes(); }
     return total;
 }
@@ -625,6 +721,7 @@ std::size_t Pipeline::peakLiveBytes() const noexcept {
     for (std::size_t step = 0; step < order_.size(); ++step) {
         const int id = order_[step];
         if (id < 0 || static_cast<std::size_t>(id) >= nodes_.size()) continue;
+        if (!nodes_[static_cast<std::size_t>(id)].enabled) continue;   // never written
         live += nodeBytes(id);
         written[static_cast<std::size_t>(id)] = true;
         peak = std::max(peak, live);

@@ -286,7 +286,14 @@ static class SideBySide {
         }
         if (graph == Graph.Failed) {
             string why = session.LastError;
-            if (again && why.Contains(EngineModel.OutOfGpuMemory) && E.Cache.Shed()) { s.Stale = stale; return Render(s, again: false); }
+            // Out of GPU memory: the decoded neighbours go (#392), and the other
+            // pane's engine gives its render memory back, its picture already
+            // copied into its pane (#406); then once more, before saying so.
+            if (again && why.Contains(EngineModel.OutOfGpuMemory)) {
+                bool freed = E.Cache.Shed();
+                if (Other(s).Session is { } other && other != session) { other.ReleaseRenderMemory(); freed = true; }
+                if (freed) { s.Stale = stale; return Render(s, again: false); }
+            }
             s.Region = null;
             s.Rendered = s.Wanted;   // said once, not retried every frame
             Say(s, $"Couldn't render {s.Name}: {why}." + (s.Preview != null ? " Showing its preview." : ""));

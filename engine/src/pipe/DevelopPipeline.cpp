@@ -1,5 +1,7 @@
 #include "pipe/DevelopPipeline.h"
 
+#include <vector>
+
 #include "raw/RawImage.h"
 
 #include <cmath>
@@ -69,6 +71,40 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     // The final output and the source are pinned structurally by `Pipeline`
     // itself and are deliberately not repeated here.
     pipeline_.setPinned({nFuseProxy_, nPeak_, nHueSat_, nRgb_, nHighlights_, nHlFill_});
+
+    // ⚠ **The levels of clarity, denoise and texture (#406).** Each chain
+    // reruns whole whenever any of it is dirty, except a strength move that
+    // leaves the denoise blurs clean, and only its own nodes read these. When
+    // the memory rule turns a render frugal (`Pipeline::decideMemory`) they are
+    // never kept: kept, four full-resolution denoise levels alone were 1.3 GB
+    // at 42 MP. The chains' inputs and outputs are ordinary nodes.
+    std::vector<int> levels;
+    for (int j = 0; j < kDenoiseScales; ++j) {
+        levels.push_back(nAtrousBlur_[j]);
+        levels.push_back(nLocalBlur_[j]);
+        if (j + 1 < kDenoiseScales) {
+            levels.push_back(nAtrousShrink_[j]);
+            levels.push_back(nLocalShrink_[j]);
+        }
+    }
+    levels.push_back(nDenoiseField_);
+    levels.push_back(nChromaDown_);
+    for (int j = 0; j < kChromaScales; ++j) {
+        levels.push_back(nChromaBlur_[j]);
+        levels.push_back(nChromaShrink_[j]);
+    }
+    levels.push_back(nLlfLuma_);
+    for (int l = 1; l < kLlfLevels; ++l) {
+        levels.push_back(nLlfGauss_[l]);
+        for (int st = 0; st < kLlfStacks; ++st) levels.push_back(nLlfPack_[l][st]);
+    }
+    for (int st = 0; st < kLlfStacks; ++st) levels.push_back(nLlfRemapH_[st]);
+    for (int l = 0; l + 1 < kLlfLevels; ++l) levels.push_back(nLlfOut_[l]);
+    pipeline_.setTransient(levels);
+    // Non-local means costs about forty atrous blurs a pass (denoise against
+    // texture alone, 198 against 52 ms at 42 MP, of which the eight-node chain
+    // is most of the 52): the output a frugal render keeps first.
+    pipeline_.setCostWeight(nNlm_, 40.0f);
 
     // Once per graph. The plate is 33 MB and identical for every photograph.
     uploadGrainPlate();
@@ -521,6 +557,43 @@ double DevelopPipeline::renderOnce() {
     const double ms = pipeline_.render();
     commitBrushAccum();
     return ms;
+}
+
+std::string DevelopPipeline::failedEffect() const {
+    const auto on = [&](int id) { return id >= 0 && pipeline_.node(id).enabled; };
+    // Texture rides on the denoise chain's shrinks (research/high-iso.md §2).
+    const bool texture = std::fabs(lastAdj_.texture) > 1e-4f && on(nAtrousShrink_[0]);
+    const bool denoise = (on(nAtrousShrink_[0]) && (lastAdj_.denoiseLuma > 0.0f ||
+                                                    lastAdj_.denoiseColor > 0.0f)) ||
+                         on(nNlm_);
+    std::vector<std::string> effects;
+    if (on(nDehaze_)) effects.emplace_back("dehaze");
+    if (on(nClarity_)) effects.emplace_back("clarity");
+    if (on(nFusion_)) effects.emplace_back("exposure fusion");
+    if (denoise) effects.emplace_back("denoise");
+    if (texture) effects.emplace_back("texture");
+    if (on(nLocalShrink_[0])) effects.emplace_back("masked denoise");
+
+    // The effect whose texture the card refused, when it was one; otherwise
+    // (a demosaic plane, the output) every heavy effect that is on, since
+    // together they are what the photo needs.
+    const int id = pipeline_.failedNode();
+    if (id >= 0) {
+        const std::string& name = pipeline_.node(id).name;
+        const std::string group = name.substr(0, name.find(':'));
+        if (group == "denoise") {
+            if (texture && denoise) return "denoise and texture";
+            return texture ? "texture" : "denoise";
+        }
+        if (group == "local denoise") return "masked denoise";
+        if (group == "fusion") return "exposure fusion";
+        if (group == "clarity" || group == "dehaze") return group;
+    }
+    if (effects.empty()) return "the photo";
+    std::string list = effects.front();
+    for (std::size_t i = 1; i < effects.size(); ++i)
+        list += (i + 1 == effects.size() ? " and " : ", ") + effects[i];
+    return list;
 }
 
 double DevelopPipeline::render() {

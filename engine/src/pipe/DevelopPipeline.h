@@ -197,6 +197,17 @@ public:
     /// Renders every dirty node. Returns GPU-side milliseconds.
     double render();
 
+    /// What the out-of-memory message names (#406): the effect whose texture
+    /// the device refused on the last render ("clarity", "texture", ...), else
+    /// every heavy effect that is on ("clarity, denoise and texture"), else
+    /// "the photo".
+    [[nodiscard]] std::string failedEffect() const;
+    /// What a full render of the graph as it is set now needs at once: the
+    /// pool's schedule (`Pipeline::peakLiveBytes`) and the auxiliary plates.
+    [[nodiscard]] std::size_t neededBytes() const noexcept {
+        return pipeline_.peakLiveBytes() + pipeline_.auxBytes();
+    }
+
     /// Output dimensions after orientation, which is what the UI should show.
     /// Total clockwise quarter turns currently applied.
     [[nodiscard]] int quarterTurns() const noexcept { return turns_; }
@@ -544,6 +555,11 @@ private:
     /// scales and under-smooths the coarse. Both chains read it.
     static constexpr float kDenoiseScaleNorm[kDenoiseScales] = {0.8907f, 0.2007f,
                                                                 0.0855f, 0.0412f};
+    /// Scale j's place in a chain run fine to coarse (#406), for its block.
+    static constexpr std::int32_t shrinkEnds(int j) noexcept {
+        return (j == 0 ? params::kShrinkFirst : 0) |
+               (j == kDenoiseScales - 1 ? params::kShrinkLast : 0);
+    }
     /// m_c: what linearize multiplies each camera channel by under this white
     /// balance, which is what both chains scale the fitted variance by.
     [[nodiscard]] std::array<float, 3> denoiseMultipliers(const Adjustments&) const;

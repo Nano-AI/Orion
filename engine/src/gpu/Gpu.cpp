@@ -42,6 +42,45 @@ void Device::reclaim() noexcept { impl_->reclaim(); }
 
 std::uint64_t Device::allocatedBytes() const noexcept { return impl_->allocatedBytes(); }
 
+std::uint64_t Device::peakBytes() const noexcept { return peak_.load(); }
+
+void Device::resetPeak() noexcept {
+    const std::uint64_t now = impl_->allocatedBytes();
+    peak_.store(now ? now : textureBytes_->load());
+}
+
+std::uint64_t Device::textureBytes() const noexcept { return textureBytes_->load(); }
+
+std::uint64_t Device::freeBytes() const noexcept {
+    const std::uint64_t reported = impl_->freeBytes();
+    if (reported != kUnknown) return reported;
+    const std::uint64_t ceiling = ceiling_.load();
+    if (ceiling == 0) return kUnknown;
+    const std::uint64_t allocated = impl_->allocatedBytes();
+    const std::uint64_t held = allocated ? allocated : textureBytes_->load();
+    return ceiling > held ? ceiling - held : 0;
+}
+
+void Device::noteOutOfMemory() noexcept {
+    const std::uint64_t allocated = impl_->allocatedBytes();
+    ceiling_.store(allocated ? allocated : textureBytes_->load());
+}
+
+std::shared_ptr<std::atomic<std::uint64_t>> Device::noteTexture(std::uint64_t bytes) noexcept {
+    const std::uint64_t live = textureBytes_->fetch_add(bytes) + bytes;
+    // The allocator's figure includes what the texture just took; where the
+    // backend has none, the textures alive are the honest stand-in.
+    const std::uint64_t allocated = impl_->allocatedBytes();
+    const std::uint64_t now = allocated ? allocated : live;
+    std::uint64_t seen = peak_.load();
+    while (now > seen && !peak_.compare_exchange_weak(seen, now)) {}
+    // A ceiling learned from one refusal is not the card's forever: what was
+    // granted since raises it (another process gave memory back).
+    std::uint64_t ceiling = ceiling_.load();
+    while (ceiling != 0 && now > ceiling && !ceiling_.compare_exchange_weak(ceiling, now)) {}
+    return textureBytes_;
+}
+
 #ifndef ORION_HAS_DAWN
 std::unique_ptr<Device::Impl> makeDawnDevice() {
     throw std::runtime_error("this engine was built without Dawn (third_party/dawn-build)");
@@ -86,7 +125,9 @@ const char* formatName(PixelFormat f) noexcept {
 
 // ── Texture ────────────────────────────────────────────────────────────────
 
-Texture::~Texture() = default;
+Texture::~Texture() {
+    if (account_) account_->fetch_sub(sizeBytes());
+}
 
 std::unique_ptr<Texture> Texture::create(Device& device, std::uint32_t width,
                                          std::uint32_t height, PixelFormat format,
@@ -97,6 +138,7 @@ std::unique_ptr<Texture> Texture::create(Device& device, std::uint32_t width,
     t->height_ = height;
     t->format_ = format;
     t->impl_   = device.impl().texture(width, height, format, linear);
+    t->account_ = device.noteTexture(t->sizeBytes());
     return t;
 }
 
@@ -110,6 +152,7 @@ std::unique_ptr<Texture> Texture::createShared(Device& device, std::uint32_t wid
     t->height_ = height;
     t->format_ = PixelFormat::RGBA8Unorm;
     t->impl_   = std::move(impl);
+    t->account_ = device.noteTexture(t->sizeBytes());
     return t;
 }
 

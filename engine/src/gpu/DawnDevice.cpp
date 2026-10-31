@@ -146,6 +146,10 @@ struct DawnDevice final : Device::Impl {
             submit();
         } catch (...) {}   // a failed wait leaves the memory for a later tick, as before
     }
+    // The driver's count where it has one (#406); Dawn has none of its own.
+    std::uint64_t freeBytes() const noexcept override {
+        return driverFreeBytes(ctx->vendorId, ctx->deviceId);
+    }
     std::uint64_t allocatedBytes() const noexcept override {
         return ::dawn::native::GetAllocatorMemoryInfo(ctx->device.Get()).totalAllocatedMemory;
     }

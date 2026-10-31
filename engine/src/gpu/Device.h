@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <stdexcept>
@@ -71,6 +72,33 @@ public:
     /// Shared by every engine in the process, as the device is.
     [[nodiscard]] std::uint64_t allocatedBytes() const noexcept;
 
+    /// The most this device has held since `resetPeak`, sampled at every
+    /// texture creation: the allocator's bytes where the backend reports them
+    /// (Dawn, `allocatedBytes`), else the bytes of the textures alive (Metal).
+    /// What the memory budget gate reads (#406). Starts at zero.
+    [[nodiscard]] std::uint64_t peakBytes() const noexcept;
+    void resetPeak() noexcept;
+    /// What the device can still give, in bytes: the backend's own figure
+    /// where it has one (Metal's recommended working set less what it holds),
+    /// else, once an allocation has been refused, that refusal's ceiling less
+    /// what is held now; `kUnknown` before either. The memory rule's budget
+    /// reads it (#406).
+    static constexpr std::uint64_t kUnknown = ~std::uint64_t(0);
+    [[nodiscard]] std::uint64_t freeBytes() const noexcept;
+    /// An allocation was refused with this much held: the ceiling `freeBytes`
+    /// falls back to where the backend cannot say (Dawn).
+    void noteOutOfMemory() noexcept;
+    /// Forgets that ceiling: memory others held may have come back. The engine
+    /// calls it when a photo opens.
+    void forgetOutOfMemory() noexcept { ceiling_.store(0); }
+
+    /// Bytes of the textures this device has created and not yet destroyed.
+    [[nodiscard]] std::uint64_t textureBytes() const noexcept;
+
+    /// Texture::create's bookkeeping, backend-neutral: one more texture of
+    /// `bytes` exists. Returns the counter its destructor subtracts from.
+    [[nodiscard]] std::shared_ptr<std::atomic<std::uint64_t>> noteTexture(std::uint64_t bytes) noexcept;
+
     /// Backend-private: how the backend's own files reach their half.
     struct Impl;
     [[nodiscard]] Impl& impl() const noexcept { return *impl_; }
@@ -81,6 +109,11 @@ private:
     std::unique_ptr<Impl> impl_;
     DeviceInfo            info_;
     Backend               backend_ = Backend::Metal;
+    /// Shared with every texture, which may outlive the device (Dawn).
+    std::shared_ptr<std::atomic<std::uint64_t>> textureBytes_ =
+        std::make_shared<std::atomic<std::uint64_t>>(0);
+    std::atomic<std::uint64_t> peak_{0};
+    std::atomic<std::uint64_t> ceiling_{0};   // 0: no allocation refused yet
 };
 
 }  // namespace orion::gpu

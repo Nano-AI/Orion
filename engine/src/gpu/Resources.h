@@ -9,6 +9,7 @@
 
 #include "gpu/Device.h"
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -93,6 +94,9 @@ private:
     std::unique_ptr<Impl> impl_;
     std::uint32_t width_ = 0, height_ = 0;
     PixelFormat   format_ = PixelFormat::R32Float;
+    /// The device's live texture bytes, which this subtracts from when it
+    /// goes (`Device::textureBytes`, #406).
+    std::shared_ptr<std::atomic<std::uint64_t>> account_;
 };
 
 /// A compiled .metallib (Metal) or prepared .wgsl (Dawn, which swaps the

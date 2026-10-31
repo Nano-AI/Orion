@@ -48,8 +48,22 @@ struct ShrinkParams
     int   step;            // 2^j: the local energy window's spacing
     int   useField;        // 1: β per pixel from `field`, strengths ignored
     float texture;         // -1..1, Starck et al. 2003's gain on j = 0, 1
-    int   _pad1;
+    int   ends;            // kFirstScale | kLastScale, fine to coarse (#406)
 };
+
+// Run fine to coarse, a scale needs only its two levels and the sum so far
+// (#406): the finest starts the sum from zero, the coarsest adds the residual
+// c_J. Coarse to fine (both clear) the residual is the first `accum` instead.
+static const int kFirstScale = 1;   // `accum` is unread: the sum starts here
+static const int kLastScale  = 2;   // add c_{j+1}, the residual, to the result
+
+/// What this scale's kept detail is added to: the sum so far, plus the
+/// residual at the coarsest scale.
+float3 sumBase(Texture2D<float4> accum, Texture2D<float4> coarse, uint2 at, int ends)
+{
+    const float3 sum = (ends & kFirstScale) != 0 ? float3(0.0f) : accum[at].rgb;
+    return (ends & kLastScale) != 0 ? sum + coarse[at].rgb : sum;
+}
 
 [shader("compute")]
 [numthreads(16, 16, 1)]
@@ -80,7 +94,7 @@ void atrousShrink(uint3 tid : SV_DispatchThreadID,
     }
     else if (betaLuma <= 0.0f && betaChroma <= 0.0f && p.texture == 0.0f)
     {
-        dst[tid.xy] = float4(accum[tid.xy].rgb + detail, 1.0f);
+        dst[tid.xy] = float4(sumBase(accum, coarse, tid.xy, p.ends) + detail, 1.0f);
         return;
     }
 
@@ -128,5 +142,5 @@ void atrousShrink(uint3 tid : SV_DispatchThreadID,
     // this, Color still smooths luminance, which is §0.1's defect again.
     keptChroma -= luminance2020(keptChroma);
 
-    dst[tid.xy] = float4(accum[tid.xy].rgb + keptLuma + keptChroma, 1.0f);
+    dst[tid.xy] = float4(sumBase(accum, coarse, tid.xy, p.ends) + keptLuma + keptChroma, 1.0f);
 }
