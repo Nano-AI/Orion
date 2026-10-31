@@ -125,6 +125,10 @@ struct RawInfo {
     /// where a DJI drone or a phone writes its own lens correction. Empty for
     /// every other format. Parsed by pipe/LensOpcodes.h.
     std::vector<std::uint8_t> dngOpcodes[3];
+    /// The XMP packet the file carries (a DNG's or TIFF's XMLPacket tag), as
+    /// LibRaw read it into `xmpdata`; empty when there is none. The sidecar's
+    /// baseline for a format Adobe embeds into, never written back (#405).
+    std::string xmp;
 };
 
 /// Metadata only. Orders of magnitude cheaper than decodeBayer — this is what a

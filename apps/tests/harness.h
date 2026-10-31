@@ -137,6 +137,7 @@ void testFloatToHalf();
 void testDngRoundTrip();
 void testLinearDngOpens();
 void testDngEmbeddedPreview();
+void testDngEmbeddedXmp();
 void testLinearDngBaselineExposure();
 void testLinearDngEngineOpen();
 void testFacadeSessionSeams();

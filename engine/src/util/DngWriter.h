@@ -76,6 +76,11 @@ struct DngLinearImage {
     /// the raw image. Empty writes none. Only the lens-opcode tests set it, to
     /// put a known correction in a real file LibRaw then reads back.
     std::vector<std::uint8_t> opcodeList3;
+
+    /// An XMP packet written as IFD0's XMLPacket tag (700; XMP Specification
+    /// Part 3, 2016, §1.1.4 TIFF). Empty writes none. Only the sidecar test
+    /// sets it, to put a known embedded rating in a real file (#405).
+    std::string xmp;
 };
 
 /// Writes the DNG. Throws std::runtime_error on failure; on any throw the

@@ -57,8 +57,8 @@ static class LibraryFiles {
     public static IEnumerable<string> Siblings(string photo) {
         string folder = Path.GetDirectoryName(photo)!, stem = Path.GetFileNameWithoutExtension(photo);
         var listed = Directory.EnumerateFiles(folder).Select(Path.GetFileName).ToHashSet();
-        foreach (var owned in new[] { stem + ".xmp", stem + ".orion-snapshots.json" })
-            if (listed.Contains(owned)) yield return Path.Combine(folder, owned);
+        if (Sidecar.OwnPath(photo) is { } sidecar) yield return sidecar;   // the naming rule's own answer (#405)
+        if (listed.Contains(stem + ".orion-snapshots.json")) yield return Path.Combine(folder, stem + ".orion-snapshots.json");
         foreach (var name in listed.Where(n => n!.StartsWith(stem + ".orion-matte-") && n.EndsWith(".png")).Order())
             yield return Path.Combine(folder, name!);
     }

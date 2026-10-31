@@ -75,7 +75,7 @@ Nothing in `shell/` sets a colour, spacing, radius, font size, shadow or icon si
 | Shadow | one: black .7, y 1, blur 3 | Only under what a hand grabs (thumb, puck, compare handle); hover and press move it from there |
 | Icons | 24-unit grid kept, one 1.6 stroke, `sm` 12 / `md` 16 | Never stretched to a glyph's bounds; `sm` in a row of text, `md` on a button, tab or nameplate |
 | Colour roles | `warn` apart from `star`; `faint` not for words | A warning is not a rating; faint is 2.5:1 |
-| Exempt | 1 px hairlines, ring offsets and the 2 px focus ring, the 80 px traffic lights, pills, the tab cells' 8 px | The tab padding is pinned by `SelfTest.Design` (8 spare at 322, equal cells at 560) |
+| Exempt | 1 px hairlines, ring offsets and the 2 px focus ring, the 80 px traffic lights, pills, the tab cells' 8 px | The tab padding is pinned by `SelfTest.Design` (7.75 spare each side at 322 and at the widest, equal cells at the widest; #403) |
 | Exempt, ink | White and black at an opacity, and their stroke widths, wherever they draw over a photograph or a colour wheel (`Ink.White`/`Ink.Black`, the crop, mask, spot and loupe overlays, the navigator, the wheel's cross and puck outline) | They must read on any picture; a UI grey is tuned for the panels and vanishes on a mid-grey sky |
 | Exempt, data | The loupe's sampled colour, a colour mask's swatch, the histogram's channels, the watermark raster (it draws into the exported file) | They show the photograph's values, not the interface's |
 | Exempt, derived | `AccentLift` (accent toward text), `AnalogTrack.Shade` (the shadow token's alpha), the colour wheel's panel fade | Computed from tokens, so they follow them |
@@ -85,7 +85,7 @@ Nothing in `shell/` sets a colour, spacing, radius, font size, shadow or icon si
 
 | Area | Decision |
 |---|---|
-| Layout | Tool column 322–560 px, resizable by a splitter on the hairline (canvas keeps 360); canvas never wraps under it (a wrapping row made the photo 1506 px tall); single column under 760 px |
+| Layout | Tool column 322 px to its widest (560, or up to 600 where the tab names' face needs it, #403), resizable by a splitter on the hairline (canvas keeps 360); canvas never wraps under it (a wrapping row made the photo 1506 px tall); single column under 760 px |
 | Overlays | Zoom and rating float over the photo as translucent pills; solid under reduced transparency |
 | Tabs | Selected tab changes color only, never weight; a sliding indicator moves under it |
 | States | Every control drawn at rest, hover, pressed (scale .97, 100 ms), focus, disabled, edited; canvas has loading, not-cached and couldn't-open states |

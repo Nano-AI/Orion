@@ -23,6 +23,10 @@ public sealed class EngineModel : INotifyPropertyChanged {
 
     public EngineModel() => _source = new SessionCache(_list);
 
+    /// A sidecar write that escaped to the full name says so on the status line (#405).
+    /// Posted, so a write flushed on a photo switch is not cleared by the open after it.
+    static EngineModel() => Sidecar.Noticed += message => Dispatcher.UIThread.Post(() => Shared.Say(message));
+
     /// Where sessions come from: the two-tier cache of decision #318.
     public SessionCache Cache => _source;
 

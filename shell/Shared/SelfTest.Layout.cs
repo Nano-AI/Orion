@@ -108,7 +108,7 @@ static partial class SelfTest {
               "each clipping flag says what it measures");
     }
 
-    static void SplitterChecks(Window window) {
+    static void SplitterChecks(MainWindow window) {
         var splitter = window.FindControl<GridSplitter>("Splitter")!;
         var body = window.FindControl<Grid>("Body")!;
         var canvas = window.FindControl<Grid>("CanvasHost")!;
@@ -150,8 +150,8 @@ static partial class SelfTest {
         for (int i = 0; i < 60; i++) Press(window, splitter, Key.Right);
         window.UpdateLayout();
         double narrowest = body.ColumnDefinitions[2].ActualWidth;
-        Check(widest == MainWindow.ToolColMax && narrowest == Layout.ToolCol,
-              $"the tool column stays between {Layout.ToolCol} and {MainWindow.ToolColMax} ({narrowest}–{widest})");
+        Check(widest == window.ToolColMax && narrowest == Layout.ToolCol && window.ToolColMax is >= MainWindow.ToolColBase and <= MainWindow.ToolColCap,
+              $"the tool column stays between {Layout.ToolCol} and its measured widest {window.ToolColMax} ({narrowest}–{widest})");
         Check(splitter.Bounds.Width >= 8 && splitter.Cursor != null && !string.IsNullOrEmpty(Avalonia.Automation.AutomationProperties.GetName(splitter)),
               $"the splitter is a {splitter.Bounds.Width} px target with a resize cursor and a spoken name");
     }

@@ -127,6 +127,7 @@ int main() {
     testDngRoundTrip();
     testLinearDngOpens();
     testDngEmbeddedPreview();
+    testDngEmbeddedXmp();
     testLinearDngBaselineExposure();
     testLinearDngEngineOpen();
     testFacadeSessionSeams();

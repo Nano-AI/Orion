@@ -14,7 +14,7 @@ static partial class SelfTest {
     static void ForeignXmpChecks() {
         string dir = Directory.CreateTempSubdirectory("orion-foreign-xmp-").FullName;
         try {
-            string photo = Path.Combine(dir, "photo.ARW"), xmp = Sidecar.PathFor(photo);
+            string photo = Path.Combine(dir, "photo.ARW"), xmp = Path.Combine(dir, "photo.xmp");
             const string edit64 = "eyJleHBvc3VyZUV2IjoxfQ==";   // {"exposureEv":1}
             foreach (var (file, rating, label, develop, inPlace) in new[] {
                          ("lightroom-style.xmp", 2, (string?)"Red", false, new[] { "xmp:Rating=\"4\"" }),
@@ -86,12 +86,12 @@ static partial class SelfTest {
         }
     }
 
-    /// The document without Orion's three fields and without namespace
+    /// The document without Orion's fields (rating, label, edit, source) and without namespace
     /// declarations (Orion may add `xmlns:orion`; names stay expanded), whitespace dropped.
-    static XDocument ForeignNodes(string text) {
-        var doc = XDocument.Parse(text);
+    static XDocument ForeignNodes(string text, LoadOptions options = LoadOptions.None) {
+        var doc = XDocument.Parse(text, options);
         XName[] orion = [XName.Get("Rating", "http://ns.adobe.com/xap/1.0/"), XName.Get("Label", "http://ns.adobe.com/xap/1.0/"),
-                         XName.Get("Develop", "http://orion.photo/ns/1.0/")];
+                         XName.Get("Develop", "http://orion.photo/ns/1.0/"), XName.Get("Source", "http://orion.photo/ns/1.0/")];
         foreach (var d in doc.Descendants(RdfNs + "Description").ToList()) {
             d.Attributes().Where(a => orion.Contains(a.Name)).Remove();
             d.Elements().Where(e => orion.Contains(e.Name)).Remove();

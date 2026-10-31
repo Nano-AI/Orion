@@ -710,6 +710,15 @@ OrionStatus orion_read_thumbnail(const char* path, uint8_t* buffer,
                                  uint32_t capacity, uint32_t* out_size,
                                  int32_t* out_turns);
 
+/* Copies the XMP packet a file embeds (a DNG's XMLPacket tag, as LibRaw reads
+ * it) into `buffer`, not NUL-terminated. Pass a NULL buffer to query the size
+ * first; *out_size receives the byte count needed or written, 0 when the file
+ * carries none (ORION_OK). A buffer too small returns ORION_ERR_BAD_ARG with
+ * *out_size still set, so one call with a generous buffer usually suffices. The shell reads it as a sidecar's baseline for a
+ * format Adobe embeds XMP into, and never writes it back (#405). */
+OrionStatus orion_read_xmp(const char* path, uint8_t* buffer,
+                           uint32_t capacity, uint32_t* out_size);
+
 /* Export. Renders at full resolution and writes the file. */
 typedef enum OrionImageFormat {
     ORION_FORMAT_PNG  = 0,

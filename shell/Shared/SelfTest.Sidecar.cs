@@ -33,6 +33,7 @@ static partial class SelfTest {
     static partial void SidecarChecks() {
         GoldenChecks();
         ForeignXmpChecks();
+        SidecarNameChecks();
         var engine = EngineModel.Shared;
         if (engine.Handle == 0) return;   // Run already failed for want of a photo
         string dir = Directory.CreateTempSubdirectory("orion-sidecar-").FullName;

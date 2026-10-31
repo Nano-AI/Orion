@@ -672,6 +672,19 @@ OrionStatus orion_read_info(const char* path, OrionRawInfo* out) {
     });
 }
 
+OrionStatus orion_read_xmp(const char* path, uint8_t* buffer,
+                           uint32_t capacity, uint32_t* out_size) {
+    if (path == nullptr || out_size == nullptr) return ORION_ERR_BAD_ARG;
+    return guard(nullptr, [&]() -> OrionStatus {
+        const auto info = orion::raw::readInfo(path);
+        *out_size = static_cast<uint32_t>(info.xmp.size());
+        if (buffer == nullptr || info.xmp.empty()) return ORION_OK;   // size query, or none
+        if (capacity < info.xmp.size()) return ORION_ERR_BAD_ARG;
+        std::memcpy(buffer, info.xmp.data(), info.xmp.size());
+        return ORION_OK;
+    });
+}
+
 OrionStatus orion_read_thumbnail(const char* path, uint8_t* buffer,
                                  uint32_t capacity, uint32_t* out_size,
                                  int32_t* out_turns) {
