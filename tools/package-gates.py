@@ -64,6 +64,7 @@ RULES = [
     (["jxl*.dll", "libjxl*.so*"], ["libjxl.txt"], "libjxl"),
     (["hwy*.dll", "libhwy*.so*"], ["highway.txt"], "Highway"),
     (["brotli*.dll", "libbrotli*.so*"], ["brotli.txt"], "Brotli"),
+    (["libicuuc.so.*", "libicui18n.so.*", "libicudata.so.*"], ["icu.txt"], "ICU"),   # Linux only (#404)
 ]
 NOT_SHIPPED = ["*.pdb"]                     # debug databases carry build paths
 DIRS_OF_ORION = ("shaders", "data")         # the engine's own; lensfun is in NOTICE
@@ -81,6 +82,12 @@ EXCUSED = {("MicroCom.Runtime.dll", "kekekeks")}
 GPL = re.compile(r"GNU (AFFERO )?GENERAL PUBLIC LICENSE|^\s*License:\s*A?GPL|SPDX-License-Identifier:\s*A?GPL"
                  r"|(?i:terms\s+of\s+the\s+GNU\s+(Affero\s+)?General\s+Public\s+License)", re.M)
 LGPL = re.compile(r"GNU (LESSER|LIBRARY) GENERAL PUBLIC LICENSE")
+# ⚠ Sections excused by name, in one licence text each: ICU's LICENSE ends with the
+# notices of its build scripts, two of them GPL with Autoconf's exception (#404).
+# Neither file is compiled into ICU's libraries; a GPL match anywhere else in that
+# text, or in a section naming any other file, still fails.
+BUILD_SCRIPTS = {"icu.txt": ("File: aclocal.m4 (only for ICU4C)", "File: config.guess (only for ICU4C)")}
+SECTION = re.compile(r"^-{20,}\s*$", re.M)
 HOME = re.compile(rb"(?:/Users/|/home/|[A-Za-z]:\\+Users\\+)([^/\\\s\x00\"'<>:*?|]+)")
 
 
@@ -162,7 +169,13 @@ def check_files(app: Path, licences: Path, notice: str, errors):
 def check_gpl(licences: Path, needed_by, errors):
     for t in sorted(licences.iterdir()):
         text = t.read_text(errors="replace")
-        m = GPL.search(text)
+        excused = BUILD_SCRIPTS.get(t.name, ())
+
+        def build_script(at: int) -> bool:   # the section holding `at` is an excused build script's
+            start = max((s.end() for s in SECTION.finditer(text, 0, at)), default=0)
+            return text[start:at].strip().startswith(excused) if excused else False
+
+        m = next((m for m in GPL.finditer(text) if not build_script(m.start())), None)
         if m:
             line = text.count("\n", 0, m.start()) + 1
             fail(errors, f"{t.name}:{line} is GPL ({m.group(0).strip()!r}); an Orion package cannot carry it (#359)")

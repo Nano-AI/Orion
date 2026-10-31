@@ -1,0 +1,14 @@
+{
+  "featureFilters": {
+    "brkitr_dictionaries": "exclude",
+    "brkitr_lstm": "exclude",
+    "brkitr_adaboost": "exclude",
+    "conversion_mappings": "exclude",
+    "confusables": "exclude",
+    "rbnf_tree": "exclude",
+    "stringprep": "exclude",
+    "translit": "exclude",
+    "unames": "exclude",
+    "unit_tree": "exclude"
+  }
+}

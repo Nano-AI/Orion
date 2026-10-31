@@ -6,8 +6,10 @@
 #
 #   tools/package-linux.sh SHELL_DIR BUILD_DIR OUT_DIR
 #
-# Needs: dotnet, patchelf, mksquashfs (squashfs-tools), and vpk on PATH (or $VPK). Run on the oldest
-# system the AppImage should start on: it carries no glibc of its own.
+# Needs: dotnet, patchelf, mksquashfs (squashfs-tools), and vpk on PATH (or $VPK). Run on
+# the oldest system the AppImage should start on, Ubuntu 22.04 (glibc 2.35, decision #404):
+# it carries no glibc of its own, and tools/check-glibc-floor.py refuses a package that
+# asks for a newer one, or for libstdc++ outside Microsoft's own .NET runtime files.
 set -euo pipefail
 shell=$1 build=$(cd "$2" && pwd) out=$3   # build absolute: ldd answers absolute paths
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -37,6 +39,33 @@ done
 # load Orion's zlib and liblzma in place of the system's. The build's RUNPATH
 # names the build machine's vcpkg folder, which no user has (#396).
 patchelf --set-rpath '$ORIGIN/../lib' "$app/usr/bin/liborion_shim.so"
+
+# ICU, vcpkg's, its data filtered (tools/vcpkg-ports/icu, #404): .NET needs it for
+# culture-aware text and without it dies before Main, with no window, and bare
+# Ubuntu and Debian installs have no libicu. Microsoft's ICU package carries no
+# Linux binaries, so the package brings its own and names it to the runtime
+# (System.Globalization.AppLocalIcu), which then loads this copy only, from beside
+# the executable, by the sonames the ICU libraries ask each other for.
+icus=("$build"/vcpkg_installed/*/lib/libicuuc.so.*.*)
+[[ -f ${icus[0]} ]] || { echo "error: no ICU in $build/vcpkg_installed; vcpkg.json asks for it on Linux" >&2; exit 1; }
+icuuc=${icus[0]}
+icu=${icuuc##*/libicuuc.so.}; icu=${icu%%.*}   # the major version, as in the sonames
+for part in uc i18n data; do
+    cp -L "$(dirname "$icuuc")/libicu$part.so.$icu" "$app/usr/bin/"
+done
+python3 - "$app/usr/bin/Orion.runtimeconfig.json" "$icu" <<'PY'
+import json, sys
+path, icu = sys.argv[1:3]
+with open(path) as f:
+    config = json.load(f)
+props = config["runtimeOptions"].setdefault("configProperties", {})
+if props.get("System.Globalization.Invariant"):
+    sys.exit("error: the shell is built with invariant globalization; the package carries ICU instead (#404)")
+props["System.Globalization.AppLocalIcu"] = icu
+with open(path, "w") as f:
+    json.dump(config, f, indent=2)
+    f.write("\n")
+PY
 missing=$(env -u LD_LIBRARY_PATH ldd "$app/usr/bin/liborion_shim.so" | awk '/not found/ {print $1}' | grep -Ev "$base" || true)
 if [[ -n $missing ]]; then
     echo "error: the shim does not find $missing in the package" >&2; exit 1
@@ -45,11 +74,8 @@ cp "$root/LICENSE" "$root/NOTICE" "$app/usr/share/doc/orion/"
 cp "$root"/licenses/* "$app/usr/share/doc/orion/licenses/"
 rm -f "$app"/usr/bin/*.pdb   # debug databases carry build paths; the gate refuses any that remain
 
-cat > "$app/AppRun" <<'EOF'
-#!/bin/sh
-here="$(dirname "$(readlink -f "$0")")"
-exec "$here/usr/bin/Orion" "$@"
-EOF
+# AppRun checks its own files, a Vulkan loader and a display before .NET starts.
+sed "s/@ICU@/$icu/g" "$root/tools/AppRun" > "$app/AppRun"
 chmod +x "$app/AppRun"
 cat > "$app/orion.desktop" <<'EOF'
 [Desktop Entry]
@@ -73,4 +99,7 @@ python3 "$root/tools/package-gates.py" linux "$app" "$app/usr/share/doc/orion/li
 # version is the tag without its v, SemVer as vpk needs.
 "${VPK:-vpk}" pack --packId Orion --packVersion "${version#v}" --packDir "$app" --mainExe Orion \
     --packTitle Orion --outputDir "$out/releases"
+# Every ELF file starts on glibc 2.35, and none of ours asks for libstdc++ (#404). After
+# vpk, which adds its own UpdateNix to the AppDir: that ships too (static at 1.2.161).
+python3 "$root/tools/check-glibc-floor.py" "$app" --floor 2.35
 ls "$out/releases"

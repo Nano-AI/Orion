@@ -1,7 +1,7 @@
 {
   "name": "orion",
   "version-string": "0.5.0",
-  "description": "The engine's libraries on Windows and Linux (decision #376); macOS uses Homebrew.",
+  "description": "The engine's libraries on Windows and Linux (decision #376); macOS uses Homebrew. ICU only on Linux, for the AppImage (#404).",
   "builtin-baseline": "9eec002df1cd109f8f104cd966a763daf9751489",
   "dependencies": [
     "libraw",
@@ -10,6 +10,10 @@
       "name": "opencv4",
       "default-features": false,
       "features": ["calib3d", "fs", "jpeg", "png", "tiff"]
+    },
+    {
+      "name": "icu",
+      "platform": "linux"
     }
   ]
 }
