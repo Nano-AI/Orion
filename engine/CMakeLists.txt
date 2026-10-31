@@ -54,6 +54,7 @@ add_library(orion_engine STATIC
     src/merge/HdrMerge.cpp
     src/stack/Rejection.cpp
     src/stack/StarAlign.cpp
+    src/stack/Integrate.cpp
 )
 
 add_library(Orion::Engine ALIAS orion_engine)

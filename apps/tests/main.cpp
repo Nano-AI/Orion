@@ -135,6 +135,11 @@ int main() {
     testStarDetect();
     testStarAlignRecovers();
     testStarAlignRefuses();
+    testStackNoiseFallsSqrtN();
+    testStackRejectsStreak();
+    testStackRemovesHotPixel();
+    testStackNormalizesAndWeights();
+    testStackSkyGroundBlend();
     testGrainPlate();
     testGrainGpu();
     testGrainWiring();
