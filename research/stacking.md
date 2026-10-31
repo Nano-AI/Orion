@@ -94,6 +94,7 @@ Weight w_i = (k_i/σ_i)² when noise weighting is on (inverse variance after sca
 
 Luma → Gaussian blur σ 1 [S87] → background L = median and σ = 1.4826·MAD on a sparse grid → pixels > L + 5σ → 8-connected components [BA96] → keep area 2–400 px → centroid and flux from the unsmoothed luma above L → the 60 brightest.
 A sky mask, where given, restricts stars to the sky.
+A component whose brightest unsmoothed pixel carries more than half its flux is rejected: DAOPHOT's sharpness criterion [S87], which tells hot pixels and cosmic rays (all their flux in one pixel) from stars (a σ 1.2 PSF's peak carries ≈ 0.11, σ 0.7 ≈ 0.32). Without it, hot pixels pass the area gate, sit at the same sensor position in every frame, and their identical triangles lock registration at identity. Calibration darks (applied on the mosaic before detection) are the full remedy for hot pixels; this test is the guard for uncalibrated frames.
 
 ## 5. Registration
 

@@ -89,6 +89,28 @@ void testStarAlignRecovers() {
     std::printf("    measured max corner error %.4f px, %d inliers\n", err, got.inliers);
     report(got.ok && err < 0.3f, "the four corners land within 0.3 px",
            std::to_string(err) + " px");
+
+    // Hot pixels sit still on the sensor while the sky turns: if they were
+    // taken for stars, their identical triangles would vote for identity.
+    // A spike's flux is about its amplitude, a star's about 9x its peak, so
+    // against this fixture's bright stars (peak 0.05-0.8) spikes of 8 are
+    // what outrank them all — a real sky's mostly faint stars against
+    // spikes of 1. Measured: without the sharpness test this fails.
+    auto refHot = ref.rgb, movedHot = moved.rgb;
+    stackfix::addSpikes(refHot, kW, kH, 77, 40, 8.0f);
+    stackfix::addSpikes(movedHot, kW, kH, 77, 40, 8.0f);
+    const auto hot = alignStars(detectStars(movedHot.data(), kW, kH),
+                                detectStars(refHot.data(), kW, kH));
+    const float hotErr = worstCornerError(hot.refToSource, truth);
+    std::printf("    with 40 hot pixels: max corner error %.4f px, %d inliers\n", hotErr, hot.inliers);
+    report(hot.ok && hotErr < 0.3f, "40 fixed hot pixels outranking every star do not pull it to identity",
+           std::to_string(hotErr) + " px");
+
+    auto spikes = stackfix::starField(41, 0, kW, kH, persp::identity(), kNoise, kBackground).rgb;
+    stackfix::addSpikes(spikes, kW, kH, 77, 40, 1.0f);
+    const auto spikeStars = detectStars(spikes.data(), kW, kH);
+    report(spikeStars.size() < 3, "hot pixels alone are not stars",
+           std::to_string(spikeStars.size()));
 }
 
 void testStarAlignRefuses() {

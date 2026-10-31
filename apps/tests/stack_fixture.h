@@ -9,7 +9,11 @@
  *  `noiseSigma`. Packed float RGB, R = G = B. Pixel (x, y)'s centre is the
  *  coordinate (x, y), as in tests_align.cpp.
  *
+ *  Stars sit at least 10 px from the frame edge and from each other, so a
+ *  detection count measures the detector, not the seed's blends.
+ *
  *  `extra` stars are drawn as given, in frame coordinates, untransformed.
+ *  `addSpikes` plants single-pixel hot pixels at fixed sensor positions.
  */
 
 #pragma once
@@ -50,11 +54,14 @@ inline StarField starField(unsigned seed, int n, std::uint32_t w, std::uint32_t 
                            const std::vector<Star>& extra = {}) {
     StarField f;
     std::mt19937 rng(seed);
-    std::uniform_real_distribution<float> ux(4.0f, float(w) - 5.0f), uy(4.0f, float(h) - 5.0f),
+    std::uniform_real_distribution<float> ux(10.0f, float(w) - 11.0f), uy(10.0f, float(h) - 11.0f),
         peak(0.05f, 0.8f);
-    for (int i = 0; i < n; ++i) {
+    for (int tries = 0; int(f.reference.size()) < n && tries < 100 * n; ++tries) {
         const float x = ux(rng), y = uy(rng);   // sequenced: same seed, same field
-        f.reference.push_back({x, y, peak(rng)});
+        const float p = peak(rng);
+        bool clear = true;
+        for (const Star& s : f.reference) clear &= std::hypot(s.x - x, s.y - y) >= 10.0f;
+        if (clear) f.reference.push_back({x, y, p});
     }
 
     std::vector<Star> drawn;
@@ -86,6 +93,19 @@ inline StarField starField(unsigned seed, int n, std::uint32_t w, std::uint32_t 
         f.rgb[i * 3] = f.rgb[i * 3 + 1] = f.rgb[i * 3 + 2] = v;
     }
     return f;
+}
+
+/// `count` single-pixel spikes of `amplitude` added to all three channels at
+/// seeded positions — the same positions for the same seed, as a sensor's hot
+/// pixels are.
+inline void addSpikes(std::vector<float>& rgb, std::uint32_t w, std::uint32_t h,
+                      unsigned seed, int count, float amplitude) {
+    std::mt19937 rng(seed);
+    std::uniform_int_distribution<std::uint32_t> ux(0, w - 1), uy(0, h - 1);
+    for (int i = 0; i < count; ++i) {
+        const std::uint32_t x = ux(rng), y = uy(rng);
+        for (int c = 0; c < 3; ++c) rgb[(std::size_t(y) * w + x) * 3 + std::size_t(c)] += amplitude;
+    }
 }
 
 }  // namespace stackfix

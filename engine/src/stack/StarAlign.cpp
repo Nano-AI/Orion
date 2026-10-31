@@ -5,7 +5,8 @@
  *  Detection [BA96][S87]: luma -> Gaussian blur sigma 1 -> background median
  *  and 1.4826*MAD on a sparse grid -> smoothed > L + 5 sigma (and mask) ->
  *  8-connected components of area 2-400 -> flux-weighted centroid of the
- *  *unsmoothed* luma above L.
+ *  *unsmoothed* luma above L. A component whose brightest pixel carries over
+ *  half its flux is a hot pixel, not a star (sharpness, [S87]).
  *
  *  Matching [G86][V95][BCS20]: each star and its 4 nearest neighbours give
  *  C(5,3) = 10 triangles; a triangle's shape is (L2/L1, L1/L0) with sides
@@ -13,7 +14,8 @@
  *  triangles of one shape pair their stars. Every vertex pair of every matched
  *  triangle is a vote; RANSAC [FB81] keeps the votes one similarity explains.
  *
- *  The constants (5 sigma, area 2-400, 60 stars, radius 0.1, 2 px, 6 inliers)
+ *  The constants (5 sigma, area 2-400, peak share 0.5, 60 stars, radius 0.1,
+ *  2 px, 6 inliers)
  *  are research/UNSOURCED.md §22's.
  */
 
@@ -41,6 +43,11 @@ constexpr int   kMaxStars    = 60;
 constexpr int   kNeighbours  = 4;
 constexpr float kMatchRadius = 0.1f;
 constexpr int   kMinInliers  = 6;
+/// DAOPHOT's sharpness test [S87]: a component whose brightest unsmoothed
+/// pixel carries more than this share of its flux is a hot pixel or a cosmic
+/// ray, not a star. A sigma 1.2 star's peak carries ~0.11, a sigma 0.7 one
+/// ~0.32, a lone spike ~1. research/UNSOURCED.md §22.
+constexpr float kMaxPeakShare = 0.5f;
 
 /// Median of v (reorders it).
 float median(std::vector<float>& v) {
@@ -134,14 +141,14 @@ std::vector<Star> detectStars(const float* rgb, std::uint32_t width, std::uint32
         if (area < 2 || area > 400) continue;
         const int x0 = stats.at<int>(l, cv::CC_STAT_LEFT), y0 = stats.at<int>(l, cv::CC_STAT_TOP);
         const int bw = stats.at<int>(l, cv::CC_STAT_WIDTH), bh = stats.at<int>(l, cv::CC_STAT_HEIGHT);
-        double sum = 0, sx = 0, sy = 0;
+        double sum = 0, sx = 0, sy = 0, peak = 0;
         for (int y = y0; y < y0 + bh; ++y)
             for (int x = x0; x < x0 + bw; ++x) {
                 if (labels.at<int>(y, x) != l) continue;
                 const double v = luma.at<float>(y, x) - level;
-                sum += v; sx += v * x; sy += v * y;
+                sum += v; sx += v * x; sy += v * y; peak = std::max(peak, v);
             }
-        if (sum > 0) stars.push_back({float(sx / sum), float(sy / sum), float(sum)});
+        if (sum > 0 && peak <= kMaxPeakShare * sum) stars.push_back({float(sx / sum), float(sy / sum), float(sum)});
     }
     std::sort(stars.begin(), stars.end(), [](const Star& a, const Star& b) { return a.flux > b.flux; });
     if (int(stars.size()) > maxStars) stars.resize(std::size_t(maxStars));
@@ -150,7 +157,7 @@ std::vector<Star> detectStars(const float* rgb, std::uint32_t width, std::uint32
 
 merge::AlignResult alignStars(const std::vector<Star>& frame, const std::vector<Star>& reference) {
     merge::AlignResult result;   // identity, ok = false
-    if (frame.size() < 3 || reference.size() < 3) return result;
+    if (int(frame.size()) < kMinInliers || int(reference.size()) < kMinInliers) return result;
 
     const auto ft = triangles(frame), rt = triangles(reference);
     // Distinct votes: one (reference, frame) pair counts once however many
