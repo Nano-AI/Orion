@@ -1,9 +1,10 @@
 /*  Stacker — the orchestrator: file paths in, one stacked linear DNG out.
  *
  *  Modelled line for line on merge/HdrMerge: the stages are other files'
- *  work — decode (RawImage), demosaic (MergeRender), registration (Align for
- *  Noise, StarAlign for Stars and Landscape), the sky matte onto the sensor
- *  (SkySplit), integration (Integrate), the container (DngWriter) — and this
+ *  work — decode (RawImage), darks and flats (Calibrate), demosaic
+ *  (MergeRender), registration (Align for Noise, StarAlign for Stars and
+ *  Landscape), the sky matte onto the sensor (SkySplit), integration
+ *  (Integrate), the container (DngWriter) — and this
  *  class sequences them, carries progress across the facade, and owns the
  *  policy: a frame that does not register is left out (the reference never
  *  fails, it is identity), an existing output is a refusal, and a stack of

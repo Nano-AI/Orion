@@ -814,8 +814,12 @@ OrionStatus orion_engine_hdr_merge_cancel(OrionEngine* engine);
  *       blended over sky_matte).
  * rejection: -1 auto, 0 none, 1 percentile, 2 sigma, 3 winsorized, 4 linear fit.
  * weight_by_noise: nonzero weights each frame by its inverse noise variance.
- * darks/flats: optional calibration frames (NULL/0 for none). For now any
- *            dark or flat refuses with "calibration frames are not built yet".
+ * darks/flats: optional calibration frames (NULL/0 for none), the same size,
+ *            camera and kind (mosaic raw or linear DNG) as the frames, else a
+ *            refusal. The master dark is their per-sample median, subtracted;
+ *            the master flat is the flats' median minus the master dark,
+ *            normalized to mean 1 per CFA channel, divided. A raw is
+ *            calibrated on its mosaic, before demosaic (research/stacking.md §7).
  * sky_matte: landscape only, matte_width*matte_height floats 0..1, 1 = sky,
  *            UPRIGHT (as displayed); the engine undoes the reference's EXIF
  *            turn. Required for mode 2; ignored in modes 0 and 1, though a

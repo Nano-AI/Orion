@@ -152,6 +152,11 @@ int main() {
     testStackFacadeLandscape();
     testStackFacadeRefuses();
     testStackCancelIsAtomic();
+    testStackMasterDark();
+    testStackFlatGain();
+    testStackBayerRoundTrip();
+    testStackFacadeCalibrated();
+    testStackCalibratedRaws();
     testGrainPlate();
     testGrainGpu();
     testGrainWiring();

@@ -4,6 +4,12 @@
  *  2.9 GB), plus one frame in flight — its decoded image (192 MB as a linear
  *  DNG's RGBA halves), its float RGB (288 MB), detectStars' transients
  *  (~310 MB) — plus, in Noise mode, the reference's float (288 MB).
+ *
+ *  Calibration (Calibrate.h) comes first: a master is a median, so every
+ *  dark (then every flat) is held at once as floats — 96 MB a mosaic at
+ *  24 MP, 288 MB a linear DNG's RGB. ponytail: 20 linear-DNG flats are 5.8 GB;
+ *  a median over strips of rows would cap it if anyone stacks that many.
+ *  Afterwards only the two masters stay.
  */
 
 #include "stack/Stacker.h"
@@ -12,6 +18,7 @@
 #include "merge/MergeRender.h"
 #include "merge/Preview.h"
 #include "raw/RawImage.h"
+#include "stack/Calibrate.h"
 #include "stack/SkySplit.h"
 #include "stack/StarAlign.h"
 #include "util/DngWriter.h"
@@ -37,19 +44,73 @@ struct Meta {
     int flip = 0;
 };
 
-/// One file to own-normalized float RGB (1.0 = clip), camera-native; the decoded image dies on return.
-std::vector<float> decodeFrame(const std::string& path, merge::MergeRender& render, Meta& meta) {
+std::vector<float> rgbOf(const raw::LinearImage& linear) {
+    std::vector<float> rgb(linear.pixelCount() * 3);
+    for (std::size_t p = 0; p < linear.pixelCount(); ++p)
+        for (std::size_t c = 0; c < 3; ++c) rgb[p * 3 + c] = util::halfToFloat(linear.rgba[p * 4 + c]);
+    return rgb;
+}
+
+/// The master dark and flat gain, in the samples of the kind of frame they were built from: a Bayer
+/// raw's black-subtracted mosaic, or a linear DNG's RGB. Empty when no darks (flats) were given.
+/// Sizes are the sensor's (decoded, before any turn): a transposed frame has the same sample count.
+struct Masters {
+    std::vector<float> dark, gain;
+    int bayer = -1;   // -1: none built; else whether they are mosaics
+    std::uint32_t width = 0, height = 0;
+
+    void apply(std::vector<float>& samples, bool isBayer, std::uint32_t w, std::uint32_t h) const {
+        if (bayer < 0) return;
+        if (bayer != int(isBayer))
+            throw std::runtime_error("the dark and flat frames are not the same kind of raw as the lights");
+        if (w != width || h != height) throw std::runtime_error("the dark and flat frames do not match the lights' size");
+        calibrate(samples.data(), samples.size(), dark, gain);
+    }
+};
+
+/// One calibration frame as samples (see Masters), and each sample's channel when asked.
+std::vector<float> samplesOf(const std::string& path, Masters& m, std::vector<std::uint8_t>* channel) {
+    auto decoded = raw::decode(path);
+    const auto* bayer = std::get_if<raw::BayerImage>(&decoded);
+    const auto* linear = std::get_if<raw::LinearImage>(&decoded);
+    const std::uint32_t w = bayer ? bayer->width : linear->width, h = bayer ? bayer->height : linear->height;
+    if (m.bayer >= 0 && m.bayer != int(bayer != nullptr))
+        throw std::runtime_error("the dark and flat frames mix mosaic raws and linear DNGs");
+    if (m.bayer >= 0 && (w != m.width || h != m.height))
+        throw std::runtime_error("the dark and flat frames are not all the same size");
+    m.bayer = bayer != nullptr;
+    m.width = w;
+    m.height = h;
+    if (bayer) {
+        if (channel) *channel = channelsOf(*bayer);
+        return mosaicOf(*bayer);
+    }
+    auto rgb = rgbOf(*linear);
+    if (channel) {
+        channel->resize(rgb.size());
+        for (std::size_t i = 0; i < rgb.size(); ++i) (*channel)[i] = std::uint8_t(i % 3);
+    }
+    return rgb;
+}
+
+/// One file to own-normalized float RGB (1.0 = clip), camera-native, calibrated by the masters
+/// (a mosaic before demosaic); the decoded image dies on return.
+std::vector<float> decodeFrame(const std::string& path, merge::MergeRender& render, const Masters& masters, Meta& meta) {
     auto decoded = raw::decode(path);
     if (auto* bayer = std::get_if<raw::BayerImage>(&decoded)) {
         meta = {bayer->width, bayer->height, bayer->camMul, bayer->camToXyz, bayer->camera, bayer->flip};
+        if (masters.bayer >= 0) {
+            auto mosaic = mosaicOf(*bayer);
+            masters.apply(mosaic, true, bayer->width, bayer->height);
+            storeMosaic(*bayer, mosaic);
+        }
         return render.demosaic(*bayer);
     }
     // A linear DNG stacks too (and is what makes the stack testable from synthetic files).
     const auto& linear = std::get<raw::LinearImage>(decoded);
     meta = {linear.width, linear.height, linear.camMul, linear.camToXyz, linear.camera, linear.flip};
-    std::vector<float> rgb(linear.pixelCount() * 3);
-    for (std::size_t p = 0; p < linear.pixelCount(); ++p)
-        for (std::size_t c = 0; c < 3; ++c) rgb[p * 3 + c] = util::halfToFloat(linear.rgba[p * 4 + c]);
+    auto rgb = rgbOf(linear);
+    masters.apply(rgb, false, linear.width, linear.height);
     return rgb;
 }
 
@@ -83,20 +144,48 @@ void Stacker::run(const Request& rq) {
     if (landscape && (rq.skyMatte.empty() || rq.matteWidth <= 0 || rq.matteHeight <= 0 ||
                       rq.skyMatte.size() != std::size_t(rq.matteWidth) * std::size_t(rq.matteHeight)))
         throw std::runtime_error("a landscape stack needs a sky matte");
-    // ponytail: Task 11 builds calibration; until then a dark or flat is refused, not ignored.
-    if (!rq.darks.empty() || !rq.flats.empty()) throw std::runtime_error("calibration frames are not built yet");
-
     // Refuse a mixed set before paying for any decode (metadata only); the decode loop re-checks size.
     const auto ref = std::size_t(rq.reference);
     const raw::RawInfo refInfo = raw::readInfo(rq.paths[ref]);
+    const auto named = [](const std::string& c) { return c.find_first_not_of(' ') != std::string::npos; };
+    const auto otherCamera = [&](const raw::RawInfo& info) {
+        return named(info.camera) && named(refInfo.camera) && info.camera != refInfo.camera;
+    };
     for (const auto& path : rq.paths) {
         const raw::RawInfo info = raw::readInfo(path);
         if (info.width != refInfo.width || info.height != refInfo.height)
             throw std::runtime_error("the frames are different sizes — a stack comes from one camera");
-        const auto named = [](const std::string& c) { return c.find_first_not_of(' ') != std::string::npos; };
-        if (named(info.camera) && named(refInfo.camera) && info.camera != refInfo.camera)
+        if (otherCamera(info))
             throw std::runtime_error("the frames come from different cameras: " + refInfo.camera + ", " + info.camera);
     }
+    // readInfo's size is as displayed, and a dark shot with the camera turned is the same sensor: either way round.
+    // (Calibration is in sensor space, before any turn; the masters re-check the decoded sensor size.)
+    for (const auto* list : {&rq.darks, &rq.flats}) {
+        const std::string what = list == &rq.darks ? "dark" : "flat";
+        for (const auto& path : *list) {
+            const raw::RawInfo info = raw::readInfo(path);
+            if (!(info.width == refInfo.width && info.height == refInfo.height) &&
+                !(info.width == refInfo.height && info.height == refInfo.width))
+                throw std::runtime_error("the " + what + " frames do not match the lights' size");
+            if (otherCamera(info)) throw std::runtime_error("the " + what + " frames do not match the lights' camera");
+        }
+    }
+
+    // ── The masters, progress 0–0.05; each list is held whole only while its median needs it ──
+    Masters masters;
+    const std::size_t calTotal = rq.darks.size() + rq.flats.size();
+    std::size_t calDone = 0;
+    std::vector<std::uint8_t> channel;   // the flat's, for its per-channel mean
+    const auto median = [&](const std::vector<std::string>& paths, bool flat) {
+        std::vector<std::vector<float>> frames;
+        for (const auto& path : paths) {
+            step(0.05f * float(calDone++) / float(calTotal));
+            frames.push_back(samplesOf(path, masters, flat && frames.empty() ? &channel : nullptr));
+        }
+        return medianOf(frames);
+    };
+    masters.dark = median(rq.darks, false);
+    if (!rq.flats.empty()) masters.gain = flatGain(median(rq.flats, true), masters.dark, channel);
 
     // ── Decode and register, one frame at a time, the reference first ─────
     merge::MergeRender render(device_, shaderDir_);
@@ -111,7 +200,7 @@ void Stacker::run(const Request& rq) {
         step(0.05f + 0.70f * float(k) / float(n));
         const std::size_t i = k == 0 ? ref : (k <= ref ? k - 1 : k);   // the reference, then the rest in order
         Meta meta;
-        std::vector<float> rgb = decodeFrame(rq.paths[i], render, meta);
+        std::vector<float> rgb = decodeFrame(rq.paths[i], render, masters, meta);
         if (k == 0) {
             refMeta = meta;
         } else if (meta.width != refMeta.width || meta.height != refMeta.height) {

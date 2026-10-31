@@ -35,51 +35,12 @@ namespace fs = std::filesystem;
 namespace persp = orion::pipe::persp;
 using orion::stack::Star;
 
-void writeFrame(const std::string& path, const std::vector<float>& rgb, std::uint32_t w, std::uint32_t h,
-                const std::string& camera = "SONY ILCE-7RM3") {
-    orion::util::DngLinearImage img;
-    img.width = w;
-    img.height = h;
-    img.rgb = rgb.data();
-    img.xyzToCam = {0.6640f, -0.1847f, -0.0503f, -0.5238f, 1.3465f, 0.1916f, -0.0879f, 0.1636f, 0.6271f};
-    img.asShotNeutral = {0.4548f, 1.0f, 0.7130f};
-    img.camera = camera;
-    orion::util::writeDngLinear(path, img);
-}
-
-/// A DNG back to packed float RGB.
-std::vector<float> reopen(const std::string& path, std::uint32_t& w, std::uint32_t& h) {
-    const auto decoded = orion::raw::decode(path);
-    const auto& m = std::get<orion::raw::LinearImage>(decoded);
-    w = m.width;
-    h = m.height;
-    std::vector<float> rgb(m.pixelCount() * 3);
-    for (std::size_t p = 0; p < m.pixelCount(); ++p)
-        for (int c = 0; c < 3; ++c) rgb[p * 3 + std::size_t(c)] = orion::util::halfToFloat(m.rgba[p * 4 + std::size_t(c)]);
-    return rgb;
-}
-
-/// tests_hdr_merge.cpp's tile radiance (floored, so negative coordinates tile too) at 0.3 scale.
-float tile(float x, float y) {
-    const int tx = int(std::floor(x / 24.0f)), ty = int(std::floor(y / 24.0f));
-    const unsigned hsh = unsigned(tx) * 2654435761u ^ unsigned(ty) * 40503u;
-    return 0.3f * (0.08f + float(hsh % 40) * 0.01f);
-}
-
-constexpr std::uint32_t kTW = 480, kTH = 360;
-
-/// Frame pixel p depicts scene point p - (dx, dy): refToSource is a translation by (+dx, +dy).
-std::vector<float> tiles(float dx, float dy, float noise, unsigned seed) {
-    std::mt19937 rng(seed);
-    std::normal_distribution<float> g(0.0f, noise);
-    std::vector<float> rgb(std::size_t(kTW) * kTH * 3);
-    for (std::uint32_t y = 0; y < kTH; ++y)
-        for (std::uint32_t x = 0; x < kTW; ++x) {
-            const float v = tile(float(x) - dx, float(y) - dy) + g(rng);
-            for (int c = 0; c < 3; ++c) rgb[(std::size_t(y) * kTW + x) * 3 + std::size_t(c)] = v;
-        }
-    return rgb;
-}
+using stackfix::kTH;
+using stackfix::kTW;
+using stackfix::reopen;
+using stackfix::tile;
+using stackfix::tiles;
+using stackfix::writeFrame;
 
 OrionStatus stackFiles(OrionEngine* e, const std::vector<std::string>& files, int ref, int mode,
                        const std::string& out, const float* matte = nullptr, int mw = 0, int mh = 0) {
@@ -290,14 +251,15 @@ void testStackFacadeRefuses() {
         report(std::strstr(orion_last_error(engine), "sky") != nullptr, "landscape without a matte names the sky",
                orion_last_error(engine));
 
-        const char* dark[1] = {files[0].c_str()};
-        std::vector<const char*> p;
-        for (const auto& f : files) p.push_back(f.c_str());
-        CHECK(orion_engine_stack(engine, p.data(), 6, 0, 1, -1, 0, dark, 1, nullptr, 0, nullptr, 0, 0, out.c_str()) !=
-              ORION_OK);
-
-        {   // Mixed sets refuse before any decode: an odd size last of six, another camera.
+        {   // Mixed sets refuse before any decode: an odd size last of six, another camera, a dark of another size.
             writeFrame(odd, stackfix::starField(23, 60, 336, 240, persp::identity(), 0.005f, 0.05f).rgb, 336, 240);
+            const char* dark[1] = {odd.c_str()};
+            std::vector<const char*> p;
+            for (const auto& f : files) p.push_back(f.c_str());
+            CHECK(orion_engine_stack(engine, p.data(), 6, 0, 1, -1, 0, dark, 1, nullptr, 0, nullptr, 0, 0, out.c_str()) !=
+                  ORION_OK);
+            report(std::strstr(orion_last_error(engine), "dark frames do not match the lights' size") != nullptr,
+                   "a dark of another size is refused", orion_last_error(engine));
             auto mixed = files;
             mixed.back() = odd;
             CHECK(stackFiles(engine, mixed, 0, 1, out) != ORION_OK);
@@ -309,6 +271,17 @@ void testStackFacadeRefuses() {
             CHECK(stackFiles(engine, mixed, 0, 1, out) != ORION_OK);
             report(std::strstr(orion_last_error(engine), "different cameras") != nullptr,
                    "another camera's frame is refused", orion_last_error(engine));
+            const char* flat[1] = {other.c_str()};
+            CHECK(orion_engine_stack(engine, p.data(), 6, 0, 1, -1, 0, nullptr, 0, flat, 1, nullptr, 0, 0, out.c_str()) !=
+                  ORION_OK);
+            report(std::strstr(orion_last_error(engine), "flat frames do not match the lights' camera") != nullptr,
+                   "another camera's flat is refused", orion_last_error(engine));
+            // A turned camera passes the metadata check (as displayed), but this one's sensor really is 240x320.
+            writeFrame(odd, stackfix::starField(23, 60, 240, 320, persp::identity(), 0.005f, 0.05f).rgb, 240, 320);
+            CHECK(orion_engine_stack(engine, p.data(), 6, 0, 1, -1, 0, dark, 1, nullptr, 0, nullptr, 0, 0, out.c_str()) !=
+                  ORION_OK);
+            report(std::strstr(orion_last_error(engine), "do not match the lights' size") != nullptr,
+                   "a transposed dark is refused after decode", orion_last_error(engine));
             report(!fs::exists(out), "no output after a refusal");
         }
 

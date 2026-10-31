@@ -1,4 +1,5 @@
-/*  stack_fixture — a synthetic star field with known truth, shared by the
+/*  stack_fixture — a synthetic star field with known truth, and the linear-DNG
+ *  helpers (writeFrame, reopen, the tile scene), shared by the
  *  stack tests.
  *
  *  `n` stars are placed at seeded random reference positions; the frame shows
@@ -19,11 +20,15 @@
 #pragma once
 
 #include "pipe/Perspective.h"
+#include "raw/RawImage.h"
 #include "stack/StarAlign.h"
+#include "util/DngWriter.h"
+#include "util/Half.h"
 
 #include <cmath>
 #include <cstdint>
 #include <random>
+#include <string>
 #include <vector>
 
 namespace stackfix {
@@ -106,6 +111,53 @@ inline void addSpikes(std::vector<float>& rgb, std::uint32_t w, std::uint32_t h,
         const std::uint32_t x = ux(rng), y = uy(rng);
         for (int c = 0; c < 3; ++c) rgb[(std::size_t(y) * w + x) * 3 + std::size_t(c)] += amplitude;
     }
+}
+
+/// Linear-DNG fixtures for the facade tests (tests_stack_facade.cpp, tests_stack_calibrate.cpp).
+inline void writeFrame(const std::string& path, const std::vector<float>& rgb, std::uint32_t w, std::uint32_t h,
+                       const std::string& camera = "SONY ILCE-7RM3") {
+    orion::util::DngLinearImage img;
+    img.width = w;
+    img.height = h;
+    img.rgb = rgb.data();
+    img.xyzToCam = {0.6640f, -0.1847f, -0.0503f, -0.5238f, 1.3465f, 0.1916f, -0.0879f, 0.1636f, 0.6271f};
+    img.asShotNeutral = {0.4548f, 1.0f, 0.7130f};
+    img.camera = camera;
+    orion::util::writeDngLinear(path, img);
+}
+
+/// A DNG back to packed float RGB.
+inline std::vector<float> reopen(const std::string& path, std::uint32_t& w, std::uint32_t& h) {
+    const auto decoded = orion::raw::decode(path);
+    const auto& m = std::get<orion::raw::LinearImage>(decoded);
+    w = m.width;
+    h = m.height;
+    std::vector<float> rgb(m.pixelCount() * 3);
+    for (std::size_t p = 0; p < m.pixelCount(); ++p)
+        for (int c = 0; c < 3; ++c) rgb[p * 3 + std::size_t(c)] = orion::util::halfToFloat(m.rgba[p * 4 + std::size_t(c)]);
+    return rgb;
+}
+
+/// tests_hdr_merge.cpp's tile radiance (floored, so negative coordinates tile too) at 0.3 scale.
+inline float tile(float x, float y) {
+    const int tx = int(std::floor(x / 24.0f)), ty = int(std::floor(y / 24.0f));
+    const unsigned hsh = unsigned(tx) * 2654435761u ^ unsigned(ty) * 40503u;
+    return 0.3f * (0.08f + float(hsh % 40) * 0.01f);
+}
+
+constexpr std::uint32_t kTW = 480, kTH = 360;
+
+/// Frame pixel p depicts scene point p - (dx, dy): refToSource is a translation by (+dx, +dy).
+inline std::vector<float> tiles(float dx, float dy, float noise, unsigned seed) {
+    std::mt19937 rng(seed);
+    std::normal_distribution<float> g(0.0f, noise);
+    std::vector<float> rgb(std::size_t(kTW) * kTH * 3);
+    for (std::uint32_t y = 0; y < kTH; ++y)
+        for (std::uint32_t x = 0; x < kTW; ++x) {
+            const float v = tile(float(x) - dx, float(y) - dy) + g(rng);
+            for (int c = 0; c < 3; ++c) rgb[(std::size_t(y) * kTW + x) * 3 + std::size_t(c)] = v;
+        }
+    return rgb;
 }
 
 }  // namespace stackfix
