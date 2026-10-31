@@ -300,7 +300,7 @@ double Engine::renderRegion(const Region& v, bool interacting) {
     // graph: its textures go back (#318's release), ~3.3 GB at 24 MP, before
     // the window allocates, not after: at 42 MP beside a desktop, the full
     // graph an export's size estimate had just rendered left every region
-    // out of memory (#400). The next full render (export, an edit the region
+    // out of memory (#401). The next full render (export, an edit the region
     // refuses) rebuilds them.
     if (!fullReleased_) {
         develop_->graph().releaseOutputs();
@@ -346,11 +346,13 @@ double Engine::renderRegion(const Region& v, bool interacting) {
     double ms = 0.0;
     try {
         ms = region_->render();
-    } catch (const gpu::OutOfMemory&) {
-        // A window that did not fit keeps nothing: the next one starts from
-        // empty rather than beside this one's half-allocated graph (#400).
+    } catch (...) {
+        // A window that failed (out of memory, a lost device) keeps nothing:
+        // the next one starts from empty rather than beside this one's
+        // half-allocated graph (#401).
         region_.reset();
-        regionLoaded_ = false;
+        regionLoaded_ = regionCurrent_ = false;
+        regionView_ = {};
         device_->reclaim();
         throw;
     }
@@ -436,7 +438,7 @@ double Engine::render() {
     // the preview and every other open photo: give it back, as a release would.
     const auto giveBack = [&] {
         develop_->graph().releaseOutputs();
-        // A region graph, if any, is not what is wanted now: the next region rebuilds it (#400).
+        // A region graph, if any, is not what is wanted now: the next region rebuilds it (#401).
         if (region_) region_->graph().releaseOutputs();
         regionCurrent_ = false;
         device_->reclaim();
@@ -752,8 +754,8 @@ void Engine::exportImage(const std::string& path, const util::ExportOptions& opt
     // Make sure what we write matches what is on screen.
     renderForExport();
 
-    // The orientation node's texture is square; only the oriented rectangle
-    // inside it holds pixels.
+    // The orientation node's texture can be larger than the picture (it grows
+    // with room to spare, #399); only the oriented rectangle inside it holds pixels.
     const std::uint32_t w = develop_->outputWidth();
     const std::uint32_t h = develop_->outputHeight();
 
@@ -777,7 +779,7 @@ void Engine::renderForExport() {
         // Out of memory part way, the graph keeps every texture it did get, and
         // past fit no region frees them again (they are already "released"):
         // at 42 MP beside a desktop, a size estimate that failed so left 2.2 GB
-        // behind and every region after it out of memory (#400). Give it back.
+        // behind and every region after it out of memory (#401). Give it back.
         develop_->graph().releaseOutputs();
         device_->reclaim();
         fullReleased_ = true;

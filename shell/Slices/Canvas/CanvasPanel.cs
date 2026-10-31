@@ -28,6 +28,7 @@ public sealed class CanvasPanel : Panel {
     readonly SharedPicture _shared = new();   // under _picture: the canvas draws over it
     readonly CopiedPicture _copied = new();   // where _shared does not hold the picture (#386)
     readonly Halvings _shown = new(), _original = new();
+    (CanvasState.Scene, int, string) _noted;   // what _note says, for which scene, photo and message
     int _version;   // the shown bitmap is reused render after render: same object, new pixels
     Point? _anchor;
     int? _band;
@@ -37,7 +38,11 @@ public sealed class CanvasPanel : Panel {
     public CanvasPanel() {
         Margin = new Thickness(CanvasState.Inset);
         Background = Brushes.Transparent;   // the whole canvas takes a press, as the MTKView does
-        _picture = new Drawn(Draw);
+        _picture = new Drawn(c => {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Draw(c);
+            DrawMilliseconds += sw.Elapsed.TotalMilliseconds;
+        });
         // Try again reopens this photo; Skip moves on. Neither takes the arrow keys, which keep browsing.
         _choices.Children.AddRange([
             new StateButton(null, "Try again", () => { var e = EngineModel.Shared; if (e.Current >= 0) e.Open(e.Current); }) { Focusable = false },
@@ -50,7 +55,10 @@ public sealed class CanvasPanel : Panel {
         _shared.Arrived += _picture.InvalidateVisual;
         _copied.Arrived += () => { _version++; _picture.InvalidateVisual(); };
         // Before the first draw says how wide the picture is: the first copy is not the whole render.
-        SizeChanged += (_, e) => _copied.Seed(e.NewSize.Width * (TopLevel.GetTopLevel(this)?.RenderScaling ?? 1));
+        SizeChanged += (_, e) => {
+            _copied.Seed(e.NewSize.Width * (TopLevel.GetTopLevel(this)?.RenderScaling ?? 1));
+            Tell();   // a resized view shows more or less of the picture
+        };
         CanvasState.Changed += Refresh;
         CompareState.Moved += _picture.InvalidateVisual;   // a divider drag repaints the picture and nothing else
         EngineModel.Shared.Shown.Changed += () => { _version++; Refresh(); };   // the picture: only through this seam
@@ -65,6 +73,7 @@ public sealed class CanvasPanel : Panel {
     }
 
     void Refresh() {
+        Tell();
         var scene = CanvasState.Now;
         _garden.IsVisible = _welcome.IsVisible = scene == CanvasState.Scene.Welcome;
         _state.IsVisible = scene is CanvasState.Scene.Loading or CanvasState.Scene.Failed;
@@ -73,7 +82,10 @@ public sealed class CanvasPanel : Panel {
         if (scene != _was) Arrive(scene);
         var engine = EngineModel.Shared;
         if (_state.IsVisible) {
-            _note.Text = scene == CanvasState.Scene.Loading ? $"Decoding {engine.CurrentName}" : Failure(engine);
+            // Failure reads the raw file to say why: once per photo and message, not on every
+            // viewport change (a pan over a failed render read 86 MB a frame, #401).
+            var key = (scene, engine.Current, engine.Timing);
+            if (key != _noted) (_noted, _note.Text) = (key, scene == CanvasState.Scene.Loading ? $"Decoding {engine.CurrentName}" : Failure(engine));
             _note.Foreground = scene == CanvasState.Scene.Loading ? Palette.Dim : Palette.Text;
         }
         _picture.InvalidateVisual();   // same bitmap, new pixels
@@ -103,6 +115,25 @@ public sealed class CanvasPanel : Panel {
             }
             return t < 0.5 + rows.Length * 0.07;
         });
+    }
+
+    /// Past fit the engine renders only what is on screen (#22): tells it what
+    /// that is, the part of the picture in view and the device pixels it covers.
+    /// Only at rest: while a hand or a spring moves the view the canvas moves the
+    /// pixels already rendered and the engine does nothing (#401).
+    void Tell() {
+        var size = Bounds.Size;
+        double a = CanvasState.ImageAspect;
+        var vp = CanvasState.Viewport;
+        if (vp.Live || CropEdit.Previewing || a <= 0 || size.Width <= 0 || size.Height <= 0) return;
+        vp.Measure(a, size.Width / size.Height);
+        var whole = CanvasState.Whole(size);
+        var seen = CanvasState.DrawnFrame(size);
+        if (seen.Width <= 0 || seen.Height <= 0) return;
+        double scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
+        EngineModel.Shared.View = (new Rect((seen.X - whole.X) / whole.Width, (seen.Y - whole.Y) / whole.Height,
+                                            seen.Width / whole.Width, seen.Height / whole.Height),
+                                   new PixelSize((int)Math.Round(seen.Width * scaling), (int)Math.Round(seen.Height * scaling)));
     }
 
     /// What failed, as far as the shell can tell without the engine's word for it.
@@ -141,6 +172,11 @@ public sealed class CanvasPanel : Panel {
         Motion.Detach(e.RootVisual as TopLevel);
     }
 
+    /// For the bench's pan: this thread's milliseconds in the canvas's draws and
+    /// in its pointer moves (the viewport, and every panel that follows it).
+    public static double DrawMilliseconds { get; private set; }
+    public static double MoveMilliseconds { get; private set; }
+
     void Draw(DrawingContext c) {
         var engine = EngineModel.Shared;
         double a = CanvasState.ImageAspect;
@@ -157,15 +193,6 @@ public sealed class CanvasPanel : Panel {
         vp.FitScale = CanvasLayout.FrameRect(a, size).Width * scaling / Math.Max(CanvasNative.ImageSize.Width, 1);
         // Past 4× a pixel is a square, not a blur; below it, filtered.
         var mode = vp.FitScale * vp.Zoom > 4 ? BitmapInterpolationMode.None : BitmapInterpolationMode.HighQuality;
-        // Past fit the engine renders only what is on screen (#22): say what that is,
-        // the part of the picture in view and the device pixels it covers.
-        var seen = CanvasState.DrawnFrame(size);
-        if (seen.Width > 0 && seen.Height > 0 && !CropEdit.Previewing) {
-            var view = (new Rect((seen.X - whole.X) / whole.Width, (seen.Y - whole.Y) / whole.Height,
-                                 seen.Width / whole.Width, seen.Height / whole.Height),
-                        new PixelSize((int)Math.Round(seen.Width * scaling), (int)Math.Round(seen.Height * scaling)));
-            if (engine.View != view) Avalonia.Threading.Dispatcher.UIThread.Post(() => engine.View = view);
-        }
         // A region sits where its part of the picture is, and moves with it until the next.
         var uv = engine.Shown.Graph == Graph.Region ? engine.Shown.Uv : new Rect(0, 0, 1, 1);
         var dest = new Rect(whole.X + uv.X * whole.Width, whole.Y + uv.Y * whole.Height,
@@ -297,6 +324,11 @@ public sealed class CanvasPanel : Panel {
     }
 
     protected override void OnPointerMoved(PointerEventArgs e) {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        try { Move(e); } finally { MoveMilliseconds += sw.Elapsed.TotalMilliseconds; }
+    }
+
+    void Move(PointerEventArgs e) {
         var p = e.GetPosition(this);
         ColorLoupe.Track(p, Bounds.Size);
         if (_anchor is not { } anchor) return;

@@ -293,7 +293,7 @@ private:
     /// no preview) first when it has to.
     [[nodiscard]] const pipe::DevelopPipeline& measured();
     /// After an export past fit, the full graph's outputs go back again.
-    void renderForExport();   // the full graph for a read, given back if it fails part way (#400)
+    void renderForExport();   // the full graph for a read, given back if it fails part way (#401)
     void rereleaseFull() noexcept;
     Region                                 regionView_{};
     /// What `setAdjustments` last pushed, for the region graph's own apply.

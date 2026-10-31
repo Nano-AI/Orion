@@ -41,7 +41,7 @@ void readOnCpu(const orion::gpu::Texture& t, std::uint32_t w, std::uint32_t h, s
     }
 }
 
-/// The texture is square so a straightened frame fits; the picture is its top left.
+/// The texture can be larger than the picture (it grows for a straighten, #399); the picture is its top left.
 void pictureSize(const orion::pipe::DevelopPipeline& d, std::uint32_t& w, std::uint32_t& h) {
     const orion::gpu::Texture& t = d.output();
     w = std::min(t.width(), d.outputWidth());

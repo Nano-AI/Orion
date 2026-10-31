@@ -269,10 +269,12 @@ static class CanvasState {
     public static readonly Viewport Viewport = new();
     public static event Action? Changed;
     public static void Touch() {
+        // The panels first: the canvas tells the engine the view it now shows,
+        // which a render past fit asks for (#22, #401).
+        Changed?.Invoke();
         // Past fit the photo renders full size (#318), once the hand rests: a
         // full render inside a pinch would hold the fingers still.
         if (!Viewport.Live) EngineModel.Shared.ZoomedPastFit = Viewport.PastFit;
-        Changed?.Invoke();
     }
 
     /// The tool tab the shell is showing. Overlays belong to theirs (the crop
@@ -313,6 +315,7 @@ static class CanvasState {
         engine.Shown.Changed += () => ShownFor = engine.Shown.Any ? engine.Current : -1;
         engine.Opened += () => { Viewport.Reset(); ClearHover(); };
         engine.Rendered += Touch;
+        engine.ViewHeld = () => Viewport.Live;
         engine.PropertyChanged += (_, e) => {
             if (e.PropertyName != nameof(EngineModel.Tool)) return;
             if (!WantsLoupe) ClearHover();

@@ -128,6 +128,7 @@ sealed partial class App {
         CacheReplay.Print();
         var engine = EngineModel.Shared;
         if (engine.Handle == 0) return;
+        if (PanOnly) { Pan(window); return; }
         int n = engine.Photos.Count;
         void Settle() => Pump(() => !Opening && !Busy);
         // To laid out: the session active, its picture rendered, the window laid out.

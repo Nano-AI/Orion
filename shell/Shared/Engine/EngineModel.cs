@@ -58,24 +58,33 @@ public sealed class EngineModel : INotifyPropertyChanged {
     bool _zoomed;
 
     /// What the canvas shows of the picture past fit: the part, normalized,
-    /// and the device pixels it covers. Renders past fit ask for only this
-    /// (#22). Set by the canvas as it draws; a change re-renders once the view
-    /// has rested, so a pan draws the last region over the preview meanwhile.
+    /// and the device pixels it covers. Renders past fit ask for this and a
+    /// margin round it (#22, ViewRegion). Set by the canvas whenever the view
+    /// is at rest, never while a hand or a spring moves it (#401): a pan moves
+    /// the pixels already rendered, over the preview where it uncovers more,
+    /// and a view that comes to rest outside what is rendered renders once.
     public (Avalonia.Rect Uv, Avalonia.PixelSize Pixels)? View {
         get => _view;
         set {
             if (_view == value) return;
             _view = value;
             if (!ZoomedPastFit || _session == null) return;
+            _viewRest?.Stop();
+            // Nothing a render would add: the whole picture at full size, or a region that holds this view at its detail.
+            if (Shown.Graph == Graph.Full || Shown.Graph == Graph.Region && _region is { } had && value is { } now && ViewRegion.Covers(had, now))
+                return;
             _viewRest ??= new DispatcherTimer(TimeSpan.FromMilliseconds(150), DispatcherPriority.Background, (t, _) => {
+                // A hand that took hold since: it moves pixels, and this renders once it rests again.
+                if (ViewHeld?.Invoke() == true) return;
                 ((DispatcherTimer)t!).Stop();
                 if (ZoomedPastFit && !Interacting && _session != null) Render(preview: false);
             });
-            _viewRest.Stop();
             _viewRest.Start();
         }
     }
-    (Avalonia.Rect Uv, Avalonia.PixelSize Pixels)? _view;
+    (Avalonia.Rect Uv, Avalonia.PixelSize Pixels)? _view, _region;   // _region: what the shown region was asked for
+    /// Set by the canvas: a hand or a spring holds the view now, and a render for its last rest waits.
+    public Func<bool>? ViewHeld { get; set; }
     DispatcherTimer? _viewRest;
     static readonly TimeSpan Rest = TimeSpan.FromMilliseconds(300);
     /// The status line's message: a stub saying it is not built, until the next open.
@@ -214,6 +223,8 @@ public sealed class EngineModel : INotifyPropertyChanged {
 
     /// Hands the photo on screen back to the source.
     public void Close() {
+        _viewRest?.Stop();   // a rest's render belongs to the photo it was for
+        _region = null;
         if (_session != null) {
             Leaving?.Invoke();
             _source.Release(_session);
@@ -294,7 +305,9 @@ public sealed class EngineModel : INotifyPropertyChanged {
         var sw = Stopwatch.StartNew();
         // Past fit, only what is on screen, at the screen's resolution, drag or
         // rest (#22); the whole graph when the engine says this edit needs it.
+        // At rest, with a margin round the view; a drag's ticks, the view alone, as fast as it can be.
         var view = ZoomedPastFit ? View : null;
+        if (view is { } seen && !Interacting) view = ViewRegion.Around(seen);
         var graph = view is { } v ? s.RenderRegion(v.Uv, v.Pixels, Interacting) : Graph.None;
         if (graph == Graph.Region && !Interacting) {
             // The small whole-frame pass: what the histogram reads while the
@@ -312,6 +325,7 @@ public sealed class EngineModel : INotifyPropertyChanged {
             SetTiming("render failed: " + s.LastError);
             return (render, 0);
         }
+        _region = graph == Graph.Region ? view : null;
         Shown.ShowLive(s, graph, graph == Graph.Region ? view!.Value.Uv : null);
         double copy = sw.Elapsed.TotalMilliseconds;
         Last = (render, copy);
