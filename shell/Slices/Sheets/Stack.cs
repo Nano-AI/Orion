@@ -17,6 +17,7 @@ static partial class Stack {
                                                   float[]? skyMatte, int matteWidth, int matteHeight, string output);
     [LibraryImport(Native.Lib)] private static partial int orion_engine_stack_progress(nint engine, out float progress);
     [LibraryImport(Native.Lib)] private static partial int orion_engine_stack_cancel(nint engine);
+    [LibraryImport(Native.Lib)] private static partial int orion_engine_stack_skipped(nint engine, out int skipped);
 
     // The stacking engine, while one runs. Read and cleared under Gate, so Progress and Cancel never
     // call into an engine Run's finally has destroyed.
@@ -35,6 +36,9 @@ static partial class Stack {
     /// 0…1 while a stack runs, null otherwise.
     public static float? Progress { get { lock (Gate) return _running != 0 && orion_engine_stack_progress(_running, out float p) == 0 ? p : null; } }
 
+    /// Frames the last Run left out because they did not register.
+    public static int Skipped { get; private set; }
+
     /// Stop: the stack fails at its next stage and leaves no partial file.
     public static void Cancel() { lock (Gate) if (_running != 0) orion_engine_stack_cancel(_running); }
 
@@ -50,10 +54,15 @@ static partial class Stack {
             _running = engine;
         }
         try {
-            return await Task.Run(() => orion_engine_stack(engine, paths.ToArray(), paths.Count, reference, (int)mode, rejection, weight ? 1 : 0,
-                    darks.Count > 0 ? darks.ToArray() : null, darks.Count, flats.Count > 0 ? flats.ToArray() : null, flats.Count,
-                    skyMatte, matteWidth, matteHeight, output) == 0 ? null
-                : Marshal.PtrToStringUTF8(Native.orion_last_error(engine)) is { Length: > 0 } why ? why : "the stack failed");
+            Skipped = 0;
+            return await Task.Run<string?>(() => {
+                if (orion_engine_stack(engine, paths.ToArray(), paths.Count, reference, (int)mode, rejection, weight ? 1 : 0,
+                        darks.Count > 0 ? darks.ToArray() : null, darks.Count, flats.Count > 0 ? flats.ToArray() : null, flats.Count,
+                        skyMatte, matteWidth, matteHeight, output) != 0)
+                    return Marshal.PtrToStringUTF8(Native.orion_last_error(engine)) is { Length: > 0 } why ? why : "the stack failed";
+                Skipped = orion_engine_stack_skipped(engine, out int skipped) == 0 ? skipped : 0;
+                return null;
+            });
         } finally {
             lock (Gate) _running = 0;
             orion_engine_destroy(engine);

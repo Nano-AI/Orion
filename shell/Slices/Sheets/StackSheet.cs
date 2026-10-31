@@ -25,6 +25,7 @@ public sealed class StackSheet : Border {
     readonly Rows _split = new();
     readonly Rows _actions = new() { Orientation = Orientation.Horizontal, Spacing = Space.Md, HorizontalAlignment = HorizontalAlignment.Right };
     readonly TextBlock _modeNote = SheetKit.Note("", Palette.Dim);
+    readonly TextBlock _status = SheetKit.Note("", Palette.Warn);   // why Stack did nothing, or failed
     readonly StackCalibration _calibration = new();
     Stack.Mode _mode;
     int _reference, _rejection = -1;
@@ -72,11 +73,21 @@ public sealed class StackSheet : Border {
         Idle();
         // As ExportPanel: the choices scroll on a small display; Cancel and Stack stay put. 760, not Export's 540:
         // Landscape with a portrait frame's painter and its brush is about 730 tall (measured in a screenshot).
-        Child = new Rows { Spacing = Space.Pad, Children = { new ScrollViewer { Content = body, MaxHeight = 760 }, _actions } };
+        Child = new Rows { Spacing = Space.Pad, Children = { new ScrollViewer { Content = body, MaxHeight = 760 }, _status, _actions } };
+        Status(null);
     }
 
     /// Landscape needs a painted sky, so a raw with no preview to paint it on cannot stack that way.
-    bool Ready => _mode != Stack.Mode.Landscape || _painter != null;
+    bool Paintable => _mode != Stack.Mode.Landscape || _painter != null;
+
+    /// And some sky painted: an empty matte finds no stars, and the engine would say only that nothing registered.
+    /// (Checked on Stack, not live: the painter has no change event.)
+    bool Ready => Paintable && (_mode != Stack.Mode.Landscape || _painter!.Matte.Any(v => v >= 0.5f));
+
+    void Status(string? text) {
+        _status.Text = text ?? "";
+        _status.IsVisible = text != null;
+    }
 
     IEnumerable<Control> Choices() {
         var mode = new Segmented(["Noise", "Stars", "Landscape"], (int)_mode);
@@ -135,50 +146,66 @@ public sealed class StackSheet : Border {
             _split.Children.Clear();
             _split.Children.Add(SheetKit.Row("Sky", _painter?.Editor() ?? SheetKit.Note("This raw carries no preview to paint the sky on.", Palette.Warn)));
         }
-        if (_stack != null) _stack.IsEnabled = Ready;
+        if (_stack != null) _stack.IsEnabled = Paintable;
     }
 
     void Idle() {
         _actions.Children.Clear();
         _actions.Children.Add(SheetKit.Button("Cancel", () => Dismiss?.Invoke()));
         _actions.Children.Add(_stack = SheetKit.Button("Stack", Run, prominent: true));
-        _stack.IsEnabled = Ready;
+        _stack.IsEnabled = Paintable;
     }
 
     /// As HdrMergePanel.Merge: what is owed to the open photo lands first (the stack reads files),
     /// a progress bar and Stop while it runs, then the new DNG is opened like any library photo.
     async void Run() {
-        if (_stacking || !Ready || Ineligibility(_candidates) != null) return;
+        if (_stacking || !Paintable || Ineligibility(_candidates) != null) return;
+        if (!Ready) { Status("Paint the sky first."); return; }
+        Status(null);
         _stacking = true;
-        _calibration.IsEnabled = false;
-        var paths = _candidates.Select(c => c.Path).ToList();
-        var darks = _calibration.Darks.ToList();
-        var flats = _calibration.Flats.ToList();
-        int reference = _reference;
-        var mode = _mode;
-        string output = Stack.OutputPath(paths[reference]);
-        // The matte as painted now, copied: a stroke made while the stack runs cannot reach the engine's reads.
-        var painter = mode == Stack.Mode.Landscape ? _painter : null;
-        float[]? matte = (float[]?)painter?.Matte.Clone();
-        Console.Error.WriteLine($"orion stack: start ref={reference} mode={mode} darks={darks.Count} flats={flats.Count} -> {output}");
-        Autosave.Shared.Flush();
-        var bar = new ProgressBar { Minimum = 0, Maximum = 1, Width = 300, MinHeight = 0, Height = 4, VerticalAlignment = VerticalAlignment.Center };
-        _actions.Children.Clear();
-        _actions.Children.AddRange([bar, SheetKit.Button("Stop", Stack.Cancel)]);
-        using var poll = Avalonia.Threading.DispatcherTimer.Run(() => { bar.Value = Stack.Progress ?? bar.Value; return true; },
-                                                                TimeSpan.FromMilliseconds(150));
-        string? failed = await Stack.Run(paths, reference, mode, _rejection, _weight, darks, flats, matte,
-                                         painter?.MatteWidth ?? 0, painter?.MatteHeight ?? 0, output);
-        _stacking = false;
-        Dismiss?.Invoke();
-        if (failed != null) {
-            Console.Error.WriteLine($"orion stack: failed: {failed}");
-            EngineModel.Shared.Say(failed);
-            return;
+        try {
+            _calibration.IsEnabled = false;
+            var paths = _candidates.Select(c => c.Path).ToList();
+            var darks = _calibration.Darks.ToList();
+            var flats = _calibration.Flats.ToList();
+            int reference = _reference;
+            var mode = _mode;
+            string output = Stack.OutputPath(paths[reference]);
+            // The matte as painted now, copied: a stroke made while the stack runs cannot reach the engine's reads.
+            var painter = mode == Stack.Mode.Landscape ? _painter : null;
+            float[]? matte = (float[]?)painter?.Matte.Clone();
+            Console.Error.WriteLine($"orion stack: start ref={reference} mode={mode} darks={darks.Count} flats={flats.Count} -> {output}");
+            Autosave.Shared.Flush();
+            var bar = new ProgressBar { Minimum = 0, Maximum = 1, Width = 300, MinHeight = 0, Height = 4, VerticalAlignment = VerticalAlignment.Center };
+            _actions.Children.Clear();
+            _actions.Children.AddRange([bar, SheetKit.Button("Stop", Stack.Cancel)]);
+            using var poll = Avalonia.Threading.DispatcherTimer.Run(() => { bar.Value = Stack.Progress ?? bar.Value; return true; },
+                                                                    TimeSpan.FromMilliseconds(150));
+            string? failed = await Stack.Run(paths, reference, mode, _rejection, _weight, darks, flats, matte,
+                                             painter?.MatteWidth ?? 0, painter?.MatteHeight ?? 0, output);
+            Dismiss?.Invoke();
+            if (failed != null) {
+                Console.Error.WriteLine($"orion stack: failed: {failed}");
+                EngineModel.Shared.Say(failed);
+                return;
+            }
+            Console.Error.WriteLine($"orion stack: wrote {output}");
+            StackSuggestion.DismissFrames(paths);   // the new DNG's rescan must not offer these frames again
+            LibraryFiles.OpenPhoto(output);
+            int skipped = Stack.Skipped;
+            string name = System.IO.Path.GetFileName(output);
+            EngineModel.Shared.Say(skipped == 0 ? $"Stacked {paths.Count} frames into {name}"
+                : $"Stacked {paths.Count - skipped} of {paths.Count} frames ({skipped} did not align) into {name}");
+        } catch (Exception e) {
+            // async void: an exception escaping here would take the process down.
+            Console.Error.WriteLine($"orion stack: {e}");
+            Status(e.Message);
+            EngineModel.Shared.Say(e.Message);   // in case the sheet has already closed
+            Idle();
+            _calibration.IsEnabled = true;
+        } finally {
+            _stacking = false;
         }
-        Console.Error.WriteLine($"orion stack: wrote {output}");
-        LibraryFiles.OpenPhoto(output);
-        EngineModel.Shared.Say($"Stacked {paths.Count} frames into {System.IO.Path.GetFileName(output)}");
     }
 
     /// Why these frames cannot stack, or null: HDR merge's camera rule, in a stack's words for too few.

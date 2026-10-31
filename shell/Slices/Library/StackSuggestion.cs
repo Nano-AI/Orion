@@ -18,7 +18,8 @@ sealed class StackSuggestion : Border {
     const double DarkLuma = 0.15;
 
     readonly TextBlock _text = new() { FontSize = Faces.Label, Foreground = Palette.Dim, VerticalAlignment = VerticalAlignment.Center };
-    readonly HashSet<string> _dismissed = new();   // each dismissed group's first path
+    // Each dismissed group's first path. Static: a stack the sheet just made dismisses its frames too (DismissFrames).
+    static readonly HashSet<string> _dismissed = new();
     IReadOnlyList<StackGroup> _groups = [];
     StackGroup? _shown;
 
@@ -29,6 +30,10 @@ sealed class StackSuggestion : Border {
     /// so a rescan of the same folder (a sort, a trash) keeps them.
     public static StackGroup? Pick(IReadOnlyList<StackGroup> groups, IReadOnlySet<string> dismissed) =>
         groups.FirstOrDefault(g => !dismissed.Contains(g.Paths[0]));
+
+    /// After a stack: every group starting with one of these frames stays hidden (the rescan the new DNG
+    /// causes would otherwise offer it again), as × does.
+    public static void DismissFrames(IEnumerable<string> paths) => _dismissed.UnionWith(paths);
 
     public StackSuggestion() {
         HorizontalAlignment = HorizontalAlignment.Right;
