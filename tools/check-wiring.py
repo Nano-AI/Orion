@@ -111,6 +111,10 @@ HARNESS_ONLY = {
     "EngineAvailableOverride":
         "a test seam: the selftest makes the engine's own memory check refuse "
         "whatever the machine has free, to prove the sheet shows the warning again",
+    "orion_engine_gpu_memory":
+        "the selftest's and --bench's measure of what Dawn holds on a discrete GPU, "
+        "which the working set misses off macOS (#DEC-memory); the product never "
+        "reads its own memory",
 }
 
 MODIFIERS = ("public|private|internal|protected|static|override|virtual|sealed|"

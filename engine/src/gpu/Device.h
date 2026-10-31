@@ -14,9 +14,16 @@
 
 #include <cstdint>
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 namespace orion::gpu {
+
+/// The device had no memory for an allocation. Its own type so a caller can
+/// give memory back and try once more, which no other failure deserves.
+struct OutOfMemory : std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
 
 enum class Backend { Metal, Dawn };
 
@@ -52,6 +59,17 @@ public:
     /// engine renders on, under either backend (Dawn runs on Metal on macOS).
     /// Non-owning.
     [[nodiscard]] void* rawDevice() const noexcept;
+
+    /// Hands the memory of textures already dropped back to the driver now.
+    /// Metal does that by itself; Dawn frees a dropped texture only after a
+    /// later submit has finished, so without this a release lasts until the
+    /// next render but one (#DEC-memory). Waits for queued GPU work.
+    void reclaim() noexcept;
+
+    /// GPU memory this device holds from the driver, in bytes; 0 where the
+    /// backend cannot say (Metal, whose textures the process footprint counts).
+    /// Shared by every engine in the process, as the device is.
+    [[nodiscard]] std::uint64_t allocatedBytes() const noexcept;
 
     /// Backend-private: how the backend's own files reach their half.
     struct Impl;

@@ -96,6 +96,10 @@ public static unsafe partial class Native {
     [LibraryImport(Lib)]
     public static partial int orion_engine_release_render_memory(nint engine);
 
+    /// GPU memory the process's device holds; 0 on Metal, where the footprint counts it.
+    [LibraryImport(Lib)]
+    public static partial int orion_engine_gpu_memory(nint engine, out ulong bytes);
+
     /// One tone-curve channel (0 master, 1-3 R G B) as interleaved x, y; returns the point count.
     [LibraryImport(Lib)]
     public static partial int shim_curve(nint shim, int channel, float* xy, int capacity);

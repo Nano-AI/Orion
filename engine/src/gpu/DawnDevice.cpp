@@ -4,6 +4,8 @@
 
 #include "gpu/Dawn.h"
 
+#include <dawn/native/DawnNative.h>
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -49,7 +51,11 @@ std::string ErrorScope::pop() {
     for (int i = 0; i < 2; ++i) {
         ctx_.wait(ctx_.device.PopErrorScope(wgpu::CallbackMode::WaitAnyOnly,
             [&](wgpu::PopErrorScopeStatus, wgpu::ErrorType type, wgpu::StringView msg) {
-                if (type != wgpu::ErrorType::NoError && why.empty()) why = text(msg);
+                // Said plainly: the shell shows it, and a card too small for the edit is
+                // the photographer's to know, not a Vulkan code's (#DEC-memory).
+                if (type == wgpu::ErrorType::NoError || !why.empty()) return;
+                oom_ = type == wgpu::ErrorType::OutOfMemory;
+                why = (oom_ ? "out of GPU memory: " : "") + text(msg);
             }));
     }
     return why;
@@ -57,6 +63,7 @@ std::string ErrorScope::pop() {
 
 void ErrorScope::check(const std::string& what) {
     std::string why = pop();
+    if (oom_) throw OutOfMemory(what + ": " + why);
     if (why.empty()) why = ctx_.lost();
     if (!why.empty()) throw std::runtime_error(what + ": " + why);
 }
@@ -116,6 +123,31 @@ struct DawnDevice final : Device::Impl {
     std::unique_ptr<Readback::Slot> staging() override { return makeStaging(ctx); }
     std::unique_ptr<Texture::Impl> sharedTexture(std::uint32_t w, std::uint32_t h) override {
         return makeSharedTexture(ctx, w, h);
+    }
+    // ⚠ Dawn frees a dropped texture's memory at the tick of a submit made
+    // after a later submit has finished: it is queued at the next submit's
+    // serial, and a wait marks that serial done without running the deleter,
+    // after which a tick with nothing scheduled returns early. So a release
+    // followed by one render freed nothing: 1,378 MB of a 24 MP full render
+    // stayed until the render after (#DEC-memory). Hence submit, wait, submit,
+    // with empty command buffers. ReduceMemoryUsage first queues the
+    // allocator's recycled heaps (Vulkan; a no-op on D3D12 and Metal).
+    void reclaim() noexcept override {
+        try {
+            ErrorScope scope(*ctx);   // a lost device is the next render's error, not stderr's
+            const auto submit = [&] {
+                wgpu::CommandBuffer none = ctx->device.CreateCommandEncoder().Finish();
+                ctx->queue.Submit(1, &none);
+            };
+            ::dawn::native::ReduceMemoryUsage(ctx->device.Get());
+            submit();
+            ctx->wait(ctx->queue.OnSubmittedWorkDone(wgpu::CallbackMode::WaitAnyOnly,
+                                                     [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {}));
+            submit();
+        } catch (...) {}   // a failed wait leaves the memory for a later tick, as before
+    }
+    std::uint64_t allocatedBytes() const noexcept override {
+        return ::dawn::native::GetAllocatorMemoryInfo(ctx->device.Get()).totalAllocatedMemory;
     }
     // No explicit Destroy(): a texture may outlive this object, and the device
     // goes when the last Context reference does.

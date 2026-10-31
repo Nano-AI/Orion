@@ -73,6 +73,9 @@ struct Device::Impl {
     virtual std::unique_ptr<Readback::Slot> staging() { return nullptr; }
     /// Texture::createShared's, or null where the backend has none (Metal).
     virtual std::unique_ptr<Texture::Impl> sharedTexture(std::uint32_t, std::uint32_t) { return nullptr; }
+    /// Device::reclaim's; nothing to do where the driver frees on its own (Metal).
+    virtual void reclaim() noexcept {}
+    virtual std::uint64_t allocatedBytes() const noexcept { return 0; }
 };
 
 /// One staging buffer of a `Readback` (#386).

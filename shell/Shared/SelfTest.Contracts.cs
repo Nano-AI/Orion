@@ -145,6 +145,8 @@ static partial class SelfTest {
         } catch (NotBuiltException e) {
             Check(e.Message.EndsWith("isn't in this version yet."), $"Session seam '{what}' says it is not built");
             _stubs.Add(what);
+        } catch (InvalidOperationException e) {   // a refusal, with the engine's reason
+            Check(false, $"Session seam '{what}' is built and right: {e.Message}");
         }
     }
 

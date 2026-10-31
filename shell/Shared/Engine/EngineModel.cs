@@ -254,7 +254,11 @@ public sealed class EngineModel : INotifyPropertyChanged {
     public bool Apply(Action<Session> write, bool reread = false) {
         if (_session == null) return false;
         try {
-            write(_session);
+            try {
+                write(_session);
+            } catch (InvalidOperationException e) when (e.Message.Contains(OutOfGpuMemory) && _source.Shed()) {
+                write(_session);   // the decoded neighbours are a convenience: once more without them, as Render
+            }
         } catch (Exception e) when (e is NotBuiltException or ArgumentException or InvalidOperationException) {
             Say(e.Message);
             return false;
@@ -298,6 +302,9 @@ public sealed class EngineModel : INotifyPropertyChanged {
             if (s.Render(preview: true) == Graph.Preview) s.Read(Graph.Preview);
         }
         if (graph == Graph.None) graph = s.Render(preview);
+        // Out of GPU memory: the decoded neighbours are a convenience, the photo on
+        // screen is not. Once more without them (#DEC-memory).
+        if (graph == Graph.None && s.LastError.Contains(OutOfGpuMemory) && _source.Shed()) graph = s.Render(preview);
         double render = sw.Elapsed.TotalMilliseconds;
         sw.Restart();
         var size = s.Size(graph);
@@ -314,6 +321,9 @@ public sealed class EngineModel : INotifyPropertyChanged {
         Rendered?.Invoke();
         return (render, copy);
     }
+
+    /// What the engine's message says when the card had no room (Dawn.h's ErrorScope, Metal's allocation).
+    internal const string OutOfGpuMemory = "out of GPU memory";
 
     internal void SetTiming(string text) { Timing = text; Changed(nameof(Timing)); }
 

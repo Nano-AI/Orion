@@ -193,10 +193,11 @@ static class CompareState {
     /// photo with nothing kept still shows its split in a decode's time.
     /// A foreground thread, so a process quitting mid-render waits for it to close its engine.
     static void Sharpen(string path, string key, (string Field, float Value)[] geometry, bool small,
-                        System.Text.Json.Nodes.JsonObject? reference = null) {
+                        System.Text.Json.Nodes.JsonObject? reference = null, bool aside = false) {
         _working = true;
         new Thread(() => {
             WriteableBitmap? sharp = null;
+            string? why = null;
             try {
                 using var s = Session.Open(path);
                 if (s != null) {
@@ -204,6 +205,7 @@ static class CompareState {
                     foreach (var (f, v) in geometry) s.Set(f, v);
                     if (small && s.Copy(s.Render(preview: true)) is { } preview) Dispatcher.UIThread.Post(() => { Keep(path, key, preview); Arrived(path, key); });
                     sharp = s.Copy(s.Render(preview: false));
+                    if (sharp == null) why = s.LastError;
                 }
             } catch (Exception e) {
                 Console.Error.WriteLine($"compare: the original of {Path.GetFileName(path)} failed: {e.Message}");
@@ -211,7 +213,24 @@ static class CompareState {
             Dispatcher.UIThread.Post(() => {
                 _working = false;
                 bool current = _sharp is { } s && s.Path == path && s.Key == key;
-                if (current && sharp == null) return;   // failed: the next toggle tries again
+                var e = EngineModel.Shared;
+                // Failed: the next toggle tries again. Out of GPU memory, once more with the
+                // photo on screen set aside: at 24 MP its full graph is the other ~1.6 GB, and
+                // two do not fit a 3 GB card (#DEC-memory). Its picture stays, as a CPU copy;
+                // its textures and the decoded neighbours go. Still failing, it is said: the
+                // split keeps the preview-sized original, visibly softer past fit.
+                if (current && sharp == null) {
+                    if (!aside && why?.Contains(EngineModel.OutOfGpuMemory) == true && e.Session is { } shown) {
+                        e.Cache.Shed();
+                        if (e.Shown.Bitmap is { } still) e.Shown.Show(still, e.Shown.Graph, e.Shown.Uv);
+                        shown.ReleaseRenderMemory();
+                        Sharpen(path, key, geometry, small: false, reference, aside: true);
+                        return;
+                    }
+                    if (why is { Length: > 0 }) e.Say($"Compare shows a reduced original: {why.Split('\n')[0]}");
+                }
+                if (aside && e.Session != null) e.Render(preview: false);   // brings the set-aside photo back
+                if (current && sharp == null) return;
                 if (current) _sharp = (path, key, sharp); else sharp?.Dispose();   // the geometry moved on while it rendered
                 if (Comparing) Make();   // shows it, or starts the one wanted now
             });

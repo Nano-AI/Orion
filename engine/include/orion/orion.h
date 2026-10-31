@@ -548,6 +548,12 @@ OrionStatus orion_engine_render(OrionEngine* engine, double* out_ms);
  * NULL until the next render, which rebuilds them. Safe with nothing open. */
 OrionStatus orion_engine_release_render_memory(OrionEngine* engine);
 
+/* Bytes of GPU memory the engine's device holds from the driver, every engine
+ * in the process together (they share one device). What a process footprint
+ * misses on a discrete GPU. 0 where the backend cannot say: Metal, whose
+ * textures the footprint already counts. */
+OrionStatus orion_engine_gpu_memory(OrionEngine* engine, uint64_t* out_bytes);
+
 /* Dimensions of the open image, as rendered — so the crop and the crop tool's
  * preview canvas both change this. */
 OrionStatus orion_engine_image_size(const OrionEngine* engine,

@@ -71,9 +71,16 @@ static partial class SelfTest {
         Check(lent is { Handle: not 0 } && cache.Sessions == 2 && cache.Pictures == 3,
               $"Request answers with an open session; photos 1 and 3 decoded beside it, 3 pictures ({cache.Sessions}, {cache.Pictures})");
 
-        // Acquire never hands out a closed session.
-        var kept = cache.Acquire(3)!;
-        Check(kept.Handle != 0 && cache.Sessions == 1, "Acquire takes a kept session, open, without decoding");
+        // Acquire never hands out a closed session. A photo that did not open (out of
+        // GPU memory, #DEC-memory) is that check's failure, not a crash of the rest.
+        var kept = cache.Acquire(3);
+        Check(kept is { Handle: not 0 } && cache.Sessions == 1, "Acquire takes a kept session, open, without decoding");
+        if (lent == null || kept == null) {
+            foreach (var held in new[] { lent, kept }) if (held != null) cache.Release(held);
+            cache.Clear();
+            cache.Drain();
+            return;
+        }
         cache.Release(kept);
         cache.Hint(0, 0);   // window [0, 2]: photo 3 falls out
         Settle(() => !cache.Busy);
@@ -104,6 +111,7 @@ static partial class SelfTest {
         // Through EngineModel, over five spellings of the selftest photo (dir/./name...) so paths differ.
         string photo = EngineModel.Shared.Photos[0];
         var spelt = Enumerable.Range(0, 5).Select(k => Path.Combine([Path.GetDirectoryName(photo)!, .. Enumerable.Repeat(".", k), Path.GetFileName(photo)])).ToList();
+        SetAside();
         var model = new EngineModel();
         model.Load(spelt);
         model.Open(0);
@@ -146,5 +154,6 @@ static partial class SelfTest {
         model.Close();
         model.Cache.Drain();
         Check(onScreen.Handle == 0, "the removed photo's session closed");
+        EngineModel.Shared.Render(preview: false);
     }
 }

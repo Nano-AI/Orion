@@ -38,6 +38,10 @@ std::unique_ptr<Device> Device::create(Backend backend) {
 
 void* Device::rawDevice() const noexcept { return impl_->metalDevice(); }
 
+void Device::reclaim() noexcept { impl_->reclaim(); }
+
+std::uint64_t Device::allocatedBytes() const noexcept { return impl_->allocatedBytes(); }
+
 #ifndef ORION_HAS_DAWN
 std::unique_ptr<Device::Impl> makeDawnDevice() {
     throw std::runtime_error("this engine was built without Dawn (third_party/dawn-build)");

@@ -30,6 +30,7 @@ static partial class SelfTest {
             string a = Path.Combine(dir, "a" + ext), b = Path.Combine(dir, "b" + ext);
             File.CreateSymbolicLink(a, source);
             File.CreateSymbolicLink(b, source);
+            SetAside();
             RestoreChecks(a);
             engine.Load([a, b]);
             OpenAndWait(engine, 0);

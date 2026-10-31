@@ -68,6 +68,7 @@ private:
     std::string pop();
     Context& ctx_;
     bool     open_ = true;
+    bool     oom_  = false;   // what pop() read was Dawn's OutOfMemory
 };
 
 wgpu::TextureFormat toWgpu(PixelFormat);

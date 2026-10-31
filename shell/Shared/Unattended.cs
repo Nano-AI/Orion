@@ -230,7 +230,12 @@ sealed partial class App {
     static extern int proc_pid_rusage(int pid, int flavor, byte[] buffer);
 
     /// rusage_info_v0: resident_size at byte 64, phys_footprint (what Activity Monitor calls memory, GPU buffers included) at 72.
+    /// Elsewhere there is no proc_pid_rusage: the working set, and it plus the GPU memory Dawn holds (#DEC-memory).
     static (double Rss, double Footprint) Footprint() {
+        if (!OperatingSystem.IsMacOS()) {
+            Native.orion_engine_gpu_memory(EngineModel.Shared.Handle, out ulong gpu);
+            return (Environment.WorkingSet / 1048576.0, (Environment.WorkingSet + (long)gpu) / 1048576.0);
+        }
         var info = new byte[256];
         proc_pid_rusage(Environment.ProcessId, 0, info);
         return (BitConverter.ToUInt64(info, 64) / 1048576.0, BitConverter.ToUInt64(info, 72) / 1048576.0);

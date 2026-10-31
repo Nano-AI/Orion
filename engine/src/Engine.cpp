@@ -21,7 +21,11 @@ Engine::Engine() : device_(gpu::Device::create()) {
     stacker_ = std::make_unique<stack::Stacker>(*device_, res::shaderDir());
 }
 
-Engine::~Engine() = default;
+Engine::~Engine() {
+    // The Dawn device outlives this engine while another holds it (#DEC-memory).
+    develop_.reset(); preview_.reset(); region_.reset(); display_.reset(); hdrMerge_.reset();
+    device_->reclaim();
+}
 
 const pipe::LensDatabase& Engine::lensDatabase() {
     // Function-local static: parsed on the first open, never on a path where
@@ -334,6 +338,7 @@ double Engine::renderRegion(const Region& v, bool interacting) {
     // next full render (export, an edit the region refuses) rebuilds them.
     if (!fullReleased_) {
         develop_->graph().releaseOutputs();
+        device_->reclaim();
         fullReleased_ = true;
         fullCurrent_ = false;
     }
@@ -357,6 +362,7 @@ void Engine::releaseRenderMemory() noexcept {
     if (preview_) preview_->graph().releaseOutputs();
     if (region_)  region_->graph().releaseOutputs();
     if (display_) display_->release();   // the kernel stays compiled
+    device_->reclaim();
 }
 
 pipe::DisplayCopy& Engine::displayCopy() {
@@ -412,7 +418,31 @@ const pipe::DevelopPipeline& Engine::previewDevelop() const {
 
 double Engine::render() {
     if (!develop_) throw std::runtime_error("no image open");
-    const double ms = develop_->render();
+    // Out of GPU memory part way, the graph keeps what it did get and starves
+    // the preview and every other open photo: give it back, as a release would.
+    const auto giveBack = [&] {
+        develop_->graph().releaseOutputs();
+        device_->reclaim();
+        fullReleased_ = true;
+        fullCurrent_ = false;
+    };
+    double ms = 0.0;
+    try {
+        ms = develop_->render();
+    } catch (const gpu::OutOfMemory&) {
+        // ⚠ What runs out is the cache, not the render: kept for slider latency
+        // (#161), every output an edit has ever enabled stays (2.7 GB at 24 MP
+        // after dehaze and NLM went on and off once), where one render alone
+        // frees each at its last reader. So once more from empty, and from then
+        // on that frugal way, as headless does (#312): slower ticks on a card
+        // this photo does not fit, rather than no picture (#DEC-memory).
+        giveBack();
+        develop_->graph().setReleaseEveryRender(true);
+        try { ms = develop_->render(); } catch (...) { giveBack(); throw; }
+    } catch (...) {
+        giveBack();
+        throw;
+    }
     fullReleased_ = false;
     fullCurrent_ = true;
     return ms;
@@ -519,11 +549,14 @@ void Engine::autoEnhance(pipe::Adjustments& adj) {
     std::vector<std::uint32_t> rgb(std::size_t(kBins) * 3);
     std::vector<std::uint32_t> combined(kBins);
 
+    // ⚠ Through render(), not the graph's own: it is what gives the memory back
+    // and retries lean when the card runs out (#DEC-memory). The look turns on
+    // clarity, whose 24 MP full graph peaks at 2.3 GB on its own, beside
+    // whatever the cache kept from the edit before, and the graph's own render
+    // failed there with nothing to say why and the cache still held.
     const auto measureNow = [&]() {
         develop_->apply(adj);
-        develop_->render();
-        fullCurrent_ = true;
-        fullReleased_ = false;
+        render();
         previewCurrent_ = regionCurrent_ = false;   // neither has had these
         histogram(rgb.data(), kBins);
         ae::combine(rgb.data(), kBins, combined.data());
@@ -554,34 +587,42 @@ void Engine::autoEnhance(pipe::Adjustments& adj) {
     // the picture the photographer took, not to the correction about to be
     // applied to it — deriving them afterwards would let the solver's own work
     // decide how much shadow lift the frame "needs".
-    const ae::Controls look = ae::look(measureNow());
-    adj.fusion  = look.fusion;
-    adj.clarity = look.clarity;
-
-    // Then solve, with the look already in place, because it moves the
-    // histogram the solver is reading.
     ae::Controls c{};
+    const pipe::Adjustments before = adj_;
+    try {
+        const ae::Controls look = ae::look(measureNow());
+        adj.fusion  = look.fusion;
+        adj.clarity = look.clarity;
 
-    // Stop when the median arrives rather than after a fixed count. Every step
-    // undershoots — see kDamping — so a frame far from the anchor needs more
-    // steps than a frame near it, and a flat count either short-changes the
-    // first or makes the second pay for renders it does not need.
-    for (int pass = 0; pass < ae::kMaxPasses; ++pass) {
+        // Then solve, with the look already in place, because it moves the
+        // histogram the solver is reading.
+        //
+        // Stop when the median arrives rather than after a fixed count. Every step
+        // undershoots — see kDamping — so a frame far from the anchor needs more
+        // steps than a frame near it, and a flat count either short-changes the
+        // first or makes the second pay for renders it does not need.
+        for (int pass = 0; pass < ae::kMaxPasses; ++pass) {
+            adj.exposureEv = c.exposureEv;
+            adj.blacks     = c.blacks;
+            adj.whites     = c.whites;
+
+            const ae::Stats s = measureNow();
+            if (std::abs(s.median - ae::kMidGray) < ae::kSettled) break;
+            c = ae::refine(c, s);
+        }
+
         adj.exposureEv = c.exposureEv;
         adj.blacks     = c.blacks;
         adj.whites     = c.whites;
-
-        const ae::Stats s = measureNow();
-        if (std::abs(s.median - ae::kMidGray) < ae::kSettled) break;
-        c = ae::refine(c, s);
+        develop_->apply(adj);
+        adj_ = adj;
+        render();
+    } catch (...) {
+        // A measuring pass's values are nobody's edit: the caller's go back.
+        adj_ = before;
+        develop_->apply(adj_);
+        throw;
     }
-
-    adj.exposureEv = c.exposureEv;
-    adj.blacks     = c.blacks;
-    adj.whites     = c.whites;
-    develop_->apply(adj);
-    adj_ = adj;
-    develop_->render();
 }
 
 void Engine::histogram(std::uint32_t* out, std::uint32_t bins) {
@@ -693,7 +734,10 @@ void Engine::exportImage(const std::string& path, const util::ExportOptions& opt
 void Engine::rereleaseFull() noexcept {
     // An export past fit renders the full graph directly; give its ~3.3 GB
     // back again, as the region did (#22). The next export rebuilds them.
-    if (fullReleased_ && develop_) develop_->graph().releaseOutputs();
+    if (fullReleased_ && develop_) {
+        develop_->graph().releaseOutputs();
+        device_->reclaim();
+    }
 }
 
 std::size_t Engine::exportedSize(const util::ExportOptions& options) {
