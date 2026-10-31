@@ -135,15 +135,22 @@ static partial class SelfTest {
         string took = Frames();
         Check(banded is < 1 and > 0.5 && vp.IsFit, $"pinching out past fit rubber-bands ({banded:0.000}×, never below 0.5) and springs back to fit ({vp.Zoom:0.000}× after {took})");
 
-        // A double-click springs to 1:1 about the point, a second back to fit; 9 jumps.
+        // A double-click springs to 1:1 about the point, a second back to fit; 9 jumps. Counted by the zooms
+        // shown on the way, not by Live after the click: where a headless frame takes longer than the frame
+        // interval (WARP, Linux's CPU Skia), the press's own RunJobs renders the whole spring before it
+        // returns (#DEC-ui). A jump, or a spring with no clock, shows two at most.
         vp.Reset();
         window.UpdateLayout();
         var q = At(window, canvas, p);
+        var zooms = new List<double>();
+        void Saw() => zooms.Add(vp.Zoom);
+        CanvasState.Changed += Saw;
         window.MouseDown(q, MouseButton.Left); window.MouseUp(q, MouseButton.Left);
         window.MouseDown(q, MouseButton.Left); window.MouseUp(q, MouseButton.Left);
-        bool moving = vp.Live;
         took = Frames();
-        Check(moving && vp.Percent == 100, $"a double-click springs to 100% ({vp.Percent}%, {(moving ? "moving" : "still")} after the click, {took})");
+        CanvasState.Changed -= Saw;
+        int between = zooms.Where(z => z > 1.001 && z < vp.Zoom * 0.999).Distinct().Count();
+        Check(between >= 5 && !vp.Live && vp.Percent == 100, $"a double-click springs to 100% ({vp.Percent}%, {between} zooms on the way, {took})");
         vp.Reset();
         Commands.Run("actual-size");
         Check(!vp.Live && vp.Percent == 100, "the 9 key jumps to 100%: a key never animates");

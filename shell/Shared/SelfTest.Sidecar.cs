@@ -209,7 +209,9 @@ static partial class SelfTest {
     }
 
     /// The checks that make a file or folder unreadable use POSIX modes, which .NET
-    /// refuses on Windows; there they are skipped and said (#376).
+    /// refuses on Windows; there they are skipped and said (#376). The guard tells
+    /// the platform analyser (CA1416) what the check already knows.
+    [System.Runtime.Versioning.UnsupportedOSPlatformGuard("windows")]
     static bool Posix(string check) {
         if (!OperatingSystem.IsWindows()) return true;
         Console.WriteLine($"selftest: skipped on Windows: {check} (POSIX file modes)");

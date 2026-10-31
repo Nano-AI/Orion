@@ -123,7 +123,7 @@ public partial class MainWindow : Window {
                     new TextBlock { Text = tab, FontSize = Faces.Label, VerticalAlignment = VerticalAlignment.Center, Transitions = [Glide(OpacityProperty)] },
                 } },
             };
-            ToolTip.SetTip(button, $"{tab} (⌘{i + 1})");
+            ToolTip.SetTip(button, $"{tab} ({Commands.KeyLabel($"tab-{tab.ToLowerInvariant()}")})");
             Avalonia.Automation.AutomationProperties.SetName(button, tab);
             button.Click += (_, _) => Select(tab, animate: true);
             Grid.SetColumn(button, i);

@@ -225,7 +225,17 @@ public sealed class EngineModel : INotifyPropertyChanged {
     /// still Session, for anything that must be put back on it first.
     public event Action? Leaving;
 
-    public float Get(string field, int index = 0) => _session?.Get(field, index) ?? 0;
+    /// With no session (nothing open, or the engine could not start) a field reads as DevelopState's
+    /// Reset value, so a control shows its default, not a zero its range may not hold ("0 K") (#DEC-ui).
+    public float Get(string field, int index = 0) => _session?.Get(field, index) ?? Reset(field, index);
+
+    static readonly Dictionary<string, System.Text.Json.Nodes.JsonNode?> Resets =
+        DevelopJson.Defaults().ToDictionary(p => Session.Snake(p.Key), p => p.Value);
+
+    static float Reset(string field, int index) => Resets.GetValueOrDefault(field) switch {
+        System.Text.Json.Nodes.JsonArray a => index < a.Count ? DevelopJson.Float(a[index]) ?? 0 : 0,
+        var v => DevelopJson.Float(v) ?? 0,
+    };
 
     /// Writes one field and renders: the preview graph while a drag is in
     /// progress, the full graph otherwise.

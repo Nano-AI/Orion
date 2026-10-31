@@ -121,17 +121,12 @@ public sealed class ToolbarPanel : Grid {
         } else {
             int selected = ChromeStubs.ExportSelected;
             _actions.Children.Add(Button("square.and.arrow.up", selected > 0 ? $"Export {selected}" : "Export", () => Commands.Run("export"), Commands.CanRun("export"), ButtonKind.Primary,
-                                         selected > 0 ? $"Export the {selected} selected photos to a folder" : "Export this photo (⌘E)"));
+                                         selected > 0 ? $"Export the {selected} selected photos to a folder" : Keyed("Export this photo", "export")));
         }
     }
 
     /// A tooltip that names the command's key, read from the command table: "Rotate left ([)", "Undo (⌘Z)".
-    static string Keyed(string help, string command) {
-        if (Commands.Find(command)?.Keys.FirstOrDefault() is not { } key) return help;
-        string text = key.ToString("p", null);
-        if (OperatingSystem.IsMacOS()) text = text.Replace("Shift+", "⇧").Replace("Alt+", "⌥").Replace("Ctrl+", "⌃").Replace("Cmd+", "⌘");
-        return $"{help} ({text})";
-    }
+    static string Keyed(string help, string command) => Commands.KeyLabel(command) is { } key ? $"{help} ({key})" : help;
 
     static StateButton Button(string? icon, string title, Action run, bool enabled, ButtonKind kind, string help) =>
         new(icon, title, run, kind, help) { Height = ButtonHeight, IsEnabled = enabled };

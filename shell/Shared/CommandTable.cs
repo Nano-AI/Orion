@@ -58,7 +58,7 @@ static class CommandTable {
         Built("stack", "Stack photos…", null, "StackSheet.cs", () => Loaded && StackSheet.HasCandidates, () => Sheet("sheet-stack", "Stack")),
         Built("stop-batch", "Stop", null, "OrionApp+Files.swift", () => ChromeStubs.BatchProgress != null, ExportRun.Stop),
         // The shell writes no interaction log (InteractionLog.swift), so there is no file to reveal.
-        Stub("reveal-session-log", "Reveal session log in Finder", null, "InteractionLog.swift", () => true),
+        Stub("reveal-session-log", OperatingSystem.IsMacOS() ? "Reveal session log in Finder" : "Show session log in its folder", null, "InteractionLog.swift", () => true),
 
         // Edit
         Built("undo", "Undo", "Cmd+Z", "EditHistory.swift", () => ChromeStubs.CanUndo && Develop && !Locked, EditHistory.Undo),

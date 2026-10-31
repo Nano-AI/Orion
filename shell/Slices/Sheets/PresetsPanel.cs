@@ -294,11 +294,13 @@ public sealed class PresetsPanel : StackPanel {
         var (title, covers, _) = PresetStore.Groups[i];
         var box = new CheckBox {
             IsChecked = _groups.Contains(i), VerticalContentAlignment = VerticalAlignment.Center,
-            Content = new StackPanel {
-                Orientation = Orientation.Horizontal, Spacing = Space.Gap,
+            // A DockPanel, not a horizontal StackPanel: that measures its children unbounded, so the
+            // ellipsis never came and a long list was cut mid-word at the column's edge.
+            Content = new DockPanel {
                 Children = {
-                    new TextBlock { Text = title, FontSize = Faces.Label },
-                    new TextBlock { Text = covers, FontSize = Faces.Mark, Foreground = Palette.Dim, TextTrimming = TextTrimming.CharacterEllipsis },
+                    new TextBlock { Text = title, FontSize = Faces.Label, Margin = new Thickness(0, 0, Space.Gap, 0), [DockPanel.DockProperty] = Dock.Left },
+                    new TextBlock { Text = covers, FontSize = Faces.Mark, Foreground = Palette.Dim, TextTrimming = TextTrimming.CharacterEllipsis,
+                                    TextWrapping = TextWrapping.NoWrap },   // the CheckBox's presenter would wrap it
                 },
             },
         };

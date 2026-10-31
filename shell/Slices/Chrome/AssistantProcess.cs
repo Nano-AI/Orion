@@ -145,8 +145,16 @@ sealed partial class AssistantModel {
 
     public const string OrionContext = "Orion is a RAW photo editor and this server is its agent surface. The photographer is looking at one photo in Orion; when they say 'this image', 'this photo', 'the current one' or give no path, that photo is the one `current_photo` returns, and every tool's `path` defaults to it, so never ask which file. Start any edit with `describe_edits` and `get_stats`; `get_edits` reads the current or proposed settings without writing anything. All values are absolute, never deltas. Local adjustments run three to four times a global's at the top of the scale: a blown sky near luma 0.98 barely moves under a small masked exposure pull, so probe strong and ease off. Numbers before pixels: `get_stats` with `region` reads a patch (luma, clippedHigh, shading, noise) for a fraction of a proxy's cost, and `detect_faces` places a radial mask on a portrait. Judge sharpening, skin and mask edges with `get_proxy`'s `region`, never a whole 2048 px frame. `detect_subject` lifts the subject, a person or the sky into a matte for a kind-4 mask row, and `sync_edits` carries one approved photo's look onto the rest of a shoot as proposals. Read `capture.iso` from `get_stats` or `current_photo` before deciding how hard to denoise. Proposals appear live in Orion's compare view; the photographer approves or rejects there, so after `propose_edit` say what you changed and stop; do not call `approve_edit` unless asked.";
 
-    /// The arguments to `/bin/zsh`. Interactive and login, as Terminal.app: CLI installs commonly
-    /// add PATH in .zshrc. Every command and argument is data, never shell source: zsh runs
+    /// The shell the agent starts under: zsh on macOS, as Terminal.app. On Linux the user's own
+    /// login shell, where many machines have no zsh, if it takes `-c 'exec "$0" "$@"'` as sh
+    /// does (fish does not); else /bin/sh, the one shell every Linux has (#DEC-ui).
+    public static string Shell(string? login) =>
+        !OperatingSystem.IsLinux() ? "/bin/zsh"
+        : login is { } path && Path.IsPathRooted(path) && File.Exists(path)
+          && Path.GetFileName(path) is "bash" or "zsh" or "sh" or "dash" or "ksh" or "mksh" ? path : "/bin/sh";
+
+    /// The arguments to `Shell`. Interactive and login, as Terminal.app: CLI installs commonly
+    /// add PATH in .zshrc. Every command and argument is data, never shell source: the shell runs
     /// `exec "$0" "$@"` and the agent is $0. A missing agent is "command not found" in the terminal.
     /// `server`, when given, registers Orion's MCP server for this session only.
     public static string[] BuildArgv(string command, string? server = null) {
@@ -168,8 +176,10 @@ sealed partial class AssistantModel {
     static string TomlString(string text) => "\"" + text.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
 
     /// `claude mcp add`, single-quoted for a shell: the Assistant menu's Copy MCP Setup Command.
+    /// On macOS it first clears the download's quarantine; nothing else has one.
     public static string ClaudeAddCommand(string server, string app) =>
-        "xattr -dr com.apple.quarantine " + ShellQuoted(app) + " && claude mcp add orion -- " + ShellQuoted(server);
+        (OperatingSystem.IsMacOS() ? "xattr -dr com.apple.quarantine " + ShellQuoted(app) + " && " : "")
+        + "claude mcp add orion -- " + ShellQuoted(server);
 
     static string ShellQuoted(string text) => "'" + text.Replace("'", "'\\''") + "'";
 

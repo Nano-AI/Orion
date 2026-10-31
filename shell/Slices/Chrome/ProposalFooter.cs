@@ -20,8 +20,8 @@ sealed class ProposalFooter : StackPanel {
         Children.Add(_keys);
         Children.Add(Engraved.Note("Approve or reject to keep editing. Both sides use the proposed framing."));
         Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Sm, Children = {
-            new StateButton(null, "Approve", () => Commands.Run("approve-proposal"), help: "Approve the proposed edit  (⌘⏎)"),
-            new StateButton(null, "Reject", () => Commands.Run("reject-proposal"), help: "Reject the proposed edit  (⌘⎋)"),
+            new StateButton(null, "Approve", () => Commands.Run("approve-proposal"), help: $"Approve the proposed edit  ({(OperatingSystem.IsMacOS() ? "⌘⏎" : Commands.KeyLabel("approve-proposal"))})"),
+            new StateButton(null, "Reject", () => Commands.Run("reject-proposal"), help: $"Reject the proposed edit  ({(OperatingSystem.IsMacOS() ? "⌘⎋" : Commands.KeyLabel("reject-proposal"))})"),
         } });
         ProposalWatcher.Shared.Changed += Refresh;
         CurrentPhoto.Install();
