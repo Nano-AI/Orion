@@ -72,7 +72,7 @@ static partial class SelfTest {
               $"Request answers with an open session; photos 1 and 3 decoded beside it, 3 pictures ({cache.Sessions}, {cache.Pictures})");
 
         // Acquire never hands out a closed session. A photo that did not open (out of
-        // GPU memory, #DEC-memory) is that check's failure, not a crash of the rest.
+        // GPU memory, #392) is that check's failure, not a crash of the rest.
         var kept = cache.Acquire(3);
         Check(kept is { Handle: not 0 } && cache.Sessions == 1, "Acquire takes a kept session, open, without decoding");
         if (lent == null || kept == null) {

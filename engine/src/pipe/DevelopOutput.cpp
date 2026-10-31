@@ -174,7 +174,7 @@ void DevelopPipeline::buildOutputNodes() {
 
 void DevelopPipeline::uploadGrainPlate() {
     // One upload per graph, because the aux texture is per `Pipeline`. The
-    // plate itself is built once a process (#DEC-perf): its seed is fixed, so
+    // plate itself is built once a process (#393): its seed is fixed, so
     // every build is the same 32 MB, and building it cost ~70 ms of CPU each
     // time, twice an open (the full graph and the preview), on every photo the
     // browsing cache decodes.

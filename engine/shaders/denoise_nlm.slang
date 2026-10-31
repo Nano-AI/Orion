@@ -106,7 +106,7 @@ void nlmLuma(uint3 tid  : SV_DispatchThreadID,
     // exponent: w·u / w is unchanged by scaling every w alike, but a small h
     // puts every absolute exp() near FLT_MIN, where the GPU flushes w·u to
     // zero while w itself survives. The sum then lost the pixel values its
-    // weights still counted, and sky came out with near-black single pixels.
+    // weights still counted, and sky came out with near-black single pixels (#397).
     float sum = 0.0f, wsum = 0.0f, emax = -3.0e38f;
     for (int oy = -r; oy <= r; ++oy)
     {

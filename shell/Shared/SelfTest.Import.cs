@@ -54,7 +54,7 @@ static partial class SelfTest {
             Directory.Delete(root, recursive: true);
         }
 
-        // A config folder that does not exist yet is still where settings go, not nowhere (#DEC-fs).
+        // A config folder that does not exist yet is still where settings go, not nowhere (#394).
         if (OperatingSystem.IsLinux()) {
             string? was = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME"), fresh = Path.Combine(Path.GetTempPath(), $"orion-xdg-{Guid.NewGuid()}");
             Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", fresh);

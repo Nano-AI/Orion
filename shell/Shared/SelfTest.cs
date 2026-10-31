@@ -12,7 +12,7 @@ static partial class SelfTest {
     /// Before a block that renders a second session full size: the app's own photo gives
     /// its render textures back, as the cache does to a photo it is not showing. The app
     /// shows one photo; two full graphs at once stand where no user does, and at 24 MP
-    /// they do not fit a 3 GB card (2 x ~1.5 GB, #DEC-memory). The caller renders it again.
+    /// they do not fit a 3 GB card (2 x ~1.5 GB, #392). The caller renders it again.
     static void SetAside() => EngineModel.Shared.Session?.ReleaseRenderMemory();
 
     static void Check(bool ok, string what) {

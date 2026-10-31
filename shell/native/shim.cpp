@@ -161,7 +161,7 @@ Shim* shim_open_mode(const char* path, int headless) {
         if (orion_engine_create(&s->engine) != ORION_OK ||
             (headless && orion_engine_set_headless(s->engine, 1) != ORION_OK) ||
             orion_engine_open_raw(s->engine, path) != ORION_OK) {
-            // No engine is no GPU it can use (#DEC-perf), not a photo it cannot decode.
+            // No engine is no GPU it can use (#393), not a photo it cannot decode.
             const char* why = orion_last_error(s->engine);   // NULL: why there is no engine
             try {
                 openError() = s->engine ? std::string(why) : std::string("the GPU engine could not start: ") + why;

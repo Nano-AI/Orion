@@ -5,7 +5,7 @@ namespace OrionShell.Library;
 
 /// The Trash on Linux, as the freedesktop.org Trash specification 1.0 lays it out
 /// (https://specifications.freedesktop.org/trash-spec/1.0/), so a file manager can
-/// show and restore what Orion put there (#DEC-fs). A file on the home trash's
+/// show and restore what Orion put there (#394). A file on the home trash's
 /// filesystem goes to $XDG_DATA_HOME/Trash; one on another mount to that mount's
 /// $topdir/.Trash/$uid (only when the administrator made .Trash, sticky and not a
 /// link) or else $topdir/.Trash-$uid. Each move is a rename, never a copy, and a

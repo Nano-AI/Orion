@@ -169,7 +169,7 @@ static partial class AgentCli {
 
     internal static JsonObject Commit(string raw, string state) {
         var decoded = Normal(File.ReadAllBytes(state));
-        if (!File.Exists(raw)) throw new Failure($"no such file: {raw}");   // a sidecar for nothing, as sync refuses (#DEC-fs)
+        if (!File.Exists(raw)) throw new Failure($"no such file: {raw}");   // a sidecar for nothing, as sync refuses (#394)
         if (!Autosave.ToSidecar(raw, decoded)) throw new Failure($"could not write the sidecar for {raw}");
         return new JsonObject { ["sidecar"] = Sidecar.PathFor(raw) };
     }

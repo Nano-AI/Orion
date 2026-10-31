@@ -33,7 +33,7 @@ public static class Commands {
 
     public static Command? Find(string name) => All.FirstOrDefault(c => c.Name == name);
 
-    /// A command's first key as a tooltip writes it: ⌘E on macOS, Ctrl+E elsewhere (#DEC-ui).
+    /// A command's first key as a tooltip writes it: ⌘E on macOS, Ctrl+E elsewhere (#395).
     public static string? KeyLabel(string name) {
         if (Find(name)?.Keys.FirstOrDefault() is not { } key) return null;
         string text = key.ToString("p", null);

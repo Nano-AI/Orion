@@ -12,7 +12,7 @@ public partial class Theme : Styles {
         Resources["ContentControlThemeFontFamily"] = Faces.Words;
         // Grayscale text in every window and popup, as macOS draws it. Skia's default off macOS is
         // LCD subpixel, which fringes blue and orange over translucent chrome (the zoom pill on a
-        // white photo) and in any rendered copy; TextOptions inherit down from the TopLevel (#DEC-ui).
+        // white photo) and in any rendered copy; TextOptions inherit down from the TopLevel (#395).
         Avalonia.Controls.Control.LoadedEvent.AddClassHandler<Avalonia.Controls.TopLevel>(
             (top, _) => TextOptions.SetTextRenderingMode(top, TextRenderingMode.Antialias));
         // Fluent's accent, every shade the one token: the dark theme reads the Light

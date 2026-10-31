@@ -1,4 +1,4 @@
-// The histogram's samples (#DEC-perf): every `stride`-th pixel of the picture,
+// The histogram's samples (#393): every `stride`-th pixel of the picture,
 // in reading order, packed into a small target the CPU reads back, so the
 // histogram reads 1/stride of the frame instead of all of it. The same pixels
 // Engine::histogram sampled from a full readback, in the source's own format:

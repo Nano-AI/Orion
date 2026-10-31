@@ -39,7 +39,7 @@ public sealed partial class Session : IDisposable {
     }
 
     /// The engine's reason the last Open of `path` failed (no GPU it can use, a
-    /// file LibRaw refused), or null if it opened or was never tried (#DEC-perf).
+    /// file LibRaw refused), or null if it opened or was never tried (#393).
     public static string? OpenFailure(string path) => Failures.TryGetValue(path, out var why) && why.Length > 0 ? why : null;
     static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> Failures = new();
 
@@ -127,7 +127,7 @@ public sealed partial class Session : IDisposable {
     }
 
     /// False when the read failed (a lost device, out of memory): the bitmap then
-    /// holds whatever it held, which is never shown as the picture (#DEC-perf).
+    /// holds whatever it held, which is never shown as the picture (#393).
     unsafe bool Fill(WriteableBitmap bitmap, Graph graph, int w, int h) {
         using var fb = bitmap.Lock();
         if (fb.RowBytes == w * 4)

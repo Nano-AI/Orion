@@ -10,7 +10,7 @@ static class AppFolder {
         get {
             // DoNotVerify: otherwise .NET answers "" for a folder not made yet - a new
             // account's ~/.config, an XDG_CONFIG_HOME still to be created - and no
-            // setting could be saved. Each writer makes the folder (#DEC-fs).
+            // setting could be saved. Each writer makes the folder (#394).
             const Environment.SpecialFolderOption may = Environment.SpecialFolderOption.DoNotVerify;
             string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile, may);
             if (OperatingSystem.IsMacOS()) return home.Length == 0 ? null : Path.Combine(home, "Library", "Application Support", "Orion");

@@ -60,7 +60,7 @@ static partial class Trash {
                                                                    Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
                 return null;
             }
-            if (OperatingSystem.IsLinux()) return FreedesktopTrash.Move(path);   // .NET has none: the freedesktop.org spec (#DEC-fs)
+            if (OperatingSystem.IsLinux()) return FreedesktopTrash.Move(path);   // .NET has none: the freedesktop.org spec (#394)
             return "moving to the Trash is not built on this system";   // never a delete instead
         } catch (Exception e) {
             return e.Message;

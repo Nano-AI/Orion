@@ -50,7 +50,7 @@ orion::raw::BayerImage rampFrame(std::uint32_t n) {
 /// ⚠ A division, not `ox + 0.0026f * float(i)`: Clang fuses that multiply-add
 /// where it folds a constant and rounds twice where it runs, so on x86 (no FMA)
 /// `diagonal(40)` and `diagonal(60)` disagreed by an ulp at dab 11 and the
-/// predicate rightly refused the append.
+/// predicate rightly refused the append (#398).
 std::vector<float> diagonal(int count, float ox = 0.06f, float oy = 0.06f) {
     std::vector<float> xy(std::size_t(count) * 2, 0.0f);
     for (int i = 0; i < count; ++i) {

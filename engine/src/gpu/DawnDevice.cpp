@@ -52,7 +52,7 @@ std::string ErrorScope::pop() {
         ctx_.wait(ctx_.device.PopErrorScope(wgpu::CallbackMode::WaitAnyOnly,
             [&](wgpu::PopErrorScopeStatus, wgpu::ErrorType type, wgpu::StringView msg) {
                 // Said plainly: the shell shows it, and a card too small for the edit is
-                // the photographer's to know, not a Vulkan code's (#DEC-memory).
+                // the photographer's to know, not a Vulkan code's (#392).
                 if (type == wgpu::ErrorType::NoError || !why.empty()) return;
                 oom_ = type == wgpu::ErrorType::OutOfMemory;
                 why = (oom_ ? "out of GPU memory: " : "") + text(msg);
@@ -129,7 +129,7 @@ struct DawnDevice final : Device::Impl {
     // serial, and a wait marks that serial done without running the deleter,
     // after which a tick with nothing scheduled returns early. So a release
     // followed by one render freed nothing: 1,378 MB of a 24 MP full render
-    // stayed until the render after (#DEC-memory). Hence submit, wait, submit,
+    // stayed until the render after (#392). Hence submit, wait, submit,
     // with empty command buffers. ReduceMemoryUsage first queues the
     // allocator's recycled heaps (Vulkan; a no-op on D3D12 and Metal).
     void reclaim() noexcept override {
@@ -175,7 +175,7 @@ std::shared_ptr<Context> open() {
     // Dawn's only fallback is SwiftShader, which this build has not got; a CPU
     // driver such as lavapipe is an ordinary adapter, ranked last, and the
     // loader's own VK_DRIVER_FILES / VK_LOADER_DRIVERS_SELECT choose between
-    // drivers (#DEC-perf). ORION_DAWN_ADAPTER=fallback asks for Dawn's outright.
+    // drivers (#393). ORION_DAWN_ADAPTER=fallback asks for Dawn's outright.
     const Platform native = platform();
     const char* pick = std::getenv("ORION_DAWN_ADAPTER");
     const bool forced = pick != nullptr && std::strcmp(pick, "fallback") == 0;
@@ -191,7 +191,7 @@ std::shared_ptr<Context> open() {
             }));
         if (c.adapter || fallback) break;
     }
-    // Named, so a person reading it knows which driver to install (#DEC-perf).
+    // Named, so a person reading it knows which driver to install (#393).
     const char* api = native.backend == wgpu::BackendType::D3D12 ? "D3D12"
                     : native.backend == wgpu::BackendType::Vulkan ? "Vulkan" : "Metal";
     if (!c.adapter && forced)

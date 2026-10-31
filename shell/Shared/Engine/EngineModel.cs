@@ -226,7 +226,7 @@ public sealed class EngineModel : INotifyPropertyChanged {
     public event Action? Leaving;
 
     /// With no session (nothing open, or the engine could not start) a field reads as DevelopState's
-    /// Reset value, so a control shows its default, not a zero its range may not hold ("0 K") (#DEC-ui).
+    /// Reset value, so a control shows its default, not a zero its range may not hold ("0 K") (#395).
     public float Get(string field, int index = 0) => _session?.Get(field, index) ?? Reset(field, index);
 
     static readonly Dictionary<string, System.Text.Json.Nodes.JsonNode?> Resets =
@@ -303,7 +303,7 @@ public sealed class EngineModel : INotifyPropertyChanged {
         }
         if (graph == Graph.None) graph = s.Render(preview);
         // Out of GPU memory: the decoded neighbours are a convenience, the photo on
-        // screen is not. Once more without them (#DEC-memory).
+        // screen is not. Once more without them (#392).
         if (graph == Graph.None && s.LastError.Contains(OutOfGpuMemory) && _source.Shed()) graph = s.Render(preview);
         double render = sw.Elapsed.TotalMilliseconds;
         sw.Restart();

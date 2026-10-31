@@ -37,7 +37,7 @@ public sealed partial class Session {
     /// orion_engine_auto_enhance into this session's adjustments: it rewrites
     /// exposure, whites, blacks, lift and clarity. Does not render. A refusal
     /// changes nothing, as Engine.swift's autoEnhance returns on one, and says why:
-    /// out of GPU memory it was a click that did nothing and told nobody (#DEC-memory).
+    /// out of GPU memory it was a click that did nothing and told nobody (#392).
     public void AutoEnhance() {
         if (Native.shim_auto_enhance(Shim) == 0) throw new InvalidOperationException($"Auto failed: {LastError.Split('\n')[0]}");
     }

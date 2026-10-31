@@ -138,7 +138,7 @@ static partial class SelfTest {
         // A double-click springs to 1:1 about the point, a second back to fit; 9 jumps. Counted by the zooms
         // shown on the way, not by Live after the click: where a headless frame takes longer than the frame
         // interval (WARP, Linux's CPU Skia), the press's own RunJobs renders the whole spring before it
-        // returns (#DEC-ui). A jump, or a spring with no clock, shows two at most.
+        // returns (#395). A jump, or a spring with no clock, shows two at most.
         vp.Reset();
         window.UpdateLayout();
         var q = At(window, canvas, p);

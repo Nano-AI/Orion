@@ -35,7 +35,7 @@ done
 # The shim finds them in usr/lib, not through LD_LIBRARY_PATH, which every
 # process Orion starts would inherit (the assistant's shell, its agent, git) and
 # load Orion's zlib and liblzma in place of the system's. The build's RUNPATH
-# names the build machine's vcpkg folder, which no user has (#DEC-pkg).
+# names the build machine's vcpkg folder, which no user has (#396).
 patchelf --set-rpath '$ORIGIN/../lib' "$app/usr/bin/liborion_shim.so"
 missing=$(env -u LD_LIBRARY_PATH ldd "$app/usr/bin/liborion_shim.so" | awk '/not found/ {print $1}' | grep -Ev "$base" || true)
 if [[ -n $missing ]]; then

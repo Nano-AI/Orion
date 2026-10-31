@@ -216,7 +216,7 @@ static class CompareState {
                 var e = EngineModel.Shared;
                 // Failed: the next toggle tries again. Out of GPU memory, once more with the
                 // photo on screen set aside: at 24 MP its full graph is the other ~1.6 GB, and
-                // two do not fit a 3 GB card (#DEC-memory). Its picture stays, as a CPU copy;
+                // two do not fit a 3 GB card (#392). Its picture stays, as a CPU copy;
                 // its textures and the decoded neighbours go. Still failing, it is said: the
                 // split keeps the preview-sized original, visibly softer past fit.
                 if (current && sharp == null) {

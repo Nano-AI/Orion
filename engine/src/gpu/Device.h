@@ -63,7 +63,7 @@ public:
     /// Hands the memory of textures already dropped back to the driver now.
     /// Metal does that by itself; Dawn frees a dropped texture only after a
     /// later submit has finished, so without this a release lasts until the
-    /// next render but one (#DEC-memory). Waits for queued GPU work.
+    /// next render but one (#392). Waits for queued GPU work.
     void reclaim() noexcept;
 
     /// GPU memory this device holds from the driver, in bytes; 0 where the

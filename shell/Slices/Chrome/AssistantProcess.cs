@@ -147,7 +147,7 @@ sealed partial class AssistantModel {
 
     /// The shell the agent starts under: zsh on macOS, as Terminal.app. On Linux the user's own
     /// login shell, where many machines have no zsh, if it takes `-c 'exec "$0" "$@"'` as sh
-    /// does (fish does not); else /bin/sh, the one shell every Linux has (#DEC-ui).
+    /// does (fish does not); else /bin/sh, the one shell every Linux has (#395).
     public static string Shell(string? login) =>
         !OperatingSystem.IsLinux() ? "/bin/zsh"
         : login is { } path && Path.IsPathRooted(path) && File.Exists(path)

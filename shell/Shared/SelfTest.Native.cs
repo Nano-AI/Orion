@@ -131,7 +131,7 @@ static partial class SelfTest {
     static unsafe long Footprint(Session session) {
         // No phys_footprint off macOS: the working set, plus the GPU memory Dawn holds, which
         // a discrete card keeps out of it (a full 24 MP render added 0 MB to the working set
-        // and 1,378 MB to the card, #DEC-memory).
+        // and 1,378 MB to the card, #392).
         if (!OperatingSystem.IsMacOS()) {
             Native.orion_engine_gpu_memory(session.Handle, out ulong gpu);
             return Environment.WorkingSet + (long)gpu;

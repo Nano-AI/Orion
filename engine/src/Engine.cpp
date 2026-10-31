@@ -22,7 +22,7 @@ Engine::Engine() : device_(gpu::Device::create()) {
 }
 
 Engine::~Engine() {
-    // The Dawn device outlives this engine while another holds it (#DEC-memory).
+    // The Dawn device outlives this engine while another holds it (#392).
     develop_.reset(); preview_.reset(); region_.reset(); display_.reset(); samples_.reset(); hdrMerge_.reset();
     device_->reclaim();
 }
@@ -436,7 +436,7 @@ double Engine::render() {
         // after dehaze and NLM went on and off once), where one render alone
         // frees each at its last reader. So once more from empty, and from then
         // on that frugal way, as headless does (#312): slower ticks on a card
-        // this photo does not fit, rather than no picture (#DEC-memory).
+        // this photo does not fit, rather than no picture (#392).
         giveBack();
         develop_->graph().setReleaseEveryRender(true);
         try { ms = develop_->render(); } catch (...) { giveBack(); throw; }
@@ -551,7 +551,7 @@ void Engine::autoEnhance(pipe::Adjustments& adj) {
     std::vector<std::uint32_t> combined(kBins);
 
     // ⚠ Through render(), not the graph's own: it is what gives the memory back
-    // and retries lean when the card runs out (#DEC-memory). The look turns on
+    // and retries lean when the card runs out (#392). The look turns on
     // clarity, whose 24 MP full graph peaks at 2.3 GB on its own, beside
     // whatever the cache kept from the edit before, and the graph's own render
     // failed there with nothing to say why and the cache still held.
@@ -647,7 +647,7 @@ void Engine::histogram(std::uint32_t* out, std::uint32_t bins) {
         ++out[c * bins + bin];
     };
 
-    // ⚠ **Sampled on the GPU, read back small (#DEC-perf).** A full readback of
+    // ⚠ **Sampled on the GPU, read back small (#393).** A full readback of
     // a 24 MP frame to keep one pixel in 31 cost 82 ms on the UI thread under
     // Dawn on Linux, every settled render. histogram_sample gathers the same
     // pixels in the output's own format, so the bins are unchanged.

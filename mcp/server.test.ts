@@ -533,7 +533,7 @@ test("current_photo returns the contents of current.json", async () => {
   }
 });
 
-// Where the app writes it off macOS: .NET's ApplicationData, which honours XDG_CONFIG_HOME (#DEC-fs).
+// Where the app writes it off macOS: .NET's ApplicationData, which honours XDG_CONFIG_HOME (#394).
 test("current_photo finds current.json under XDG_CONFIG_HOME", { skip: process.platform === "darwin" || process.platform === "win32" }, async () => {
   const config = path.join(tmpDir, "xdg");
   const current = { photo: "/shoot/b.arw", folder: "/shoot", updated: "2026-09-14T00:00:00Z" };
