@@ -484,19 +484,20 @@ echo "  verified  no paths outside the bundle, and none searched"
 # carried its author's /Users/<name>/Downloads/Logs, which a check for this
 # machine's user name passes without a word.
 #
-# ⚠ Three names excused, each in one file. libAvaloniaNative.dylib, prebuilt on
-# NuGet, and Velopack's UpdateMac carry /Users/runner/, the GitHub Actions macOS
-# build account that compiled them; orion-mcp carries /Users/admin/ some three thousand times,
-# nodejs.org's release machine's paths, in every official macOS Node. Both name
-# a build account, not a person. The builder's home and git email are still
-# searched in both like anywhere else, except on CI (#389), where the home is
-# that build account, as tools/package-gates.py has it.
+# ⚠ Two names excused. /Users/runner/ anywhere: GitHub's and Azure's macOS
+# build account (tools/package-gates.py's BUILD_ACCOUNTS), in prebuilt
+# libAvaloniaNative.dylib, Velopack's UpdateMac and, in CI's Microsoft SDK, the
+# .NET runtime (#389). /Users/admin/ in orion-mcp only, some three thousand
+# times: nodejs.org's release machine's paths, in every official macOS Node.
+# Both name a build account, not a person. The builder's home and git email are
+# still searched everywhere, except on CI (#389), where the home is that build
+# account, as tools/package-gates.py has it.
 literal=( -e "$HOME/" )
 if [[ -n "${CI:-}" ]]; then literal=( -e "/nonexistent-home/" ); fi
 email="$(git -C "$ROOT" config user.email 2>/dev/null || true)"
 if [[ -n "$email" ]]; then literal+=( -e "$email" ); fi
 leaks="$( { grep -raoE '/Users/[^/[:space:]]+/' "$APP" | sort -u \
-                | grep -vxF -e "$MACOS/libAvaloniaNative.dylib:/Users/runner/" -e "$MACOS/UpdateMac:/Users/runner/" -e "$MCP:/Users/admin/" | cut -d: -f1
+                | grep -v ':/Users/runner/$' | grep -vxF -e "$MCP:/Users/admin/" | cut -d: -f1
             grep -rlaF "${literal[@]}" "$APP"; } | sort -u || true)"
 if [[ -n "$leaks" ]]; then
     echo "error: the bundle names a person, in:" >&2

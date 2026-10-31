@@ -30,7 +30,8 @@ python "$root/tools/package-gates.py" windows "$app" "$app/licenses" "$build" "$
 # Velopack (#389), in place of Inno Setup and the zip: Setup.exe installs per
 # user, with no administrator prompt, into %LocalAppData%\Orion, with Start menu
 # and desktop shortcuts and an uninstaller in Settings; Portable.zip is the zip.
-# The version is the tag without its v, SemVer as vpk needs.
+# The version is the tag without its v, SemVer as vpk needs; --runtime, or vpk
+# takes the stubs and the feed for x86.
 "${VPK:-vpk}" pack --packId Orion --packVersion "${version#v}" --packDir "$app" --mainExe Orion.exe \
-    --packTitle Orion --outputDir "$out/releases"
+    --runtime win-x64 --packTitle Orion --outputDir "$out/releases"
 ls "$out/releases"
