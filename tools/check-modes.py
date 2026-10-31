@@ -190,7 +190,8 @@ def main():
             frames.append(os.path.join(tmp, f"{n}.ARW"))
             shutil.copyfile(SAMPLES / EXPORTS[0], frames[-1])
         stacked = os.path.join(tmp, "stacked.dng")
-        r = run(["--stack", stacked, "--mode", "noise"] + frames, problems, "--stack")
+        # --force: the gate tests the mode, not the memory check (a machine short of memory would refuse).
+        r = run(["--stack", stacked, "--mode", "noise", "--force"] + frames, problems, "--stack")
         if r is not None:
             out = (r.stderr or "") + (r.stdout or "")
             if r.returncode != 0:

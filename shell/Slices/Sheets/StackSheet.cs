@@ -31,7 +31,7 @@ public sealed class StackSheet : Border {
     readonly StackCalibration _calibration = new();
     Stack.Mode _mode;
     int _reference, _rejection = -1;
-    bool _weight, _stacking;
+    bool _weight, _stacking, _closed;
     StackSplit? _painter;
     Button? _stack;
     string? _splitFor;   // the reference the Sky row was built for
@@ -80,6 +80,7 @@ public sealed class StackSheet : Border {
             Children = { SheetKit.Button("Cancel", () => Warn(false)), SheetKit.Button("Proceed anyway", () => _ = Proceed()) },
         }]);
         Child = new Rows { Spacing = Space.Pad, Children = { new ScrollViewer { Content = body, MaxHeight = 760 }, _status, _warning, _actions } };
+        _calibration.Changed += () => Warn(false);   // the warning's numbers described the old lists
         Status(null);
     }
 
@@ -144,6 +145,7 @@ public sealed class StackSheet : Border {
     /// The mode's note, and in Landscape the Sky row for the reference frame, seeded when the reference changes.
     void ShowMode() {
         Status(null);   // "Paint the sky first." answered by a change of mode or frame
+        Warn(false);    // and a memory warning about the old frame or mode no longer applies
         _modeNote.Text = ModeNotes[(int)_mode];
         _split.IsVisible = _mode == Stack.Mode.Landscape;
         string path = _candidates[_reference].Path;
@@ -183,6 +185,7 @@ public sealed class StackSheet : Border {
         } finally {
             _stacking = false;
         }
+        if (_closed) return;   // closed while the check ran: no stack nobody can see
         if (memory is { Need: var need, Free: var free } && free > 0 && need > free) {
             _warningText.Text = MemoryWarning(_candidates.Count, need, free);
             Warn(true);
@@ -199,8 +202,14 @@ public sealed class StackSheet : Border {
         return Start(force: true);
     }
 
+    // Test seams: what the selftest reads of the warning.
     internal bool WarningShown => _warning.IsVisible;
     internal string WarningText => _warningText.Text ?? "";
+
+    protected override void OnDetachedFromVisualTree(Avalonia.VisualTreeAttachmentEventArgs e) {
+        base.OnDetachedFromVisualTree(e);
+        _closed = true;
+    }
 
     /// Decimal GB, one decimal, invariant: "memory" and "free", never "space".
     internal static string MemoryWarning(int frames, ulong need, ulong free) => FormattableString.Invariant(
@@ -231,6 +240,15 @@ public sealed class StackSheet : Border {
                                                                     TimeSpan.FromMilliseconds(150));
             string? failed = await Stack.Run(paths, reference, mode, _rejection, _weight, darks, flats, matte,
                                              painter?.MatteWidth ?? 0, painter?.MatteHeight ?? 0, output, force);
+            if (failed != null && !force && Stack.LastStatus == Stack.NotEnoughMemory) {
+                // The engine read less memory free than the sheet's check did (or the check could not tell):
+                // the same warning, with its Proceed anyway, rather than a closed sheet and nothing to press.
+                Idle();
+                _calibration.IsEnabled = true;
+                _warningText.Text = failed;
+                Warn(true);
+                return;
+            }
             Dismiss?.Invoke();
             if (failed != null) {
                 Console.Error.WriteLine($"orion stack: failed: {failed}");

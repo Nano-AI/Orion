@@ -16,9 +16,9 @@ static partial class Stack {
                                                   string[]? darks, int darkCount, string[]? flats, int flatCount,
                                                   float[]? skyMatte, int matteWidth, int matteHeight, string output, int force);
     [LibraryImport(Native.Lib, StringMarshalling = StringMarshalling.Utf8)]
-    private static partial int orion_engine_stack_estimate(nint engine, string[] paths, int count, string[]? darks, int darkCount,
-                                                           string[]? flats, int flatCount, out ulong bytes);
+    private static partial int orion_stack_estimate(string[] paths, int count, int darkCount, int flatCount, out ulong bytes);
     [LibraryImport(Native.Lib)] private static partial int orion_available_memory(out ulong bytes);
+    [LibraryImport(Native.Lib)] private static partial int orion_available_memory_override(ulong bytes);
     [LibraryImport(Native.Lib)] private static partial int orion_engine_stack_progress(nint engine, out float progress);
     [LibraryImport(Native.Lib)] private static partial int orion_engine_stack_cancel(nint engine);
     [LibraryImport(Native.Lib)] private static partial int orion_engine_stack_skipped(nint engine, out int skipped);
@@ -40,26 +40,28 @@ static partial class Stack {
     /// 0…1 while a stack runs, null otherwise.
     public static float? Progress { get { lock (Gate) return _running != 0 && orion_engine_stack_progress(_running, out float p) == 0 ? p : null; } }
 
-    /// The memory available now, in place of the machine's when set: the selftest, and --screenshot through
-    /// ORION_STACK_AVAILABLE (bytes), pose the sheet's memory warning with it.
-    public static ulong? AvailableOverride { get; set; } =
-        ulong.TryParse(Environment.GetEnvironmentVariable("ORION_STACK_AVAILABLE"), out ulong v) ? v : null;
+    /// Test seam: the memory free the sheet's check sees, in place of the machine's (the selftest; --screenshot
+    /// sets it from ORION_STACK_AVAILABLE). The engine's own check is not affected: see EngineAvailableOverride.
+    public static ulong? AvailableOverride { get; set; }
 
-    /// What the stack would need and what is free now, off the UI thread; null when the frames will not read
-    /// (the stack itself then says why). Free is 0 when the OS will not say.
+    /// Test seam: what the engine's own check (and orion_available_memory) sees; 0 restores the OS.
+    internal static void EngineAvailableOverride(ulong bytes) => orion_available_memory_override(bytes);
+
+    /// What the stack would need and what is free now, off the UI thread and with no engine (the estimate reads
+    /// metadata only); null when the frames will not read (the stack itself then says why). Free is 0 when the
+    /// OS will not say.
     public static Task<(ulong Need, ulong Free)?> Memory(IReadOnlyList<string> paths, int darks, int flats) => Task.Run<(ulong, ulong)?>(() => {
-        if (orion_engine_create(out nint engine) != 0 || engine == 0) return null;
-        try {
-            if (orion_engine_stack_estimate(engine, paths.ToArray(), paths.Count, null, darks, null, flats, out ulong need) != 0) return null;
-            ulong free = AvailableOverride ?? (orion_available_memory(out ulong f) == 0 ? f : 0);
-            return (need, free);
-        } finally {
-            orion_engine_destroy(engine);
-        }
+        if (orion_stack_estimate(paths.ToArray(), paths.Count, darks, flats, out ulong need) != 0) return null;
+        ulong free = AvailableOverride ?? (orion_available_memory(out ulong f) == 0 ? f : 0);
+        return (need, free);
     });
 
-    /// Whether the last Run was forced (the selftest reads it).
+    /// Test seam: whether the last Run was forced.
     public static bool LastForce { get; private set; }
+
+    /// The last Run's OrionStatus (0 ok; 4 ORION_ERR_MEMORY: refused over the memory available, unforced).
+    public static int LastStatus { get; private set; }
+    public const int NotEnoughMemory = 4;
 
     /// Frames the last Run left out because they did not register.
     public static int Skipped { get; private set; }
@@ -82,10 +84,12 @@ static partial class Stack {
         try {
             Skipped = 0;
             LastForce = force;
+            LastStatus = 0;
             return await Task.Run<string?>(() => {
-                if (orion_engine_stack(engine, paths.ToArray(), paths.Count, reference, (int)mode, rejection, weight ? 1 : 0,
+                LastStatus = orion_engine_stack(engine, paths.ToArray(), paths.Count, reference, (int)mode, rejection, weight ? 1 : 0,
                         darks.Count > 0 ? darks.ToArray() : null, darks.Count, flats.Count > 0 ? flats.ToArray() : null, flats.Count,
-                        skyMatte, matteWidth, matteHeight, output, force ? 1 : 0) != 0)
+                        skyMatte, matteWidth, matteHeight, output, force ? 1 : 0);
+                if (LastStatus != 0)
                     return Marshal.PtrToStringUTF8(Native.orion_last_error(engine)) is { Length: > 0 } why ? why : "the stack failed";
                 Skipped = orion_engine_stack_skipped(engine, out int skipped) == 0 ? skipped : 0;
                 return null;

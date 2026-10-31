@@ -125,11 +125,22 @@ static partial class SelfTest {
                   $"over the memory available, Stack shows the warning and runs nothing ({said})");
             Check(Stack.LastForce && !sheet.WarningShown && File.Exists(Path.Combine(dir, "b-stack.dng")),
                   "Proceed anyway runs the stack with force");
+
+            // The sheet's check passes but the engine's refuses (it reads memory later, or alone decides):
+            // the same warning comes back, with its Proceed anyway, instead of a closed sheet.
+            Stack.AvailableOverride = ulong.MaxValue;
+            Stack.EngineAvailableOverride(1000);
+            var again = sheet.Press();
+            Pump(() => again.IsCompleted, 60);
+            Check(sheet.WarningShown && !Stack.LastForce && Stack.LastStatus == Stack.NotEnoughMemory
+                  && sheet.WarningText.StartsWith("These 2 frames need about ") && !File.Exists(Path.Combine(dir, "b-stack-2.dng")),
+                  $"an engine-side memory refusal puts the warning back on the sheet ({sheet.WarningText})");
             Check(StackSheet.MemoryWarning(60, 8_600_000_000, 5_100_000_000)
                   == "These 60 frames need about 8.6 GB of memory and about 5.1 GB is free. Close other apps to free memory, or proceed anyway.",
                   "the warning names decimal GB, one decimal, memory and free");
         } finally {
             Stack.AvailableOverride = null;
+            Stack.EngineAvailableOverride(0);
             engine.Load(list);
             OpenAndWait(engine, current);
             Directory.Delete(dir, recursive: true);

@@ -23,7 +23,7 @@ sealed class StackSuggestion : Border {
     static readonly HashSet<string> _dismissed = new();
     static StackSuggestion() => EngineModel.Shared.FolderLoaded += _dismissed.Clear;
 
-    /// What Pick is asked against: the selftest reads it.
+    /// Test seam: what Pick is asked against, for the selftest.
     internal static IReadOnlySet<string> Dismissed => _dismissed;
     IReadOnlyList<StackGroup> _groups = [];
     StackGroup? _shown;

@@ -16,6 +16,9 @@ sealed class StackCalibration : Rows {
     public IReadOnlyList<string> Darks => _darks;
     public IReadOnlyList<string> Flats => _flats;
 
+    /// A list was picked or cleared.
+    public event Action? Changed;
+
     public StackCalibration() {
         Orientation = Orientation.Horizontal;
         Spacing = Space.Md;
@@ -50,6 +53,7 @@ sealed class StackCalibration : Rows {
     void Show() {
         _count.Text = Count(_darks.Count, _flats.Count);
         _clear.IsVisible = _darks.Count + _flats.Count > 0;
+        Changed?.Invoke();
     }
 
     /// "3 darks · 5 flats", "1 dark", or "none" when there is nothing to calibrate with.

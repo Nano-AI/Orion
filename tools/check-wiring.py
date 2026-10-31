@@ -107,6 +107,10 @@ HARNESS_ONLY = {
     "shim_mask_field_count":
         "the shim's count of OrionMaskComponent fields, the oracle the selftest "
         "holds Session.MaskFields to — not a product path",
+    # #391: the stack's memory check.
+    "EngineAvailableOverride":
+        "a test seam: the selftest makes the engine's own memory check refuse "
+        "whatever the machine has free, to prove the sheet shows the warning again",
 }
 
 MODIFIERS = ("public|private|internal|protected|static|override|virtual|sealed|"

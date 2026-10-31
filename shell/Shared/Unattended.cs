@@ -34,8 +34,10 @@ sealed partial class App {
             if (Run.Screenshot != null) {
                 Pump(() => Library.StackSuggestion.Scanned.IsCompleted, 10);   // the folder's stack line, posted when its scan lands
                 Dispatcher.UIThread.RunJobs();                                 // and shown
-                // The Stack sheet posed with ORION_STACK_AVAILABLE: press Stack, so the still is its memory warning.
-                if (Target is Border { Child: Sheets.StackSheet sheet } && Sheets.Stack.AvailableOverride != null) {
+                // The Stack sheet posed with ORION_STACK_AVAILABLE (bytes free): press Stack, so the still is its memory warning.
+                if (Target is Border { Child: Sheets.StackSheet sheet } &&
+                    ulong.TryParse(Environment.GetEnvironmentVariable("ORION_STACK_AVAILABLE"), out ulong free)) {
+                    Sheets.Stack.AvailableOverride = free;
                     var press = sheet.Press();
                     Pump(() => press.IsCompleted, 30);
                     window.UpdateLayout();
