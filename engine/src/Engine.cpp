@@ -18,6 +18,7 @@ Engine::Engine() : device_(gpu::Device::create()) {
     // Eager, so hdrMergeProgress/hdrMergeCancel from another thread never
     // race a lazy construction inside run().
     hdrMerge_ = std::make_unique<merge::HdrMerge>(*device_, res::shaderDir());
+    stacker_ = std::make_unique<stack::Stacker>(*device_, res::shaderDir());
 }
 
 Engine::~Engine() = default;

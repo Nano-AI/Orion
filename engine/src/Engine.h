@@ -5,6 +5,7 @@
 
 #include "gpu/Device.h"
 #include "merge/HdrMerge.h"
+#include "stack/Stacker.h"
 #include "pipe/DevelopPipeline.h"
 #include "pipe/DisplayCopy.h"
 #include "pipe/LensDatabase.h"
@@ -250,6 +251,13 @@ public:
     [[nodiscard]] float hdrMergeProgress() const noexcept;
     void hdrMergeCancel() noexcept;
 
+    // ── Stacking ─────────────────────────────────────────────────────────
+    // As the HDR merge: independent of the open photograph, blocking, with
+    // progress and cancel as noexcept reads of atomics.
+    void runStack(const stack::Request& request) { stacker_->run(request); }
+    [[nodiscard]] float stackProgress() const noexcept { return stacker_->progress(); }
+    void stackCancel() noexcept { stacker_->cancel(); }
+
     void setError(std::string message) { lastError_ = std::move(message); }
     [[nodiscard]] const char* lastError() const noexcept { return lastError_.c_str(); }
 
@@ -258,6 +266,7 @@ private:
     // Constructed eagerly so progress/cancel from another thread never race
     // a lazy creation inside run().
     std::unique_ptr<merge::HdrMerge>       hdrMerge_;
+    std::unique_ptr<stack::Stacker>        stacker_;   // eager, as hdrMerge_
     std::unique_ptr<pipe::DevelopPipeline> develop_;
     std::unique_ptr<pipe::DevelopPipeline> preview_;
     /// The region graph and what it was last loaded with (#22).

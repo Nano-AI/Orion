@@ -57,6 +57,7 @@ add_library(orion_engine STATIC
     src/stack/StarAlign.cpp
     src/stack/Integrate.cpp
     src/stack/SkySplit.cpp
+    src/stack/Stacker.cpp
 )
 
 add_library(Orion::Engine ALIAS orion_engine)

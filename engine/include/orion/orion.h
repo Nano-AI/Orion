@@ -805,6 +805,37 @@ OrionStatus orion_engine_hdr_merge_progress(OrionEngine* engine, float* out);
  * thread; a no-op when nothing is running. */
 OrionStatus orion_engine_hdr_merge_cancel(OrionEngine* engine);
 
+/* ── Stacking ──────────────────────────────────────────────────────────────
+ *
+ * Stacks two or more frames of one scene into a linear DNG at output_path
+ * (must not exist). paths[reference_index] sets the framing.
+ * mode: 0 noise (homography alignment, as HDR merge), 1 stars (sky-only,
+ *       triangle matching), 2 landscape (sky on stars, ground unaligned,
+ *       blended over sky_matte).
+ * rejection: -1 auto, 0 none, 1 percentile, 2 sigma, 3 winsorized, 4 linear fit.
+ * weight_by_noise: nonzero weights each frame by its inverse noise variance.
+ * darks/flats: optional calibration frames (NULL/0 for none).
+ * sky_matte: landscape only, matte_width*matte_height floats 0..1, 1 = sky,
+ *            UPRIGHT (as displayed); the engine undoes the reference's EXIF
+ *            turn. Required for mode 2.
+ * A frame that does not register is left out; fewer than two left is an
+ * error. Blocking; progress and cancel from any thread, as
+ * orion_engine_hdr_merge ("stack cancelled", never a partial file). */
+OrionStatus orion_engine_stack(OrionEngine* engine, const char* const* paths, int32_t count,
+                               int32_t reference_index, int32_t mode, int32_t rejection,
+                               int32_t weight_by_noise,
+                               const char* const* darks, int32_t dark_count,
+                               const char* const* flats, int32_t flat_count,
+                               const float* sky_matte, int32_t matte_width, int32_t matte_height,
+                               const char* output_path);
+
+/* 0..1, monotone within one stack. Safe from any thread. */
+OrionStatus orion_engine_stack_progress(OrionEngine* engine, float* out);
+
+/* Makes the running stack fail at its next stage boundary. Safe from any
+ * thread; a no-op when nothing is running. */
+OrionStatus orion_engine_stack_cancel(OrionEngine* engine);
+
 OrionStatus orion_engine_export(OrionEngine* engine, const char* path,
                                 const OrionExportOptions* options);
 

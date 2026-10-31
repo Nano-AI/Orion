@@ -17,6 +17,12 @@ int main() {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     std::printf("orion-tests\n\n");
 
+    // ORION_STACK_BENCH=1 runs the 24 MP stack bench alone, so the peak RSS it prints is its own.
+    if (const char* b = std::getenv("ORION_STACK_BENCH"); b && std::string(b) == "1") {
+        testStackBench();
+        return failures == 0 ? 0 : 1;
+    }
+
     // First, because it is the one that catches a shader and a binary that
     // disagree — a state in which every other GPU test's result is a guess.
     testBindingCount();
@@ -141,6 +147,11 @@ int main() {
     testStackNormalizesAndWeights();
     testStackSkyGroundBlend();
     testSkySplitOrientation();
+    testStackFacadeNoise();
+    testStackFacadeStars();
+    testStackFacadeLandscape();
+    testStackFacadeRefuses();
+    testStackCancelIsAtomic();
     testGrainPlate();
     testGrainGpu();
     testGrainWiring();

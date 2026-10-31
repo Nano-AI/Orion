@@ -717,6 +717,60 @@ OrionStatus orion_engine_hdr_merge_cancel(OrionEngine* engine) {
     return ORION_OK;
 }
 
+OrionStatus orion_engine_stack(OrionEngine* engine, const char* const* paths, int32_t count,
+                               int32_t reference_index, int32_t mode, int32_t rejection,
+                               int32_t weight_by_noise,
+                               const char* const* darks, int32_t dark_count,
+                               const char* const* flats, int32_t flat_count,
+                               const float* sky_matte, int32_t matte_width, int32_t matte_height,
+                               const char* output_path) {
+    if (engine == nullptr || paths == nullptr || count < 2 || output_path == nullptr ||
+        mode < 0 || mode > 2 || rejection < -1 || rejection > 4 ||
+        dark_count < 0 || flat_count < 0 || (dark_count > 0 && darks == nullptr) ||
+        (flat_count > 0 && flats == nullptr) ||
+        (sky_matte != nullptr && (matte_width <= 0 || matte_height <= 0))) {
+        return ORION_ERR_BAD_ARG;
+    }
+    return guard(engine, [&]() -> OrionStatus {
+        orion::stack::Request r;
+        const auto strings = [](const char* const* s, int32_t n, std::vector<std::string>& out) {
+            for (int32_t i = 0; i < n; ++i) {
+                if (s[i] == nullptr) return false;
+                out.emplace_back(s[i]);
+            }
+            return true;
+        };
+        if (!strings(paths, count, r.paths) || !strings(darks, dark_count, r.darks) ||
+            !strings(flats, flat_count, r.flats)) {
+            return ORION_ERR_BAD_ARG;
+        }
+        r.reference = reference_index;
+        r.mode = orion::stack::Mode(mode);
+        r.options.rejection = orion::stack::Rejection(rejection);
+        r.options.weightByNoise = weight_by_noise != 0;
+        if (sky_matte != nullptr) {
+            r.skyMatte.assign(sky_matte, sky_matte + std::size_t(matte_width) * std::size_t(matte_height));
+            r.matteWidth = matte_width;
+            r.matteHeight = matte_height;
+        }
+        r.output = output_path;
+        engine->impl.runStack(r);
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_engine_stack_progress(OrionEngine* engine, float* out) {
+    if (engine == nullptr || out == nullptr) return ORION_ERR_BAD_ARG;
+    *out = engine->impl.stackProgress();
+    return ORION_OK;
+}
+
+OrionStatus orion_engine_stack_cancel(OrionEngine* engine) {
+    if (engine == nullptr) return ORION_ERR_BAD_ARG;
+    engine->impl.stackCancel();
+    return ORION_OK;
+}
+
 OrionStatus orion_engine_lens_profile(const OrionEngine* engine,
                                       OrionLensProfile* out) {
     if (engine == nullptr || out == nullptr) return ORION_ERR_BAD_ARG;
