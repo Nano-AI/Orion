@@ -152,6 +152,7 @@ void testStarDetect();
 void testStarAlignRecovers();
 void testStarAlignRefuses();
 void testStarAlignWideField();
+void testStarAlignRefusesFolds();
 void testStackNoiseFallsSqrtN();
 void testStackRejectsStreak();
 void testStackRemovesHotPixel();

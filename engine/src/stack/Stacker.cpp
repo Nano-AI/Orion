@@ -235,7 +235,7 @@ void Stacker::run(const Request& rq) {
                 mr.rgb = refFloat.data();
                 a = merge::align(mf, mr);
             } else {
-                a = alignStars(detectStars(rgb.data(), W, H, landscape ? matte.data() : nullptr), refStars);
+                a = alignStars(detectStars(rgb.data(), W, H, landscape ? matte.data() : nullptr), refStars, W, H);
             }
             if (!a.ok) {
                 std::fprintf(stderr, "orion stack: skipped %s: did not register (%d inliers)\n",

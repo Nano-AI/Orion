@@ -19,7 +19,7 @@
  *  Lens distortion is the remaining ceiling: no homography models it.
  *
  *  The constants (5 sigma, area 2-400, peak share 0.5, 60 stars, radius 0.1,
- *  2 px, 8 inliers)
+ *  2 px, 8 inliers, corner w 0.5-2)
  *  are research/UNSOURCED.md §32's.
  */
 
@@ -52,6 +52,9 @@ constexpr int   kMinInliers  = 8;   // a homography has 8 degrees of freedom: ma
 /// ray, not a star. A sigma 1.2 star's peak carries ~0.11, a sigma 0.7 one
 /// ~0.32, a lone spike ~1. research/UNSOURCED.md §32.
 constexpr float kMaxPeakShare = 0.5f;
+/// A homography's w at the frame's corners (m[8] = 1) must stay inside this: a sky's turn keeps it
+/// within a few percent of 1 (200 s at 14 mm on full frame: 0.98-1.03). research/UNSOURCED.md §32.
+constexpr double kMinW = 0.5, kMaxW = 2.0;
 
 /// Median of v (reorders it).
 float median(std::vector<float>& v) {
@@ -159,7 +162,23 @@ std::vector<Star> detectStars(const float* rgb, std::uint32_t width, std::uint32
     return stars;
 }
 
-merge::AlignResult alignStars(const std::vector<Star>& frame, const std::vector<Star>& reference) {
+bool wellConditioned(const pipe::persp::Matrix3& h, std::uint32_t width, std::uint32_t height) noexcept {
+    const float* m = h.m;
+    // The Jacobian determinant of (x, y) -> (u/w, v/w) is det(H) / w³ (with m[8] = 1).
+    const double det = double(m[0]) * (double(m[4]) * m[8] - double(m[5]) * m[7])
+                     - double(m[1]) * (double(m[3]) * m[8] - double(m[5]) * m[6])
+                     + double(m[2]) * (double(m[3]) * m[7] - double(m[4]) * m[6]);
+    const double xs[2] = {0.0, double(width) - 1}, ys[2] = {0.0, double(height) - 1};
+    for (double x : xs)
+        for (double y : ys) {
+            const double w = m[6] * x + m[7] * y + m[8];
+            if (!(w >= kMinW && w <= kMaxW) || !(det / (w * w * w) > 0.0)) return false;
+        }
+    return true;
+}
+
+merge::AlignResult alignStars(const std::vector<Star>& frame, const std::vector<Star>& reference,
+                              std::uint32_t width, std::uint32_t height) {
     merge::AlignResult result;   // identity, ok = false
     if (int(frame.size()) < kMinInliers || int(reference.size()) < kMinInliers) return result;
 
@@ -196,11 +215,13 @@ merge::AlignResult alignStars(const std::vector<Star>& frame, const std::vector<
     for (const auto& [r, f] : votes) {
         if (inl.at<std::uint8_t>(i++)) { refUsed.insert(r); frameUsed.insert(f); }
     }
-    const int inliers = int(std::min(refUsed.size(), frameUsed.size()));
-    if (inliers < kMinInliers) return result;
+    result.inliers = int(std::min(refUsed.size(), frameUsed.size()));   // reported on a refusal too
+    if (result.inliers < kMinInliers) return result;
 
-    for (int k = 0; k < 9; ++k) result.refToSource.m[k] = float(a.at<double>(k / 3, k % 3) / a.at<double>(2, 2));
-    result.inliers = inliers;
+    pipe::persp::Matrix3 h;
+    for (int k = 0; k < 9; ++k) h.m[k] = float(a.at<double>(k / 3, k % 3) / a.at<double>(2, 2));
+    if (!wellConditioned(h, width, height)) return result;
+    result.refToSource = h;
     result.ok = true;
     return result;
 }

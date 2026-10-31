@@ -110,6 +110,28 @@ void testStackRejection() {
         }
     }
 
+    section("stack: winsorized's own noise cost on clean data, four and five frames");
+    for (int n = 4; n <= 5; ++n) {
+        // Gain = sigma of one value / sigma of the combined value (sqrt n for a plain mean). A clean value
+        // rejected costs some of it; at n=4 two outliers are both kept (a pass leaving < 3 is not applied).
+        constexpr int kTrials = 20000;
+        double s = 0, ss = 0;
+        int rejected = 0;
+        for (int t = 0; t < kTrials; ++t) {
+            const auto v = noisy(n, 5000u + unsigned(t));
+            const float r = run(v, Rejection::Winsorized) - 1.0f;
+            s += r;
+            ss += double(r) * r;
+            rejected += std::fabs(r + 1.0f - plainMean(v)) > 1e-6f;
+        }
+        const double sd = std::sqrt(ss / kTrials - (s / kTrials) * (s / kTrials));
+        const double gain = kSigma / sd;
+        std::printf("    n=%d: gain %.3f (sqrt n %.3f), a clean value rejected on %.1f%% of pixels\n", n, gain,
+                    std::sqrt(double(n)), 100.0 * rejected / kTrials);
+        report(gain > std::sqrt(double(n)) * 0.85, "winsorized keeps most of the averaging gain at n=" + std::to_string(n),
+               std::to_string(gain));
+    }
+
     struct Case { Rejection r; int n; const char* name; };
     const Case cases[] = {{Rejection::Percentile, 5, "percentile"},
                           {Rejection::Sigma, 8, "sigma"},

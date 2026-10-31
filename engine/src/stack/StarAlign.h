@@ -36,7 +36,14 @@ struct Star { float x = 0, y = 0, flux = 0; };
 [[nodiscard]] std::vector<Star> detectStars(const float* rgb, std::uint32_t width, std::uint32_t height,
                                             const float* mask = nullptr, int maxStars = 60);
 
-/// Homography mapping reference star coordinates to frame coordinates (refToSource). ok=false, identity, below 8 inliers.
-[[nodiscard]] merge::AlignResult alignStars(const std::vector<Star>& frame, const std::vector<Star>& reference);
+/// Homography mapping reference star coordinates to frame coordinates (refToSource), for a width x height frame.
+/// ok=false, identity, below 8 inliers or when the fit is not wellConditioned; `inliers` is what the fit found either way.
+[[nodiscard]] merge::AlignResult alignStars(const std::vector<Star>& frame, const std::vector<Star>& reference,
+                                            std::uint32_t width, std::uint32_t height);
+
+/// A sky's turn, not a fold: at each of the frame's four corners the homogeneous w (m[8] = 1) is inside
+/// [0.5, 2] and the mapping's Jacobian determinant is > 0. Outside that, persp::apply divides by a w near
+/// or below 0 and stacks mirrored or exploded pixels.
+[[nodiscard]] bool wellConditioned(const pipe::persp::Matrix3& h, std::uint32_t width, std::uint32_t height) noexcept;
 
 }  // namespace orion::stack

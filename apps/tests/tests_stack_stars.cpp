@@ -83,7 +83,7 @@ void testStarAlignRecovers() {
     const auto moved = stackfix::starField(21, 80, kW, kH, truth, kNoise, kBackground, 202);
 
     const auto got = alignStars(detectStars(moved.rgb.data(), kW, kH),
-                                detectStars(ref.rgb.data(), kW, kH));
+                                detectStars(ref.rgb.data(), kW, kH), kW, kH);
     report(got.ok, "a rotated sky registers", "inliers " + std::to_string(got.inliers));
     const float err = worstCornerError(got.refToSource, truth);
     std::printf("    measured max corner error %.4f px, %d inliers\n", err, got.inliers);
@@ -100,7 +100,7 @@ void testStarAlignRecovers() {
     stackfix::addSpikes(refHot, kW, kH, 77, 40, 8.0f);
     stackfix::addSpikes(movedHot, kW, kH, 77, 40, 8.0f);
     const auto hot = alignStars(detectStars(movedHot.data(), kW, kH),
-                                detectStars(refHot.data(), kW, kH));
+                                detectStars(refHot.data(), kW, kH), kW, kH);
     const float hotErr = worstCornerError(hot.refToSource, truth);
     std::printf("    with 40 hot pixels: max corner error %.4f px, %d inliers\n", hotErr, hot.inliers);
     report(hot.ok && hotErr < 0.3f, "40 fixed hot pixels outranking every star do not pull it to identity",
@@ -121,11 +121,11 @@ void testStarAlignRefuses() {
 
     const std::vector<Star> four(refStars.begin(),
                                 refStars.begin() + std::ptrdiff_t(std::min<std::size_t>(4, refStars.size())));
-    const auto few = alignStars(four, refStars);
+    const auto few = alignStars(four, refStars, kW, kH);
     report(!few.ok && persp::isIdentity(few.refToSource), "4 stars refuse, with identity");
 
     const auto other = stackfix::starField(32, 80, kW, kH, persp::identity(), kNoise, kBackground);
-    const auto unrelated = alignStars(detectStars(other.rgb.data(), kW, kH), refStars);
+    const auto unrelated = alignStars(detectStars(other.rgb.data(), kW, kH), refStars, kW, kH);
     report(!unrelated.ok && persp::isIdentity(unrelated.refToSource),
            "an unrelated field refuses, with identity",
            "inliers " + std::to_string(unrelated.inliers));
@@ -180,16 +180,16 @@ persp::Matrix3 skyTurn(double W, double H, double fPx, double seconds, double la
 void testStarAlignWideField() {
     section("stack stars: a 14 mm sky turn registers as a homography");
 
-    // Full frame, 6000 x 4000 at 6 um: 14 mm is 2333 px. 200 s of sidereal turn, latitude 45 deg,
-    // looking south at 20 deg altitude. The best similarity misses this by ~15 px median, ~43 px max
-    // (and with the 2 px RANSAC gate refused the frame outright: 0 inliers). Measured with the
-    // homography: median 0.004 px, max 0.016 px.
-    constexpr std::uint32_t W = 6000, H = 4000;
-    const auto truth = skyTurn(W, H, 14.0 / 0.006, 200.0, 45.0, 20.0, 180.0);
+    // Full frame at half resolution, 3000 x 2000 at 12 um: 14 mm is 1167 px, the same field of view as
+    // 6000 x 4000 at 2333 px for a quarter of the memory. 200 s of sidereal turn, latitude 45 deg,
+    // looking south at 20 deg altitude. At full resolution the best similarity misses this by ~15 px
+    // median, ~43 px max, and the 2 px RANSAC gate refused the old similarity fit outright.
+    constexpr std::uint32_t W = 3000, H = 2000;
+    const auto truth = skyTurn(W, H, 14.0 / 0.012, 200.0, 45.0, 20.0, 180.0);
     const auto refStars =
         detectStars(stackfix::starField(51, 400, W, H, persp::identity(), kNoise, kBackground, 301).rgb.data(), W, H);
     const auto moved = stackfix::starField(51, 400, W, H, truth, kNoise, kBackground, 302);
-    const auto got = alignStars(detectStars(moved.rgb.data(), W, H), refStars);
+    const auto got = alignStars(detectStars(moved.rgb.data(), W, H), refStars, W, H);
 
     // Every reference star that lands in the frame, through the fit vs through the truth.
     std::vector<float> err;
@@ -207,4 +207,31 @@ void testStarAlignWideField() {
     report(got.ok, "a 14 mm, 200 s sky turn registers", "inliers " + std::to_string(got.inliers));
     report(got.ok && med < 0.02f && worst < 0.1f, "median under 0.02 px, max under 0.1 px",
            std::to_string(med) + " / " + std::to_string(worst) + " px");
+}
+
+void testStarAlignRefusesFolds() {
+    section("stack stars: a homography that folds or explodes the frame is a refusal");
+
+    CHECK(orion::stack::wellConditioned(persp::identity(), kW, kH));
+    CHECK(orion::stack::wellConditioned(skyTurn(kW, kH, 14.0 / 0.006 * kW / 6000.0, 200.0, 45.0, 20.0, 180.0), kW, kH));
+    persp::Matrix3 far, behind, mirror;
+    far.m[6] = 1.5f / float(kW);       // w = 2.5 at the right-hand corners
+    behind.m[6] = -1.5f / float(kW);   // w = -0.5 there: those corners map from behind the camera
+    mirror.m[0] = -1.0f;               // x -> kW - 1 - x: Jacobian determinant -1
+    mirror.m[2] = float(kW - 1);
+    report(!orion::stack::wellConditioned(far, kW, kH), "w over 2 at a corner refuses");
+    report(!orion::stack::wellConditioned(behind, kW, kH), "w under 0.5 at a corner refuses");
+    report(!orion::stack::wellConditioned(mirror, kW, kH), "a mirror (Jacobian determinant < 0) refuses");
+
+    // End to end: a mirrored field has the same triangles (side ratios survive a reflection), and a
+    // homography can fit a reflection exactly. It must not register.
+    const auto ref = stackfix::starField(31, 80, kW, kH, persp::identity(), kNoise, kBackground);
+    const auto refStars = detectStars(ref.rgb.data(), kW, kH);
+    std::vector<Star> flipped = refStars;
+    for (Star& s : flipped) s.x = float(kW - 1) - s.x;
+    const auto got = alignStars(flipped, refStars, kW, kH);
+    std::printf("    mirrored field: ok %d, %d inliers\n", int(got.ok), got.inliers);
+    report(!got.ok && persp::isIdentity(got.refToSource), "a mirrored field refuses, with identity",
+           "inliers " + std::to_string(got.inliers));
+    report(got.inliers >= 8, "the refusal still reports the fit's inliers", std::to_string(got.inliers));
 }

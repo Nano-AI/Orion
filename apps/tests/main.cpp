@@ -142,6 +142,7 @@ int main() {
     testStarAlignRecovers();
     testStarAlignRefuses();
     testStarAlignWideField();
+    testStarAlignRefusesFolds();
     testStackNoiseFallsSqrtN();
     testStackRejectsStreak();
     testStackRemovesHotPixel();
