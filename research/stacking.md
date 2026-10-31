@@ -68,7 +68,7 @@ CPU, not GPU: per-pixel rejection sorts N values per channel, a divergent loop w
 | < 3 | none | weighted mean |
 | 3–6 | percentile [SIRIL] | m = median; reject v with m − v > 0.2·\|m\| or v − m > 0.1·\|m\|, one pass |
 | manual only | sigma [SIRIL] | iterate: m = median, σ = std of survivors; reject beyond m ± 3σ |
-| 7–20 | winsorized [HR09][PI] | σ from clamped values: clamp survivors to m ± 1.5σ, σ' = 1.134·std(clamped), repeat to convergence; reject beyond m ± 3σ' |
+| 7–20 | winsorized [HR09][PI] | σ from clamped values: clamp to m ± 1.5σ, σ' = 1.134·std(clamped), repeat to convergence, once, on the full sample; then iterate: re-centre m on the survivors, reject beyond m ± 3σ'. σ' stays fixed: re-estimated from survivors already cut at 3σ' it shrinks each round, since 1.134 assumes an uncut Gaussian |
 | > 20 | linear fit [PI] | sort survivors; least-squares line of value on rank; σ = mean \|residual\|; reject \|residual\| > 3σ; iterate |
 
 Rejection never leaves fewer than 3 values. A manual override picks any row.
@@ -87,6 +87,7 @@ v'    = (v − L_i)/k_i + L_ref
 ```
 
 The scale is one scalar per frame, [GN03] specialized to a linear response; sampling only bright pixels keeps the ratio away from the noise floor, where it would be a ratio of noises.
+Orion takes v as a 7×7 luma box sum about each bright local maximum (a star's core) rather than the pixel: registration taps at sub-pixel positions, and a bilinear tap lowers a star's peak while nearly conserving its flux. The box size is ours (UNSOURCED §22). The bright pixels are found at full resolution (stars cover ~0.1% of a sky, too few for a coarse grid).
 σ_i for the weight comes from pixel differences, 1.4826·MAD of horizontal neighbour differences / √2, which ignores slowly varying signal.
 Weight w_i = (k_i/σ_i)² when noise weighting is on (inverse variance after scaling), else 1.
 

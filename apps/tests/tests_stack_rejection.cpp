@@ -9,7 +9,9 @@
 #include "harness.h"
 #include "stack/Rejection.h"
 
+#include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <random>
 #include <vector>
 
@@ -98,6 +100,28 @@ void testStackRejection() {
         checkNear(run(noisy(c.n, 7, -5.0f), c.r), 1.0, 0.01, std::string(c.name) + " drops a dark outlier");
         // Control: with rejection off the same outlier drags the mean far away.
         CHECK(std::fabs(run(noisy(c.n, 7, 10.0f), Rejection::None) - 1.0f) > 0.2f);
+    }
+
+    section("stack: winsorized does not erode clean data");
+    {
+        // Survivors are a contiguous run of the sorted values (the window is symmetric
+        // about the median), compacted to the front of v: the count is the prefix whose
+        // mean, summed as combine sums it, is the result.
+        int fewest = 10;
+        for (unsigned seed = 1; seed <= 1000; ++seed) {
+            auto v = noisy(10, seed);
+            std::vector<float> w(v.size(), 1.0f);
+            const float r = combine(v.data(), w.data(), 10, Rejection::Winsorized);
+            double s = 0;
+            int k = 10;
+            for (int i = 0; i < 10; ++i) {
+                s += v[std::size_t(i)];
+                if (float(s / (i + 1)) == r) { k = i + 1; break; }
+            }
+            fewest = std::min(fewest, k);
+        }
+        std::printf("    fewest survivors of 10 clean values over 1000 seeds: %d\n", fewest);
+        CHECK(fewest >= 7);
     }
 
     section("stack: clean data is left alone");

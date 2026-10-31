@@ -43,12 +43,13 @@ std::vector<std::uint16_t> toHalf(const std::vector<float>& rgb) {
 
 /// Keeps the half planes alive behind the Frames that point into them.
 struct Stack {
+    std::uint32_t w = kW, h = kH;
     std::vector<std::vector<std::uint16_t>> planes;
     std::vector<Frame> frames;
     void add(const std::vector<float>& rgb, const persp::Matrix3& sky,
              const persp::Matrix3& ground = persp::identity()) {
         planes.push_back(toHalf(rgb));
-        frames.push_back({kW, kH, nullptr, sky, ground});
+        frames.push_back({w, h, nullptr, sky, ground});
         for (std::size_t i = 0; i < planes.size(); ++i) frames[i].rgb = planes[i].data();
     }
 };
@@ -108,13 +109,9 @@ void testStackRejectsStreak() {
     section("stack integrate: a satellite streak is rejected");
     constexpr float kNoise = 0.01f;
     constexpr int kN = 10;
-    // ⚠ Noise seeds 200+ and 1200+ each leave one streak pixel ~1.3 sigma_stack
-    // off: not the streak surviving, but iterated winsorized clipping eating a
-    // skewed clean sample (3 low of 9) down to 4-5 survivors. ~1 pixel in 5000
-    // at n = 10 over a 20-seed sweep; recorded in the Task 4 report for Rejection.
     std::vector<std::vector<float>> raw;
     for (int i = 0; i < kN; ++i)
-        raw.push_back(stackfix::starField(7, 40, kW, kH, persp::identity(), kNoise, 0.05f, 2200u + unsigned(i)).rgb);
+        raw.push_back(stackfix::starField(7, 40, kW, kH, persp::identity(), kNoise, 0.05f, 200u + unsigned(i)).rgb);
     std::vector<std::size_t> streak;   // y = 0.5x + 40, 2 px tall
     for (std::uint32_t y = 0; y < kH; ++y)
         for (std::uint32_t x = 0; x < kW; ++x)
@@ -187,6 +184,42 @@ void testStackNormalizesAndWeights() {
         CHECK(bright > 100 && bad == 0);
     }
 
+    section("stack integrate: the scale is found on a sparse sky at a coarse grid");
+    {
+        // 1600x1200: the ~50k statistics grid has step 6 and would see too few
+        // star pixels; the scale's own full-resolution scan must not.
+        constexpr std::uint32_t w = 1600, h = 1200;
+        const auto a = stackfix::starField(13, 400, w, h, persp::identity(), 0.003f, 0.02f).rgb;
+        std::vector<float> b(a.size());
+        for (std::size_t i = 0; i < a.size(); ++i) b[i] = 0.8f * a[i] + 0.05f;
+        Stack s;
+        s.w = w; s.h = h;
+        s.add(a, persp::identity());
+        s.add(b, persp::identity());
+        Options o;
+        o.rejection = Rejection::None;
+        const auto r = integrate(s.frames, 0, nullptr, o);
+        std::printf("    k = %.4f (want 0.8 within 2%%)\n", r.scale[1]);
+        CHECK(r.scale[0] == 1.0f);
+        CHECK(std::fabs(r.scale[1] - 0.8f) <= 0.02f * 0.8f);
+    }
+
+    section("stack integrate: a half-pixel shift does not bias the scale");
+    {
+        // Bilinear taps at (0.5, 0.5) flatten a star's peak; its 7x7 flux barely moves.
+        constexpr std::uint32_t w = 640, h = 480;
+        Stack s;
+        s.w = w; s.h = h;
+        s.add(stackfix::starField(17, 600, w, h, persp::identity(), 0.003f, 0.02f, 601).rgb, persp::identity());
+        s.add(stackfix::starField(17, 600, w, h, shift(0.5f, 0.5f), 0.003f, 0.02f, 602).rgb, shift(0.5f, 0.5f));
+        Options o;
+        o.rejection = Rejection::None;
+        const auto r = integrate(s.frames, 0, nullptr, o);
+        std::printf("    k = %.4f (want 1 within 2%%)\n", r.scale[1]);
+        CHECK(r.scale[1] != 1.0f);   // measured, not the too-few-samples fallback
+        CHECK(std::fabs(r.scale[1] - 1.0f) <= 0.02f);   // 150 stars: single taps 1.030, 3x3 boxes 0.971
+    }
+
     section("stack integrate: noise weights favour the cleaner frame");
     {
         Stack s;
@@ -199,6 +232,12 @@ void testStackNormalizesAndWeights() {
         const double weighted = stddev(integrate(s.frames, 0, nullptr, o).rgb.data(), 0);
         std::printf("    stack sigma plain %.5f, weighted %.5f (expect ~0.0158, ~0.0095)\n", plain, weighted);
         CHECK(weighted < 0.8 * plain);
+
+        // A noiseless frame (MAD 0) is capped at 10x the median weight, not handed the stack.
+        s.add(std::vector<float>(std::size_t(kW) * kH * 3, 0.1f), persp::identity());
+        const double capped = stddev(integrate(s.frames, 0, nullptr, o).rgb.data(), 0);
+        std::printf("    with a noiseless third frame: weighted sigma %.5f (uncapped would be ~0)\n", capped);
+        CHECK(capped > 0.0005);
     }
 }
 

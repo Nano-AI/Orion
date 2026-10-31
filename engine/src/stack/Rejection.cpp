@@ -71,22 +71,23 @@ int compact(float* v, float* w, int n, Keep keep) noexcept {
     return k;
 }
 
-int percentilePass(float* v, float* w, int n) noexcept {
+// Every pass takes `sigma`, the winsorized sigma' fixed on the full sample (unused by the others).
+int percentilePass(float* v, float* w, int n, double) noexcept {
     const double m = median(v, n), lo = m - 0.2 * std::fabs(m), hi = m + 0.1 * std::fabs(m);
     return compact(v, w, n, [&](int i) { return v[i] >= lo && v[i] <= hi; });
 }
 
-int sigmaPass(float* v, float* w, int n) noexcept {
+int sigmaPass(float* v, float* w, int n, double) noexcept {
     const double m = median(v, n), s = kClipSigmas * stdev(v, n);
     return compact(v, w, n, [&](int i) { return v[i] >= m - s && v[i] <= m + s; });
 }
 
-int winsorPass(float* v, float* w, int n) noexcept {
-    const double m = median(v, n), s = kClipSigmas * winsorSigma(v, n, m);
+int winsorPass(float* v, float* w, int n, double sigma) noexcept {
+    const double m = median(v, n), s = kClipSigmas * sigma;
     return compact(v, w, n, [&](int i) { return v[i] >= m - s && v[i] <= m + s; });
 }
 
-int linearFitPass(float* v, float* w, int n) noexcept {
+int linearFitPass(float* v, float* w, int n, double) noexcept {
     // Least-squares line of value on rank 0..n-1, then mean |residual| as sigma.
     const double xm = 0.5 * (n - 1);
     double ym = 0, sxy = 0, sxx = 0;
@@ -101,7 +102,7 @@ int linearFitPass(float* v, float* w, int n) noexcept {
     return compact(v, w, n, [&](int i) { return std::fabs(resid(i)) <= kClipSigmas * sigma; });
 }
 
-using Pass = int (*)(float*, float*, int) noexcept;
+using Pass = int (*)(float*, float*, int, double) noexcept;
 
 Pass passFor(Rejection r) noexcept {
     switch (r) {
@@ -128,8 +129,12 @@ float combine(float* v, float* w, int n, Rejection r) noexcept {
     if (r == Rejection::Auto) r = autoRejection(n);
     if (auto pass = passFor(r); pass && n >= kMinSurvivors) {
         sortPairs(v, w, n);
+        // Winsorized sigma' once, on the full sample; later rounds only re-centre the median.
+        // Re-estimated from survivors already cut at 3 sigma' it shrinks every round (the
+        // 1.134 assumes an uncut Gaussian) until a skewed clean sample is eaten to 5 of 10.
+        const double s = r == Rejection::Winsorized ? winsorSigma(v, n, median(v, n)) : 0.0;
         // Percentile is one pass; the others repeat until a pass removes nothing.
-        for (int k = pass(v, w, n); k != n; k = pass(v, w, n)) {
+        for (int k = pass(v, w, n, s); k != n; k = pass(v, w, n, s)) {
             n = k;
             if (r == Rejection::Percentile) break;
         }

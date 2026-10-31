@@ -13,6 +13,8 @@
  *                  c·sigma before estimating sigma, divide by the consistency
  *                  factor 1/sqrt(E[min(|z|,c)^2]) = 1.134 at c = 1.5 (recomputed
  *                  in research/stacking.md §2); [PI] for its use in stacking.
+ *                  That sigma is estimated once, on the full sample; the
+ *                  rounds that follow only re-centre the median.
  *    LinearFit   — [PI] linear-fit clipping; Orion's fit is a plain
  *                  least-squares line of value on rank.
  *  Implemented from those descriptions; no GPL source was read.

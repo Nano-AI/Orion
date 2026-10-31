@@ -17,9 +17,15 @@
  *    Weight (k/σ)² is inverse variance after scaling.
  *  Implemented from those descriptions; no GPL source was read.
  *
+ *  The scale is measured on 7x7 box sums of luma about the reference's bright
+ *  local maxima (star cores), found at full resolution: a sub-pixel bilinear
+ *  tap flattens a star's peak but nearly conserves its flux.
+ *
  *  ⚠ Ours, not published (research/UNSOURCED.md §22): the 10σ bright-pixel
- *  floor and the 200-sample minimum for the scale, the ~50k-sample grid, the
- *  matte >= 0.5 sky subset for the statistics, the 1e-6 noise floor.
+ *  floor and the 200-sample minimum for the scale, the ~50k-sample grid and
+ *  pair cap, the 7x7 box at local maxima, the [0.1, 10] range a scale must fall in, the 10x
+ *  median cap on a noise weight, the matte >= 0.5 sky subset for the
+ *  statistics, the 1e-6 noise floor.
  *
  *  Pure CPU, threaded over row bands; frames stay half floats throughout.
  */
@@ -51,6 +57,7 @@ struct Options {
 struct Result {
     std::vector<float> rgb;               ///< reference width*height*3, linear, >= 0
     Rejection used = Rejection::None;     ///< Auto resolved by frame count
+    std::vector<float> scale;             ///< k_i per frame (v' = (v − L_i)/k_i + L_ref); 1 for the reference
 };
 
 /// skyMatte: nullptr, or reference width*height in 0..1 (1 = sky, frame coordinates).
