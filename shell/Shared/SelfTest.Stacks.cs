@@ -24,6 +24,15 @@ static partial class SelfTest {
         var iso = StackGroups.Find(Frames(14, 20, 3200, 25, (i, s) => i == 8 ? s with { Iso = 1600 } : s));
         Check(Sizes(iso) == "7+6" && iso.All(g => !g.Paths.Contains("f08")), $"one frame at another ISO splits the run and is left out ({Sizes(iso)})");
 
+        // The Library's line (Task 10): the first group not dismissed this session, by the bar's own Pick.
+        var dismissed = new HashSet<string>();
+        bool firstShown = StackSuggestion.Pick(iso, dismissed) == iso[0];
+        dismissed.Add(iso[0].Paths[0]);
+        bool secondShown = StackSuggestion.Pick(iso, dismissed) == iso[1];
+        dismissed.Add(iso[1].Paths[0]);
+        Check(firstShown && secondShown && StackSuggestion.Pick(iso, dismissed) == null && StackSuggestion.Pick([], new HashSet<string>()) == null,
+              "the suggestion shows the first group, the second once the first is dismissed, none once both are");
+
         var gap = StackGroups.Find(Frames(14, 20, 3200, 25, (i, s) => s with { Captured = T0.AddSeconds(i * 25 + (i > 5 ? 35 : 0)) }));
         Check(Sizes(gap) == "5+9", $"a 60 s gap after frame 5 splits the run ({Sizes(gap)})");
 

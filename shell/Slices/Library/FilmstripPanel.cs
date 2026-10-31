@@ -77,6 +77,9 @@ public sealed class FilmstripPanel : Grid {
         }, RoutingStrategies.Tunnel);
         SetColumn(_film, 2);
         Children.Add(_film);
+        var suggestion = new StackSuggestion();   // over the film's right end, when the folder holds a stack
+        SetColumn(suggestion, 2);
+        Children.Add(suggestion);
         // A narrower strip can hide the open frame: show it again, at once.
         _film.PropertyChanged += (_, e) => {
             if (e.Property == ScrollViewer.ViewportProperty) Reveal(glide: false);

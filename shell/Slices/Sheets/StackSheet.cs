@@ -29,6 +29,7 @@ public sealed class StackSheet : Border {
     int _reference, _rejection = -1;
     bool _weight, _stacking;
     StackSplit? _painter;
+    Button? _stack;
     string? _splitFor;   // the reference the Sky row was built for
 
     /// Closes the sheet. Set by whatever opened it.
@@ -69,10 +70,13 @@ public sealed class StackSheet : Border {
         };
         if (Ineligibility(_candidates) is { } why) body.Children.Add(SheetKit.Note(why, Palette.Warn));
         else body.Children.AddRange(Choices());
-        body.Children.Add(_actions);
         Idle();
-        Child = body;
+        // As ExportPanel: the choices scroll on a small display; Cancel and Stack stay put.
+        Child = new Rows { Spacing = Space.Pad, Children = { new ScrollViewer { Content = body, MaxHeight = 540 }, _actions } };
     }
+
+    /// Landscape needs a painted sky, so a raw with no preview to paint it on cannot stack that way.
+    bool Ready => _mode != Stack.Mode.Landscape || _painter != null;
 
     IEnumerable<Control> Choices() {
         var mode = new Segmented(["Noise", "Stars", "Landscape"], (int)_mode);
@@ -124,23 +128,26 @@ public sealed class StackSheet : Border {
         _modeNote.Text = ModeNotes[(int)_mode];
         _split.IsVisible = _mode == Stack.Mode.Landscape;
         string path = _candidates[_reference].Path;
-        if (!_split.IsVisible || _splitFor == path) return;
-        _splitFor = path;
-        _painter = StackSplit.For(path);
-        _split.Children.Clear();
-        _split.Children.Add(SheetKit.Row("Sky", _painter?.Editor() ?? SheetKit.Note("This raw carries no preview to paint the sky on.", Palette.Warn)));
+        if (_split.IsVisible && _splitFor != path) {
+            _splitFor = path;
+            _painter = StackSplit.For(path);
+            _split.Children.Clear();
+            _split.Children.Add(SheetKit.Row("Sky", _painter?.Editor() ?? SheetKit.Note("This raw carries no preview to paint the sky on.", Palette.Warn)));
+        }
+        if (_stack != null) _stack.IsEnabled = Ready;
     }
 
     void Idle() {
         _actions.Children.Clear();
         _actions.Children.Add(SheetKit.Button("Cancel", () => Dismiss?.Invoke()));
-        _actions.Children.Add(SheetKit.Button("Stack", Run, prominent: true));
+        _actions.Children.Add(_stack = SheetKit.Button("Stack", Run, prominent: true));
+        _stack.IsEnabled = Ready;
     }
 
     /// As HdrMergePanel.Merge: what is owed to the open photo lands first (the stack reads files),
     /// a progress bar and Stop while it runs, then the new DNG is opened like any library photo.
     async void Run() {
-        if (_stacking || Ineligibility(_candidates) != null) return;
+        if (_stacking || !Ready || Ineligibility(_candidates) != null) return;
         _stacking = true;
         var paths = _candidates.Select(c => c.Path).ToList();
         int reference = _reference;

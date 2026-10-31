@@ -60,15 +60,15 @@ public static class StackGroups {
     static IReadOnlyList<string>? _key;
     static IReadOnlyList<StackGroup> _groups = [];
 
-    /// The folder's groups (no dark check), read from each file's header; unreadable files are skipped.
-    /// Safe from a background task.
-    public static IReadOnlyList<StackGroup> Of(IReadOnlyList<string> photos) {
+    /// The folder's groups, read from each file's header; unreadable files are skipped. `dark` as Find's;
+    /// whichever scan of a list lands first is the one cached. Safe from a background task.
+    public static IReadOnlyList<StackGroup> Of(IReadOnlyList<string> photos, Func<string, bool>? dark = null) {
         if (Cached(photos) is { } hit) return hit;
         var shots = new List<Shot>();
         foreach (var path in photos)
             if (CaptureInfo.ReadFile(path) is { } i)
                 shots.Add(new Shot(path, i.Camera, i.Iso, i.Shutter, i.Aperture, i.FocalLength, i.Captured));
-        var found = Find(shots);
+        var found = Find(shots, dark);
         lock (Gate) {
             if (ReferenceEquals(_key, photos)) return _groups;   // a concurrent scan finished first: one instance
             (_key, _groups) = (photos, found);

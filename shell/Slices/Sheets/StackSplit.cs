@@ -46,8 +46,14 @@ sealed class StackSplit : Control {
     /// The split for `path`'s embedded preview, seeded; null when the raw carries none.
     public static StackSplit? For(string path) {
         if (Library.Thumbnails.Load(path) is not { } picture) return null;
+        var (rgb, w, h) = Rgb(picture, LongEdge);
+        return new StackSplit(path, picture, rgb, w, h);
+    }
+
+    /// `picture` drawn at most `longEdge` px on its long side, as RGB floats in 0…1 (also the Library's dark check).
+    public static (float[] Rgb, int W, int H) Rgb(Bitmap picture, int longEdge) {
         var full = picture.PixelSize;
-        double k = Math.Min(1.0, (double)LongEdge / Math.Max(full.Width, full.Height));
+        double k = Math.Min(1.0, (double)longEdge / Math.Max(full.Width, full.Height));
         int w = Math.Max(3, (int)Math.Round(full.Width * k)), h = Math.Max(3, (int)Math.Round(full.Height * k));
         // Drawn small, then read back as RGBA whatever the preview's own format.
         using var small = new RenderTargetBitmap(new PixelSize(w, h));
@@ -65,7 +71,7 @@ sealed class StackSplit : Control {
                     for (int ch = 0; ch < 3; ch++) rgb[(y * w + x) * 3 + ch] = bytes[x * 4 + ch] / 255f;
             }
         }
-        return new StackSplit(path, picture, rgb, w, h);
+        return (rgb, w, h);
     }
 
     /// The detector on a 3×3 median of the picture: the median takes single-pixel stars out, so a
@@ -111,9 +117,12 @@ sealed class StackSplit : Control {
         size.ValueChanged += (_, e) => Radius = e.NewValue;
         ToolTip.SetTip(size, "Brush size");
         Avalonia.Automation.AutomationProperties.SetName(size, "Brush size");
-        var tools = new DockPanel { Children = { brush, size } };
+        var sized = new Avalonia.Controls.StackPanel {
+            Orientation = Orientation.Horizontal, Spacing = Space.Sm, HorizontalAlignment = HorizontalAlignment.Right,
+            Children = { new TextBlock { Text = "Size", FontSize = Faces.Mark, Foreground = Palette.Dim, VerticalAlignment = VerticalAlignment.Center }, size },
+        };
+        var tools = new DockPanel { Children = { brush, sized } };
         DockPanel.SetDock(brush, Dock.Left);
-        size.HorizontalAlignment = HorizontalAlignment.Right;
         var editor = new Avalonia.Controls.StackPanel { Spacing = Space.Sm, Children = { this, tools } };
         if (NoSky != null) editor.Children.Add(SheetKit.Note("No horizon found — paint the sky.", Palette.Warn));
         return editor;
@@ -151,9 +160,8 @@ sealed class StackSplit : Control {
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e) => _painting = false;
 
     void Stroke(Point p) {
-        if (Bounds.Width <= 0) return;
-        float k = (float)(MatteWidth / Bounds.Width);
-        Paint(Matte, MatteWidth, MatteHeight, (float)p.X * k, (float)p.Y * k, (float)(Radius * Math.Max(MatteWidth, MatteHeight)), Adding);
+        if (Bounds.Width <= 0 || Bounds.Height <= 0) return;
+        Paint(Matte, MatteWidth, MatteHeight, (float)(p.X * MatteWidth / Bounds.Width), (float)(p.Y * MatteHeight / Bounds.Height),(float)(Radius * Math.Max(MatteWidth, MatteHeight)), Adding);
         Tint();
         InvalidateVisual();
     }

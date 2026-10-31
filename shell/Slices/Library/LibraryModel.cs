@@ -270,6 +270,7 @@ public sealed class LibraryModel {
     }
 
     public void SelectAll() { Selection.SelectAll(VisiblePaths); SelectionChanged?.Invoke(); }
+    public void Select(IEnumerable<string> paths) { Selection.Choose(paths); SelectionChanged?.Invoke(); }
     public void CollapseSelection() { Selection.Collapse(); SelectionChanged?.Invoke(); }
 
     /// The platform's command key: ⌘ on macOS, Ctrl elsewhere.

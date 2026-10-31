@@ -57,6 +57,14 @@ public sealed class PhotoSelection {
         Anchor ??= visible.FirstOrDefault();
     }
 
+    /// Exactly `paths`, chosen for the person (the stack suggestion): the canvas photo is not added, so a
+    /// batch over them is these and no other. The next move of the canvas collapses it as any selection.
+    public void Choose(IEnumerable<string> paths) {
+        _chosen.Clear();
+        _chosen.UnionWith(paths);
+        Anchor = _chosen.FirstOrDefault();
+    }
+
     /// Back to just the photo on the canvas.
     public void Collapse() => Focus(Current);
 

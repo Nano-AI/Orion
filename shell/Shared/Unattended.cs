@@ -32,6 +32,8 @@ sealed partial class App {
                 exit = said.StartsWith("ran ") ? 0 : 1;
             }
             if (Run.Screenshot != null) {
+                Pump(() => Library.StackSuggestion.Scanned.IsCompleted, 10);   // the folder's stack line, posted when its scan lands
+                Dispatcher.UIThread.RunJobs();                                 // and shown
                 EngineModel.Shared.Render(preview: false);   // a still is for looking at, not for speed
                 window.UpdateLayout();
                 Dispatcher.UIThread.RunJobs();
