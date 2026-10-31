@@ -10,8 +10,10 @@ namespace OrionShell.CanvasSlice;
 /// Apple's Designing Fluid Interfaces (WWDC 2018): a hand moves a raw zoom and
 /// center, what shows is the raw state rubber-banded at the limits (§9), and a
 /// release springs it back inside carrying the hand's velocity (§4–6).
-sealed class Viewport {
+/// `shown` hears every change on screen: the canvas's by default, the side-by-side compare's for its own two.
+sealed class Viewport(Action? shown = null) {
     const double MaxZoom = 64;
+    readonly Action _shown = shown ?? CanvasState.Touch;
     double _log;                    // ln of the raw zoom
     Point _raw = new(0.5, 0.5);     // the raw center
     bool _locked, _hand;
@@ -52,7 +54,15 @@ sealed class Viewport {
         Zoom = Math.Exp(Shown(_log));
         var v = Visible;
         Center = new Point(Axis(_raw.X, v.Width, true), Axis(_raw.Y, v.Height, true));
-        CanvasState.Touch();
+        _shown();
+    }
+
+    /// Takes `leader`'s zoom and centre as they are, rubber band and all: the
+    /// side-by-side compare's link (#400). Its own motion stops; the leader's carries both.
+    public void Mirror(Viewport leader) {
+        Motion.Stop(this);
+        (_hand, _log, _raw) = (false, leader._log, leader._raw);
+        Show();
     }
 
     void Jump(double log, Point center) {

@@ -58,6 +58,44 @@ public sealed class SessionCache : ISessionSource {
         Pump();
     }
 
+    /// A second photo on screen beside the first (the side-by-side compare, #400):
+    /// kept, it is handed over at once; otherwise it decodes on a worker, after a
+    /// prefetch of the same photo already running, so one photo never holds two
+    /// sessions. Lent as Acquire lends: Release keeps it warm. `ready` gets null
+    /// when it will not open (Session.OpenFailure says why) or the list changed meanwhile.
+    public void Borrow(int index, Action<Session?> ready) {
+        if (_kept.Remove(index, out var kept)) { _lent[kept] = index; ready(kept); return; }
+        int generation = _generation;
+        if (_decoding.TryGetValue(index, out var running)) {
+            running.ContinueWith(_ => Dispatcher.UIThread.Post(() => {
+                if (generation == _generation) Borrow(index, ready); else ready(null);
+            }));
+            return;
+        }
+        string path = _photos.Paths[index];
+        // In _decoding while it runs: Drain waits for it, and no prefetch of the same photo starts beside it.
+        var decode = Task.Run(() => {
+            var s = Session.OpenEdited(path);
+            try {
+                if (s?.Render(preview: true) == Graph.Preview) s.Read(Graph.Preview);   // the picture, off the UI thread, as Start
+            } catch (Exception e) {
+                Console.Error.WriteLine($"cache: {path}: {e.Message}");
+                s?.Dispose();
+                s = null;
+            }
+            return s;
+        });
+        _decoding[index] = decode;
+        decode.ContinueWith(t => Dispatcher.UIThread.Post(() => {
+            if (_decoding.GetValueOrDefault(index) == decode) _decoding.Remove(index);
+            var s = t.IsCompletedSuccessfully ? t.Result : null;
+            if (s != null && generation != _generation) { Close(s); s = null; }
+            if (s != null) _lent[s] = index;
+            ready(s);
+            Pump();
+        }));
+    }
+
     public Bitmap? Picture(int index) => _pictures.GetValueOrDefault(index);
 
     /// The photo on screen ran out of GPU memory: closes every decoded neighbour and
