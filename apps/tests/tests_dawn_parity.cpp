@@ -343,9 +343,22 @@ void testDawnParityGpu() {
     std::printf("  whole graph, Dawn against Metal: %s\n", line);
     report(chain <= chainBar, virtualGpu ? "the whole develop graph on Dawn matches Metal's output within the virtual GPU's bar"
                                          : "the whole develop graph on Dawn matches Metal's output exactly", line);
+}
+
+void testEveryKernelCompilesOnDawnGpu() {
+    section("Every kernel compiles on Dawn (GPU)");
+    // Not inside the parity test: that needs Metal, and Windows and Linux,
+    // where Dawn is the only backend, are where this matters most.
+    std::unique_ptr<gpu::Device> dawn;
+    try {
+        dawn = gpu::Device::create(gpu::Backend::Dawn);
+    } catch (const std::exception& e) {
+        report(false, "Dawn device available", e.what());
+        return;
+    }
 
     // Every kernel the build makes must at least compile on Dawn, including
-    // any no graph above reaches (llfRemapDown has no node today).
+    // any no graph reaches (llfRemapDown has no node today).
     int compiled = 0;
     for (const auto& entry : std::filesystem::directory_iterator(ORION_SHADER_DIR)) {
         if (entry.path().extension() != ".wgsl") continue;

@@ -29,6 +29,7 @@ int main() {
     testDisabledCacheReleaseGpu();
     testReleaseEveryRenderGpu();
     testDawnParityGpu();
+    testEveryKernelCompilesOnDawnGpu();
 
     testWhiteBalance();
     testPlanckianLocus();
@@ -121,6 +122,7 @@ int main() {
     testExportFormats();
     testExportWatermark();
     testExportJxl();
+    testExportSharpening();
     testFloatToHalf();
     testDngRoundTrip();
     testLinearDngOpens();

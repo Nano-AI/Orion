@@ -604,7 +604,7 @@ void DevelopPipeline::applyClarity(const Adjustments& adj,
 /// textures hold what it thinks they hold, and the mask group's refine chain
 /// shares `guide:prep` with this one.
 
-void DevelopPipeline::applyGuide(const Adjustments& adj,
+void DevelopPipeline::applyGuide(const Adjustments& /*adj*/,
                                  const ApplyContext& ctx) {
     const bool first = ctx.first;
     const bool needsGuide = ctx.needsGuide;

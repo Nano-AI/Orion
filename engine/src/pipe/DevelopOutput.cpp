@@ -319,24 +319,25 @@ void DevelopPipeline::applyTone(const Adjustments& adj,
         adj.saturation != lastAdj_.saturation;
 
     if (linearMoved) {
-        params::LinearAdjust la{adj.exposureEv + kBaselineExposureEv,
-                                adj.highlights, adj.shadows,
-                                adj.whites, adj.blacks, adj.vibrance,
-                                adj.saturation,
-                                // Tell the shader whether the guide textures
-                                // hold what it thinks they hold. `linearMoved`
-                                // already covers every way this can flip:
-                                // `needsGuide` turns on exactly when a
-                                // highlights or shadows crosses zero — the
-                                // global pair is compared above, and the
-                                // layers' are inside `adj.layers`.
-                                needsGuide ? 1.0f : 0.0f,
-                                {size[0], size[1]},
-                                {guideW_, guideH_},
-                                {}, {}, {}};
-        // The bands this photograph was finished under. Named rather than
-        // positional: the block above is an aggregate and these two sit at
-        // its end, where a transposed pair would compile.
+        // Every field by name, the rest zero: the block is an aggregate, and
+        // a transposed positional pair would compile.
+        params::LinearAdjust la{};
+        la.exposureEv = adj.exposureEv + kBaselineExposureEv;
+        la.highlights = adj.highlights;
+        la.shadows    = adj.shadows;
+        la.whites     = adj.whites;
+        la.blacks     = adj.blacks;
+        la.vibrance   = adj.vibrance;
+        la.saturation = adj.saturation;
+        // Tell the shader whether the guide textures hold what it thinks they
+        // hold. `linearMoved` already covers every way this can flip:
+        // `needsGuide` turns on exactly when a highlights or shadows crosses
+        // zero - the global pair is compared above, and the layers' are
+        // inside `adj.layers`.
+        la.guideEnabled = needsGuide ? 1.0f : 0.0f;
+        la.size[0] = size[0];       la.size[1] = size[1];
+        la.guideSize[0] = guideW_;  la.guideSize[1] = guideH_;
+        // The bands this photograph was finished under.
         la.toneSigma  = params::toneBands(adj.process).sigma;
         la.toneAnchor   = params::toneBands(adj.process).anchor;
         la.layerCount = layerTable(adj, la.layerMask);

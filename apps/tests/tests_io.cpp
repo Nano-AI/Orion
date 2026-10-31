@@ -179,8 +179,8 @@ bool iptcNamesAPlace(const std::string& path) {
 
 /// The whole written picture, as 16-bit RGBA, whatever depth the file holds.
 ///
-/// `readBack` averages the image down to one pixel, which cannot see an edge —
-/// and an edge is the only place output sharpening does anything.
+/// `readBack` averages the image down to one pixel, which cannot see an edge;
+/// the watermark tests need the whole picture.
 bool decode16(const std::string& path, std::vector<std::uint16_t>& out,
               std::size_t& width, std::size_t& height) {
     CFStringRef p = CFStringCreateWithCString(nullptr, path.c_str(), kCFStringEncodingUTF8);
@@ -689,131 +689,6 @@ void testExportFormats() {
             report(bits == d.want, std::string("a PNG asked for ") + d.name + " is that",
                    "got " + std::to_string(bits));
         }
-    }
-
-    // ── Output sharpening ──────────────────────────────────────────────────
-    //
-    // On a step edge, which is the only place an unsharp mask does anything. A
-    // ramp — what the rest of this section uses — has no edge to overshoot, so
-    // it would measure a working sharpener as a dead one.
-    //
-    // The overshoot either side of the edge is the unsharp mask's signature.
-    // Asserting on it rather than on "the file changed" means a pass that
-    // blurred, or that added a constant, cannot be mistaken for one that
-    // sharpened.
-    using orion::util::Sharpen;
-    {
-        // ⚠ The edge is in **green only**, and that is what makes the
-        // luminance-only claim checkable. Red and blue are flat across the
-        // frame, so a sharpener that worked per channel would leave them flat —
-        // and one that works on luminance, as this one does, has to push them
-        // up and down alongside green. A neutral edge cannot tell the two
-        // apart: on grey they compute the same answer, so the assertion would
-        // pass on either implementation and prove nothing.
-        constexpr std::uint32_t kEw = 64, kEh = 32;
-        constexpr std::uint16_t kFlat = 32768;
-        std::vector<std::uint16_t> edge(std::size_t(kEw) * kEh * 4);
-        for (std::uint32_t y = 0; y < kEh; ++y) {
-            for (std::uint32_t x = 0; x < kEw; ++x) {
-                const std::size_t i = (std::size_t(y) * kEw + x) * 4;
-                // Well inside the range, so an overshoot has room to exist
-                // rather than being clipped at either end.
-                edge[i + 0] = kFlat;
-                edge[i + 1] = x < kEw / 2 ? 16384 : 49151;
-                edge[i + 2] = kFlat;
-                edge[i + 3] = 65535;
-            }
-        }
-        const std::size_t edgeStride = std::size_t(kEw) * 4 * sizeof(std::uint16_t);
-
-        struct SharpCase { Sharpen mode; const char* name; };
-        const SharpCase sharpCases[] = {
-            {Sharpen::None,   "none"},
-            {Sharpen::Screen, "screen"},
-            {Sharpen::Print,  "print"},
-        };
-
-        double overshoot[3] = {0, 0, 0};
-        double meanLuma[3] = {0, 0, 0};
-        double flatChannelSwing[3] = {0, 0, 0};
-
-        for (int i = 0; i < 3; ++i) {
-            orion::util::ExportOptions o{};
-            o.format = ImageFormat::Png;
-            o.sharpen = sharpCases[i].mode;
-            const std::string path = dir + "orion-sharpen-" + sharpCases[i].name + ".png";
-            try {
-                orion::util::writeImage(path, edge.data(), kEw, kEh, edgeStride, o);
-            } catch (const std::exception& e) {
-                report(false, std::string("writes sharpening ") + sharpCases[i].name, e.what());
-                continue;
-            }
-
-            std::vector<std::uint16_t> got;
-            std::size_t gw = 0, gh = 0;
-            if (!decode16(path, got, gw, gh) || gw != kEw || gh != kEh) {
-                report(false, std::string("reads back sharpening ") + sharpCases[i].name);
-                continue;
-            }
-
-            // The brightest green on the light side of the edge, against the
-            // flat value it started at — and how far the two channels that
-            // never had an edge were moved.
-            double peak = 0.0, total = 0.0, swing = 0.0;
-            for (std::size_t y = 0; y < gh; ++y) {
-                for (std::size_t x = 0; x < gw; ++x) {
-                    const std::size_t p = (y * gw + x) * 4;
-                    const double r = got[p], g = got[p + 1], b = got[p + 2];
-                    total += (0.2126 * r + 0.7152 * g + 0.0722 * b) / 65535.0;
-                    swing = std::max(swing, std::abs(r - double(kFlat)));
-                    swing = std::max(swing, std::abs(b - double(kFlat)));
-                    if (x >= gw / 2) peak = std::max(peak, g);
-                }
-            }
-            overshoot[i] = (peak - 49151.0) / 65535.0;
-            meanLuma[i] = total / double(gw * gh);
-            flatChannelSwing[i] = swing / 65535.0;
-        }
-
-        report(overshoot[0] < 1e-4, "None leaves the edge exactly as it was",
-               "overshoot " + std::to_string(overshoot[0]));
-        report(overshoot[1] > overshoot[0], "Screen overshoots the edge",
-               "got " + std::to_string(overshoot[1]));
-        report(overshoot[2] > overshoot[1], "Print overshoots more than Screen",
-               "got " + std::to_string(overshoot[2]) + " vs "
-                      + std::to_string(overshoot[1]));
-
-        // ⚠ An unsharp mask is a high-pass added back: it moves edges and
-        // leaves the overall brightness where it was. A pass that lifted the
-        // whole frame would satisfy every check above — and would be an
-        // exposure change wearing a sharpening control's label.
-        for (int i = 1; i < 3; ++i) {
-            report(std::abs(meanLuma[i] - meanLuma[0]) < 0.01,
-                   std::string("sharpening ") + sharpCases[i].name
-                       + " does not move the overall brightness",
-                   "got " + std::to_string(meanLuma[i]) + " vs "
-                          + std::to_string(meanLuma[0]));
-            // ⚠ Luminance only, which means red and blue move with green even
-            // though neither has an edge of its own. Sharpening the three
-            // channels independently would leave them exactly flat — and would
-            // put colored fringes on exactly the high-contrast edges this
-            // control is aimed at.
-            report(flatChannelSwing[i] > 0.005,
-                   std::string("sharpening ") + sharpCases[i].name
-                       + " moves all three channels together, not each alone",
-                   "flat-channel swing " + std::to_string(flatChannelSwing[i]));
-        }
-
-        // And None touches nothing at all: the channels that had no edge are
-        // exactly where they started.
-        report(flatChannelSwing[0] < 1e-4,
-               "None leaves the flat channels exactly flat",
-               "swing " + std::to_string(flatChannelSwing[0]));
-
-        orion::util::ExportOptions plain{};
-        plain.format = ImageFormat::Png;
-        report(orion::util::encodedSize(edge.data(), kEw, kEh, edgeStride, plain) > 0,
-               "the unsharpened edge encodes");
     }
 }
 

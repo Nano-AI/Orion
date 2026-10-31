@@ -48,37 +48,6 @@ void testMaskGpu() {
     // whatever the kind, like the matte beside it.
     auto dabBoundsTex = orion::gpu::Texture::create(
         *device, orion::pipe::params::kMaxDabBlocks, 1, PixelFormat::RGBA32Float);
-    // ⚠ Through the product's own `buildDabBounds`, never a copy of it. A box
-    // computed a second way here would be a stand-in with its own bugs, and the
-    // one thing this must not do is check the kernel against a private
-    // reimplementation of the thing the kernel is being checked for.
-    const auto uploadDabBounds = [&](const std::vector<float>& texels) {
-        std::vector<float> bounds(
-            std::size_t(orion::pipe::params::kMaxDabBlocks) * 4, 0.0f);
-        orion::pipe::params::buildDabBounds(
-            texels.data(), orion::pipe::params::kMaxDabs, bounds.data());
-        dabBoundsTex->upload(
-            bounds.data(),
-            std::size_t(orion::pipe::params::kMaxDabBlocks) * 4 * sizeof(float));
-    };
-    const auto setDabs = [&](const std::vector<std::pair<float, float>>& pts) {
-        std::vector<float> texels(std::size_t(orion::pipe::params::kDabStride)
-                                  * orion::pipe::params::kDabRows * 4, 0.0f);
-        for (std::size_t i = 0; i < pts.size(); ++i) {
-            texels[i * 4 + 0] = pts[i].first;
-            texels[i * 4 + 1] = pts[i].second;
-        }
-        dabTex->upload(texels.data(),
-                       std::size_t(orion::pipe::params::kDabStride) * 4 * sizeof(float));
-        uploadDabBounds(texels);
-    };
-    std::vector<std::pair<float, float>> dabList;
-    const auto setDabsAt = [&](int i, float x, float y) {
-        if (int(dabList.size()) <= i) dabList.resize(std::size_t(i) + 1, {0.0f, 0.0f});
-        dabList[std::size_t(i)] = {x, y};
-        setDabs(dabList);
-    };
-
     const std::vector<__fp16> zeroes(std::size_t(kW) * kH, __fp16(0.0f));
 
     const auto run = [&](const orion::pipe::params::MaskComponent& m) {

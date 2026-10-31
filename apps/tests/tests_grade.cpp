@@ -384,7 +384,6 @@ void testColorGradeGpu() {
         return best;
     };
     const std::uint32_t atShadow    = columnAtEv(-2.5);
-    const std::uint32_t atMidtone   = columnAtEv(0.0);
     const std::uint32_t atHighlight = columnAtEv(2.5);
 
     // A shadow push has to tint the shadows and leave the highlights alone.
