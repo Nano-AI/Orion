@@ -54,6 +54,8 @@ static class CommandTable {
         // askHdrMerge, from the strip's menu over a group: the sheet reads the selection.
         Built("hdr-merge", "Merge to HDR…", null, "HdrMergePanel.swift", () => Loaded && LibraryModel.Shared.HasExplicitSelection,
               () => Sheet("sheet-hdr-merge", "Merge to HDR")),
+        // #391: the selection, or the stack the open photo belongs to (StackGroups).
+        Built("stack", "Stack photos…", null, "StackSheet.cs", () => Loaded && StackSheet.HasCandidates, () => Sheet("sheet-stack", "Stack")),
         Built("stop-batch", "Stop", null, "OrionApp+Files.swift", () => ChromeStubs.BatchProgress != null, ExportRun.Stop),
         // The shell writes no interaction log (InteractionLog.swift), so there is no file to reveal.
         Stub("reveal-session-log", "Reveal session log in Finder", null, "InteractionLog.swift", () => true),

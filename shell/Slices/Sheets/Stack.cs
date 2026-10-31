@@ -18,7 +18,10 @@ static partial class Stack {
     [LibraryImport(Native.Lib)] private static partial int orion_engine_stack_progress(nint engine, out float progress);
     [LibraryImport(Native.Lib)] private static partial int orion_engine_stack_cancel(nint engine);
 
-    static nint _running;   // the stacking engine, while one runs
+    // The stacking engine, while one runs. Read and cleared under Gate, so Progress and Cancel never
+    // call into an engine Run's finally has destroyed.
+    static readonly object Gate = new();
+    static nint _running;
 
     /// `<reference stem>-stack.dng`, then -stack-2, -stack-3, never over a file.
     public static string OutputPath(string reference, Func<string, bool>? exists = null) {
@@ -30,26 +33,29 @@ static partial class Stack {
     }
 
     /// 0…1 while a stack runs, null otherwise.
-    public static float? Progress => _running != 0 && orion_engine_stack_progress(_running, out float p) == 0 ? p : null;
+    public static float? Progress { get { lock (Gate) return _running != 0 && orion_engine_stack_progress(_running, out float p) == 0 ? p : null; } }
 
     /// Stop: the stack fails at its next stage and leaves no partial file.
-    public static void Cancel() { if (_running != 0) orion_engine_stack_cancel(_running); }
+    public static void Cancel() { lock (Gate) if (_running != 0) orion_engine_stack_cancel(_running); }
 
     /// The stack, off the UI thread. Null when it wrote `output`, else the engine's reason.
     /// rejection: -1 auto, 0 none, 1 percentile, 2 sigma, 3 winsorized, 4 linear fit. skyMatte: Landscape only, upright, 1 = sky.
     public static async Task<string?> Run(IReadOnlyList<string> paths, int reference, Mode mode, int rejection, bool weight,
                                           IReadOnlyList<string> darks, IReadOnlyList<string> flats,
                                           float[]? skyMatte, int matteWidth, int matteHeight, string output) {
-        if (_running != 0) return "A stack is already running.";
-        if (orion_engine_create(out nint engine) != 0 || engine == 0) return "no engine for the stack";
-        _running = engine;
+        nint engine;
+        lock (Gate) {
+            if (_running != 0) return "A stack is already running.";
+            if (orion_engine_create(out engine) != 0 || engine == 0) return "no engine for the stack";
+            _running = engine;
+        }
         try {
             return await Task.Run(() => orion_engine_stack(engine, paths.ToArray(), paths.Count, reference, (int)mode, rejection, weight ? 1 : 0,
                     darks.Count > 0 ? darks.ToArray() : null, darks.Count, flats.Count > 0 ? flats.ToArray() : null, flats.Count,
                     skyMatte, matteWidth, matteHeight, output) == 0 ? null
                 : Marshal.PtrToStringUTF8(Native.orion_last_error(engine)) is { Length: > 0 } why ? why : "the stack failed");
         } finally {
-            _running = 0;
+            lock (Gate) _running = 0;
             orion_engine_destroy(engine);
         }
     }

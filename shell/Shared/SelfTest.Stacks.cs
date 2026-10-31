@@ -59,5 +59,60 @@ static partial class SelfTest {
         var first = StackGroups.Of(none);
         Check(ReferenceEquals(first, StackGroups.Of(none)) && ReferenceEquals(first, StackGroups.Cached(none)) && StackGroups.Cached(other) == null,
               "Of caches by list instance: twice is the same result, Cached of another list is null");
+
+        StackSheetChecks();
+    }
+
+    /// The Stack sheet (Task 9): who may stack, the command behind it, and the sky painter.
+    static void StackSheetChecks() {
+        static HdrMergePanel.Candidate C(string camera) => new("x.ARW", camera, 3200, 20, 2.8f);
+        Check(StackSheet.Ineligibility([C("A")]) == "Select at least two frames to stack."
+              && StackSheet.Ineligibility([C("B"), C("A")]) == "These photos come from different cameras: A, B."
+              && StackSheet.Ineligibility([C("A"), C("A"), C("")]) == null, "the stack refuses one frame or two cameras");
+        Check(Commands.Find("stack") is { Built: true, Title: "Stack photos…" }, "\"stack\" is a registered, built command");
+        Check(StackSheet.AutoRejection(2) == "None" && StackSheet.AutoRejection(6) == "Percentile"
+              && StackSheet.AutoRejection(7) == "Winsorized" && StackSheet.AutoRejection(21) == "Linear fit",
+              "Auto names what the engine picks for the count (Rejection.cpp autoRejection)");
+
+        // A disc of radius 2 around (4.5, 4.5) on a 9×9 matte: inside set, outside untouched.
+        var m = Enumerable.Repeat(0.5f, 81).ToArray();
+        StackSplit.Paint(m, 9, 9, 4.5f, 4.5f, 2, add: true);
+        bool inside(int i) { float dx = i % 9 + 0.5f - 4.5f, dy = i / 9 + 0.5f - 4.5f; return dx * dx + dy * dy <= 4; }
+        Check(Enumerable.Range(0, 81).All(i => m[i] == (inside(i) ? 1f : 0.5f)) && m[40] == 1 && m[0] == 0.5f,
+              "Add sky paints 1 inside the disc and leaves the outside untouched");
+        StackSplit.Paint(m, 9, 9, 4.5f, 4.5f, 2, add: false);
+        Check(Enumerable.Range(0, 81).All(i => m[i] == (inside(i) ? 0f : 0.5f)), "Remove sky paints 0 inside the disc only");
+        StackSplit.Paint(m, 9, 9, -50, -50, 3, add: true);
+        Check(Enumerable.Range(0, 81).All(i => m[i] != 1f), "a disc off the picture paints nothing");
+
+        // Seed: a calm sky with single-pixel stars over a busy ground. The 3×3 median
+        // takes the stars out, so the sky is found down to the horizon at row 20.
+        const int w = 60, h = 40;
+        var rgb = new float[w * h * 3];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++) {
+                float v = y < 20 ? ((x * 7 + y * 13) % 23 == 0 ? 1f : 0.05f) : ((x / 2 + y / 2) % 2 == 0 ? 0.8f : 0.2f);
+                for (int c = 0; c < 3; c++) rgb[(y * w + x) * 3 + c] = v;
+            }
+        var (seed, noSky) = StackSplit.Seed(rgb, w, h);
+        int skyRows = Enumerable.Range(0, h).Count(y => Enumerable.Range(0, w).Count(x => seed[y * w + x] > 0.5f) > w / 2);
+        Check(noSky == null && skyRows is >= 17 and <= 21, $"a starry sky over busy ground seeds the split at the horizon ({skyRows} sky rows, {noSky})");
+        var (flat, why) = StackSplit.Seed(new float[w * h * 3], w, h);
+        Check(why != null && flat.Length == w * h && flat.All(v => v == 0), "a picture with no horizon seeds an empty matte and says why");
+
+        // The real route: the sample's embedded preview, read back small and seeded.
+        if (EngineModel.Shared.Photos.FirstOrDefault() is { } photo) {
+            var split = StackSplit.For(photo);
+            Check(split is { MatteWidth: > 2, MatteHeight: > 2 } s && Math.Max(s.MatteWidth, s.MatteHeight) <= StackSplit.LongEdge
+                  && s.Matte.Length == s.MatteWidth * s.MatteHeight && (s.NoSky != null) == s.Matte.All(v => v == 0),
+                  $"the sample's preview seeds a matte of at most {StackSplit.LongEdge} px ({split?.MatteWidth}×{split?.MatteHeight}, {split?.NoSky ?? "sky found"})");
+        }
+
+        // --mode takes the names only: an enum's comma list and numerals are flag tricks, not modes.
+        string dng = Path.Combine(Path.GetTempPath(), "orion-stack-mode.dng");
+        Check(CommandLineModes.StackMode(["--stack", dng, "--mode", "noise,stars", "a.ARW", "b.ARW"]) == 2
+              && CommandLineModes.StackMode(["--stack", dng, "--mode", "1", "a.ARW", "b.ARW"]) == 2
+              && CommandLineModes.StackMode(["--stack", dng, "--mode", "STARS", "/nonexistent/a.ARW", "/nonexistent/b.ARW"]) == 1,
+              "--mode accepts noise, stars or landscape in any case, and nothing else");
     }
 }

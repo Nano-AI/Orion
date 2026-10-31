@@ -104,7 +104,7 @@ public sealed class HdrMergePanel : Border {
         EngineModel.Shared.Say($"Merged {paths.Count} exposures into {System.IO.Path.GetFileName(output)}");
     }
 
-    static Candidate Read(string path) =>
+    internal static Candidate Read(string path) =>
         Chrome.CaptureInfo.ReadFile(path) is { } info
             ? new(path, info.Camera, info.Iso, info.Shutter, info.Aperture)
             : new(path, "", 0, 0, 0);

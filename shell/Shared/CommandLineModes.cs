@@ -64,7 +64,8 @@ static partial class CommandLineModes {
         var rest = args[(i + 2)..].ToList();
         var mode = Stack.Mode.Noise;
         if (rest.IndexOf("--mode") is var m and >= 0) {
-            if (m + 1 >= rest.Count || !Enum.TryParse(rest[m + 1], true, out mode) || !Enum.IsDefined(mode)) { Console.Error.WriteLine(usage); return 2; }
+            if (m + 1 >= rest.Count || !Enum.GetNames<Stack.Mode>().Contains(rest[m + 1], StringComparer.OrdinalIgnoreCase)
+                || !Enum.TryParse(rest[m + 1], true, out mode)) { Console.Error.WriteLine(usage); return 2; }
             rest.RemoveRange(m, 2);
         }
         var frames = rest.Select(Path.GetFullPath).ToList();
