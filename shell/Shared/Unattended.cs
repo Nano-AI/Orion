@@ -13,6 +13,7 @@ namespace OrionShell;
 sealed partial class App {
     /// Headless: --selftest, --bench, --command, --screenshot. Returns the exit code.
     public static int RunUnattended() {
+        if (Run.Bench && BenchScenario is { } scenario) return RunScenario(scenario);   // tools/bench.py (Unattended.Bench.cs)
         OpenPhotos();
         Pump(() => !Opening);
         try {

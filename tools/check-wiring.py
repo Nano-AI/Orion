@@ -37,9 +37,10 @@ A *use* is any mention of the name outside its declaration, not only a call: an
 Avalonia control hands methods around as delegates (`Button("Save", Save)`),
 and counting only `Name(` would call every one of those dead. The harness is
 `SelfTest*.cs`, `SharedProof.cs` (the `--proof` run), the screenshot posing
-scenes (`CanvasScenes.cs`, `MaskScenes.cs`) and `Shared/Unattended.cs` (the
+scenes (`CanvasScenes.cs`, `MaskScenes.cs`) and `Shared/Unattended*.cs` (the
 headless --selftest/--bench/--command/--screenshot runner, moved out of
-Program.cs for this): the screenshot harness is #181's own shape.
+Program.cs for this, and tools/bench.py's scenarios beside it, #402): the
+screenshot harness is #181's own shape.
 
 ⚠ **What this still does NOT do.** It is a regex, not a compiler: a call made
 through reflection or a name built at run time is invisible to it, and two

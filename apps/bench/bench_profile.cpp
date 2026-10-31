@@ -239,7 +239,8 @@ void exportTiming(Bench& b) {
                            .space = ColorSpace::Srgb,
                            .metadataFrom = path,
                            .metadata = orion::util::Metadata::All,
-                           .rating = 4}},
+                           .rating = 4,
+                           .watermark = {}}},
             {"-web.jpg",  {.format = orion::util::ImageFormat::Jpeg,
                            .quality = 0.85f,
                            .maxDimension = 2048,
@@ -251,14 +252,16 @@ void exportTiming(Bench& b) {
                            .sharpen = orion::util::Sharpen::Screen,
                            .metadataFrom = path,
                            .metadata = orion::util::Metadata::All,
-                           .rating = 4}},
+                           .rating = 4,
+                           .watermark = {}}},
             {"-full.tif", {.format = orion::util::ImageFormat::Tiff,
                            .quality = 1.0f,
                            .space = ColorSpace::AdobeRgb,
                            .depth = orion::util::BitDepth::Sixteen,
                            .metadataFrom = path,
                            .metadata = orion::util::Metadata::All,
-                           .rating = 4}},
+                           .rating = 4,
+                           .watermark = {}}},
             // The print case: resized, eight bits, the heavier sharpening
             // pass. It is the most expensive combination the panel can ask
             // for, so it is the one worth timing.
@@ -270,7 +273,8 @@ void exportTiming(Bench& b) {
                             .sharpen = orion::util::Sharpen::Print,
                             .metadataFrom = path,
                             .metadata = orion::util::Metadata::All,
-                            .rating = 4}},
+                            .rating = 4,
+                           .watermark = {}}},
         };
 
         for (const auto& c : cases) {

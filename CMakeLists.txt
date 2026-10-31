@@ -63,9 +63,13 @@ else()
 endif()
 
 add_subdirectory(engine)
+# orion-bench runs on Dawn too (bench.py's engine numbers); Windows has no
+# footprint reader in bench_memory.cpp yet.
+if(NOT WIN32)
+    add_subdirectory(apps/bench)
+endif()
 if(APPLE)
     add_subdirectory(apps/probe)
-    add_subdirectory(apps/bench)
     add_subdirectory(apps/rawstat)
 endif()
 add_subdirectory(apps/tests)
