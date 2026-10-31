@@ -31,6 +31,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 #include <variant>
@@ -127,12 +128,12 @@ std::vector<std::uint16_t> toHalf(const std::vector<float>& rgb) {
 }  // namespace
 
 std::uint64_t estimateBytes(std::uint64_t pixels, std::size_t lights, std::size_t darks, std::size_t flats) noexcept {
-    // Bytes a pixel (research/UNSOURCED.md §32): the held lights as half RGB (6 each), or the calibration
-    // frames held as float mosaics while their median is taken (4 each; a linear DNG's RGB is 12); the two
-    // phases do not overlap. Plus 44 fixed: a frame in flight (decoded 2-8, float RGB 12, detectStars 13),
-    // Noise mode's reference float 12, the masters 8, the matte 4; the float result (12) replaces the frame
-    // in flight during integration. The worst phase measured from the code is ~39; 44 keeps a margin.
-    constexpr std::uint64_t kLight = 6, kCalibration = 4, kFixed = 44;
+    // Bytes a pixel, measured (research/UNSOURCED.md §32): peak footprint of `Orion --stack --force` on 2, 3,
+    // 5 and 7 links to one real 24 MP ARW (6024x4024) is 12.0 per light plus 85.4 fixed, to 0.1 B/px across
+    // all four. 12, not the half planes' 6: something in the raw path grows ~6 B/px a frame (unexplained;
+    // a linear DNG stack grows 6). Fixed x 1.1 = 94. Calibration frames: 4 each, as float mosaics while
+    // their median is taken (from the code, unmeasured; a linear DNG's RGB is 12).
+    constexpr std::uint64_t kLight = 12, kCalibration = 4, kFixed = 94;
     return pixels * (std::max(kLight * lights, kCalibration * std::max(darks, flats)) + kFixed);
 }
 
@@ -221,7 +222,10 @@ void Stacker::run(const Request& rq) {
     if (!rq.flats.empty()) masters.gain = flatGain(median(rq.flats, true), masters.dark, channel);
 
     // ── Decode and register, one frame at a time, the reference first ─────
-    merge::MergeRender render(device_, shaderDir_);
+    // Scoped to the loop: its GPU demosaic pool (~22-26 B/px) is freed before integration (on Apple silicon
+    // it comes out of the memory availableMemory reports).
+    std::optional<merge::MergeRender> render;
+    render.emplace(device_, shaderDir_);
     Meta refMeta;
     std::vector<float> refFloat;     // Noise mode: kept until every frame is aligned
     std::vector<Star> refStars;      // Stars and Landscape
@@ -233,7 +237,7 @@ void Stacker::run(const Request& rq) {
         step(0.05f + 0.70f * float(k) / float(n));
         const std::size_t i = k == 0 ? ref : (k <= ref ? k - 1 : k);   // the reference, then the rest in order
         Meta meta;
-        std::vector<float> rgb = decodeFrame(rq.paths[i], render, masters, meta);
+        std::vector<float> rgb = decodeFrame(rq.paths[i], *render, masters, meta);
         if (k == 0) {
             refMeta = meta;
         } else if (meta.width != refMeta.width || meta.height != refMeta.height) {
@@ -272,6 +276,7 @@ void Stacker::run(const Request& rq) {
         frames.push_back(f);
     }
     refFloat = {};
+    render.reset();
     if (frames.size() < 2) throw std::runtime_error("no frame registered against the reference — nothing to stack");
     for (std::size_t j = 0; j < frames.size(); ++j) frames[j].rgb = planes[j].data();
 

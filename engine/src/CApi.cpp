@@ -766,25 +766,27 @@ OrionStatus orion_engine_stack(OrionEngine* engine, const char* const* paths, in
     });
 }
 
-OrionStatus orion_engine_stack_estimate(OrionEngine* engine, const char* const* paths, int32_t count,
-                                        const char* const* darks, int32_t dark_count,
-                                        const char* const* flats, int32_t flat_count, uint64_t* out_bytes) {
-    if (engine == nullptr || paths == nullptr || paths[0] == nullptr || count < 1 || dark_count < 0 ||
-        flat_count < 0 || out_bytes == nullptr) {
+OrionStatus orion_stack_estimate(const char* const* paths, int32_t count, int32_t dark_count, int32_t flat_count,
+                                 uint64_t* out_bytes) {
+    if (paths == nullptr || paths[0] == nullptr || count < 1 || dark_count < 0 || flat_count < 0 || out_bytes == nullptr)
         return ORION_ERR_BAD_ARG;
-    }
-    (void)darks;   // counted, not read: the estimate is the lights' size
-    (void)flats;
-    return guard(engine, [&]() -> OrionStatus {
+    try {   // no engine to hold a message: a frame that will not read is the stack's own error to tell
         *out_bytes = orion::stack::estimateBytes(std::string(paths[0]), std::size_t(count), std::size_t(dark_count),
                                                  std::size_t(flat_count));
         return ORION_OK;
-    });
+    } catch (...) {
+        return ORION_ERR_INTERNAL;
+    }
 }
 
 OrionStatus orion_available_memory(uint64_t* out_bytes) {
     if (out_bytes == nullptr) return ORION_ERR_BAD_ARG;
     *out_bytes = orion::util::availableMemory();   // noexcept
+    return ORION_OK;
+}
+
+OrionStatus orion_available_memory_override(uint64_t bytes) {
+    orion::util::setAvailableMemoryOverride(bytes);
     return ORION_OK;
 }
 

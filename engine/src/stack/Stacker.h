@@ -58,7 +58,7 @@ struct NotEnoughMemory : std::runtime_error {
 };
 
 /// Estimated peak bytes of a stack of `lights` frames of `pixels` each, with `darks` and `flats`
-/// (research/UNSOURCED.md §32): pixels · (max(6·lights, 4·max(darks, flats)) + 44).
+/// (research/UNSOURCED.md §32, measured): pixels · (max(12·lights, 4·max(darks, flats)) + 94).
 [[nodiscard]] std::uint64_t estimateBytes(std::uint64_t pixels, std::size_t lights, std::size_t darks,
                                           std::size_t flats) noexcept;
 

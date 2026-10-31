@@ -1,5 +1,7 @@
 #include "util/Memory.h"
 
+#include <atomic>
+
 #if defined(__APPLE__)
 #include <mach/mach.h>
 #elif defined(_WIN32)
@@ -15,8 +17,14 @@
 #endif
 
 namespace orion::util {
+namespace {
+std::atomic<std::uint64_t> override_{0};
+}
+
+void setAvailableMemoryOverride(std::uint64_t bytes) noexcept { override_.store(bytes, std::memory_order_relaxed); }
 
 std::uint64_t availableMemory() noexcept {
+    if (const std::uint64_t o = override_.load(std::memory_order_relaxed)) return o;
 #if defined(__APPLE__)
     // Inactive and purgeable pages are given up on demand, so they count as free, as Activity Monitor's
     // "memory available" does.

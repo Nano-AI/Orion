@@ -408,12 +408,12 @@ void testStackMemory() {
         for (const auto& f : files) p.push_back(f.c_str());
         const std::vector<const char*> many(21, files[0].c_str());
 
-        // The estimate is the formula on the first light's size: 320 x 240 x (max(6n, 4 max(d, f)) + 44).
+        // The estimate is the formula on the first light's size: 320 x 240 x (max(12n, 4 max(d, f)) + 94).
         std::uint64_t est = 0, cal = 0, avail = 0;
-        CHECK(orion_engine_stack_estimate(engine, p.data(), 3, nullptr, 0, nullptr, 0, &est) == ORION_OK);
-        CHECK(orion_engine_stack_estimate(engine, p.data(), 3, many.data(), 21, many.data(), 2, &cal) == ORION_OK);
-        report(est == 320ull * 240 * (6 * 3 + 44) && cal == 320ull * 240 * (4 * 21 + 44),
-               "the estimate is W x H x (max(6 lights, 4 max(darks, flats)) + 44)",
+        CHECK(orion_stack_estimate(p.data(), 3, 0, 0, &est) == ORION_OK);
+        CHECK(orion_stack_estimate(p.data(), 3, 21, 2, &cal) == ORION_OK);
+        report(est == 320ull * 240 * (12 * 3 + 94) && cal == 320ull * 240 * (4 * 21 + 94),
+               "the estimate is W x H x (max(12 lights, 4 max(darks, flats)) + 94)",
                std::to_string(est) + ", " + std::to_string(cal));
         CHECK(orion_available_memory(&avail) == ORION_OK);
         std::printf("    available now: %.1f GB\n", double(avail) / 1e9);
@@ -421,7 +421,7 @@ void testStackMemory() {
 
         // Through the facade: enough frames that the estimate passes 1.5x what is available. All but the first
         // are missing, so any readInfo or decode would fail with another sentence.
-        const std::size_t n = std::size_t(1.5 * double(avail) / (320.0 * 240 * 6)) + 10;
+        const std::size_t n = std::size_t(1.5 * double(avail) / (320.0 * 240 * 12)) + 10;
         std::vector<std::string> lots(n, "/tmp/orion-stack-missing.dng");
         lots[0] = files[0];
         std::vector<const char*> lp;
@@ -438,6 +438,15 @@ void testStackMemory() {
                    std::strstr(orion_last_error(engine), "orion-stack-missing") != nullptr,
                "with force it goes on, to the missing frames' own refusal", orion_last_error(engine));
         report(!fs::exists(out), "no output after either");
+
+        // The test seam: an override answers for the OS, in orion_available_memory and in the stack's own check.
+        std::uint64_t seen = 0;
+        CHECK(orion_available_memory_override(1000) == ORION_OK && orion_available_memory(&seen) == ORION_OK && seen == 1000);
+        const OrionStatus tiny = stackFiles(engine, files, 0, 1, out);
+        orion_available_memory_override(0);
+        report(tiny == ORION_ERR_MEMORY && !fs::exists(out), "1000 bytes overridden refuses three small frames, unforced",
+               orion_last_error(engine));
+        CHECK(orion_available_memory(&seen) == ORION_OK && seen != 1000);
 
         // A forced run over an injected budget writes the stack.
         auto device = orion::gpu::Device::create();

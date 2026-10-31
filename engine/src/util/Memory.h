@@ -14,4 +14,7 @@ namespace orion::util {
 /// Bytes available now; 0 when the OS will not say (a caller then treats it as unknown, not as none).
 [[nodiscard]] std::uint64_t availableMemory() noexcept;
 
+/// Test seam: non-zero makes availableMemory() answer this instead of the OS; 0 restores the OS.
+void setAvailableMemoryOverride(std::uint64_t bytes) noexcept;
+
 }  // namespace orion::util

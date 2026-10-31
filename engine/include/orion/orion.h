@@ -828,7 +828,7 @@ OrionStatus orion_engine_hdr_merge_cancel(OrionEngine* engine);
  *            turn. Required for mode 2; ignored in modes 0 and 1, though a
  *            non-NULL matte's dimensions are still validated.
  * Frames of different sizes or cameras are refused before any decode.
- * Without force, so is a stack whose orion_engine_stack_estimate exceeds
+ * Without force, so is a stack whose orion_stack_estimate exceeds
  * orion_available_memory: ORION_ERR_MEMORY, with a sentence in
  * orion_last_error. force != 0 runs it anyway.
  * A frame that does not register is left out; fewer than two left is an
@@ -843,17 +843,20 @@ OrionStatus orion_engine_stack(OrionEngine* engine, const char* const* paths, in
                                const char* output_path, int32_t force);
 
 /* The stack's estimated peak memory in bytes, from the first frame's metadata
- * alone (no decode; darks and flats may be NULL, only their counts are
- * used): width x height x (max(6 x count, 4 x max(dark_count,
- * flat_count)) + 44). research/UNSOURCED.md §32. */
-OrionStatus orion_engine_stack_estimate(OrionEngine* engine, const char* const* paths, int32_t count,
-                                        const char* const* darks, int32_t dark_count,
-                                        const char* const* flats, int32_t flat_count, uint64_t* out_bytes);
+ * alone (no decode, no engine): width x height x (max(12 x count, 4 x
+ * max(dark_count, flat_count)) + 94), measured (research/UNSOURCED.md §32).
+ * ORION_ERR_INTERNAL when the first frame will not read. */
+OrionStatus orion_stack_estimate(const char* const* paths, int32_t count, int32_t dark_count, int32_t flat_count,
+                                 uint64_t* out_bytes);
 
 /* This machine's memory available now, in bytes (0 when the OS will not
  * say). macOS: free + inactive + purgeable pages; Windows: ullAvailPhys;
  * Linux: MemAvailable. */
 OrionStatus orion_available_memory(uint64_t* out_bytes);
+
+/* Test seam: non-zero makes orion_available_memory, and the stack's own
+ * check, answer this instead of the OS; 0 restores the OS. */
+OrionStatus orion_available_memory_override(uint64_t bytes);
 
 /* 0..1, monotone within one stack. Safe from any thread. */
 OrionStatus orion_engine_stack_progress(OrionEngine* engine, float* out);
