@@ -140,6 +140,7 @@ int main() {
     testStackRemovesHotPixel();
     testStackNormalizesAndWeights();
     testStackSkyGroundBlend();
+    testSkySplitOrientation();
     testGrainPlate();
     testGrainGpu();
     testGrainWiring();

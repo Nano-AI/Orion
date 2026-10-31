@@ -51,10 +51,12 @@ add_library(orion_engine STATIC
     src/merge/Merge.cpp
     src/merge/MergeRender.cpp
     src/merge/Align.cpp
+    src/merge/Preview.cpp
     src/merge/HdrMerge.cpp
     src/stack/Rejection.cpp
     src/stack/StarAlign.cpp
     src/stack/Integrate.cpp
+    src/stack/SkySplit.cpp
 )
 
 add_library(Orion::Engine ALIAS orion_engine)

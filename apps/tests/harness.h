@@ -156,6 +156,7 @@ void testStackRejectsStreak();
 void testStackRemovesHotPixel();
 void testStackNormalizesAndWeights();
 void testStackSkyGroundBlend();
+void testSkySplitOrientation();
 void testOrientGpu();
 void testDisplayNeutrality();
 void testCropGpu();
