@@ -256,6 +256,7 @@ public:
     // progress and cancel as noexcept reads of atomics.
     void runStack(const stack::Request& request) { stacker_->run(request); }
     [[nodiscard]] float stackProgress() const noexcept { return stacker_->progress(); }
+    [[nodiscard]] int stackSkipped() const noexcept { return stacker_->skipped(); }
     void stackCancel() noexcept { stacker_->cancel(); }
 
     void setError(std::string message) { lastError_ = std::move(message); }

@@ -826,6 +826,8 @@ OrionStatus orion_engine_hdr_merge_cancel(OrionEngine* engine);
  *            turn. Required for mode 2; ignored in modes 0 and 1, though a
  *            non-NULL matte's dimensions are still validated.
  * Frames of different sizes or cameras are refused before any decode.
+ * So is a stack whose frames, held as half floats (count x width x height
+ * x 6 bytes), would exceed 6 GiB.
  * A frame that does not register is left out; fewer than two left is an
  * error. Blocking; progress and cancel from any thread, as
  * orion_engine_hdr_merge ("stack cancelled", never a partial file). */
@@ -839,6 +841,10 @@ OrionStatus orion_engine_stack(OrionEngine* engine, const char* const* paths, in
 
 /* 0..1, monotone within one stack. Safe from any thread. */
 OrionStatus orion_engine_stack_progress(OrionEngine* engine, float* out);
+
+/* Frames the last stack left out because they did not register. Safe from
+ * any thread. */
+OrionStatus orion_engine_stack_skipped(OrionEngine* engine, int32_t* out);
 
 /* Makes the running stack fail at its next stage boundary. Safe from any
  * thread; a no-op when nothing is running. */

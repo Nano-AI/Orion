@@ -765,6 +765,12 @@ OrionStatus orion_engine_stack_progress(OrionEngine* engine, float* out) {
     return ORION_OK;
 }
 
+OrionStatus orion_engine_stack_skipped(OrionEngine* engine, int32_t* out) {
+    if (engine == nullptr || out == nullptr) return ORION_ERR_BAD_ARG;
+    *out = engine->impl.stackSkipped();
+    return ORION_OK;
+}
+
 OrionStatus orion_engine_stack_cancel(OrionEngine* engine) {
     if (engine == nullptr) return ORION_ERR_BAD_ARG;
     engine->impl.stackCancel();

@@ -251,6 +251,16 @@ void testStackFacadeRefuses() {
         report(std::strstr(orion_last_error(engine), "sky") != nullptr, "landscape without a matte names the sky",
                orion_last_error(engine));
 
+        {   // Over the memory budget: refused from the reference's metadata alone. The other 13,999 paths do
+            // not exist, so any readInfo or decode of them would fail with another sentence.
+            // 6 GiB / (320 * 240 * 6 bytes) = 13,981 frames.
+            std::vector<std::string> many(14000, "/tmp/orion-stack-missing.dng");
+            many[0] = files[0];
+            CHECK(stackFiles(engine, many, 0, 1, out) != ORION_OK);
+            report(std::strstr(orion_last_error(engine), "over 13981 frames at this size are not supported yet") != nullptr,
+                   "a stack over the memory budget is refused before any decode", orion_last_error(engine));
+        }
+
         {   // Mixed sets refuse before any decode: an odd size last of six, another camera, a dark of another size.
             writeFrame(odd, stackfix::starField(23, 60, 336, 240, persp::identity(), 0.005f, 0.05f).rgb, 336, 240);
             const char* dark[1] = {odd.c_str()};
@@ -298,6 +308,10 @@ void testStackFacadeRefuses() {
         std::printf("    skipped %d of %zu\n", stacker.skipped(), rq.paths.size());
         CHECK(stacker.skipped() == 1);
         CHECK(fs::exists(out));
+        std::remove(out.c_str());   // the facade reports the count too
+        CHECK(stackFiles(engine, rq.paths, 0, 1, out) == ORION_OK);
+        int32_t skipped = -1;
+        CHECK(orion_engine_stack_skipped(engine, &skipped) == ORION_OK && skipped == 1);
     } catch (const std::exception& e) {
         report(false, "refusal fixture", e.what());
     }

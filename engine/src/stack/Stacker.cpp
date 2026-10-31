@@ -36,6 +36,10 @@
 namespace orion::stack {
 namespace {
 
+/// The held half planes' ceiling: 6 GiB, a quarter of a 24 GB laptop, past which swap thrash
+/// has crashed one. research/UNSOURCED.md §32.
+constexpr std::uint64_t kHeldBudgetBytes = 6ull << 30;
+
 /// The reference's metadata, for the container.
 struct Meta {
     std::uint32_t width = 0, height = 0;
@@ -149,6 +153,12 @@ void Stacker::run(const Request& rq) {
     // Refuse a mixed set before paying for any decode (metadata only); the decode loop re-checks size.
     const auto ref = std::size_t(rq.reference);
     const raw::RawInfo refInfo = raw::readInfo(rq.paths[ref]);
+    // Every registered frame is held as half RGB, 6 bytes a pixel, and the frames must all be the reference's size.
+    // ponytail: refuse over the budget; streaming the integration over strips of rows is the upgrade.
+    const std::uint64_t frameBytes = std::uint64_t(refInfo.width) * refInfo.height * 6;
+    if (frameBytes > 0 && std::uint64_t(n) * frameBytes > kHeldBudgetBytes)
+        throw std::runtime_error("Stacks over " + std::to_string(kHeldBudgetBytes / frameBytes) +
+                                 " frames at this size are not supported yet; select fewer.");
     const auto named = [](const std::string& c) { return c.find_first_not_of(' ') != std::string::npos; };
     const auto otherCamera = [&](const raw::RawInfo& info) {
         return named(info.camera) && named(refInfo.camera) && info.camera != refInfo.camera;
