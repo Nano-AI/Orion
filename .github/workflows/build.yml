@@ -47,7 +47,7 @@ jobs:
           # Build tools only. The engine's libraries are vcpkg's, as on Windows: Ubuntu's
           # OpenCV is built with GDAL, which brings poppler, and poppler is GPL (#243, #376).
           sudo apt-get install -y --no-install-recommends ninja-build clang nasm pkg-config \
-            autoconf autoconf-archive automake libtool libvulkan1 vulkan-tools \
+            autoconf autoconf-archive automake libtool libvulkan1 vulkan-tools patchelf \
             squashfs-tools   # mksquashfs, for vpk's AppImage (#389)
 
       - name: vcpkg at the manifest's baseline

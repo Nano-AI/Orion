@@ -6,7 +6,7 @@
 #
 #   tools/package-linux.sh SHELL_DIR BUILD_DIR OUT_DIR
 #
-# Needs: dotnet, mksquashfs (squashfs-tools), and vpk on PATH (or $VPK). Run on the oldest
+# Needs: dotnet, patchelf, mksquashfs (squashfs-tools), and vpk on PATH (or $VPK). Run on the oldest
 # system the AppImage should start on: it carries no glibc of its own.
 set -euo pipefail
 shell=$1 build=$(cd "$2" && pwd) out=$3   # build absolute: ldd answers absolute paths
@@ -32,6 +32,15 @@ ldd "$app/usr/bin/liborion_shim.so" | awk '$3 ~ /^\// {print $1, $3}' | while re
         *) echo "error: $name comes from $path, not from vcpkg; the package takes no distribution library" >&2; exit 1 ;;
     esac
 done
+# The shim finds them in usr/lib, not through LD_LIBRARY_PATH, which every
+# process Orion starts would inherit (the assistant's shell, its agent, git) and
+# load Orion's zlib and liblzma in place of the system's. The build's RUNPATH
+# names the build machine's vcpkg folder, which no user has (#DEC-pkg).
+patchelf --set-rpath '$ORIGIN/../lib' "$app/usr/bin/liborion_shim.so"
+missing=$(env -u LD_LIBRARY_PATH ldd "$app/usr/bin/liborion_shim.so" | awk '/not found/ {print $1}' | grep -Ev "$base" || true)
+if [[ -n $missing ]]; then
+    echo "error: the shim does not find $missing in the package" >&2; exit 1
+fi
 cp "$root/LICENSE" "$root/NOTICE" "$app/usr/share/doc/orion/"
 cp "$root"/licenses/* "$app/usr/share/doc/orion/licenses/"
 rm -f "$app"/usr/bin/*.pdb   # debug databases carry build paths; the gate refuses any that remain
@@ -39,7 +48,6 @@ rm -f "$app"/usr/bin/*.pdb   # debug databases carry build paths; the gate refus
 cat > "$app/AppRun" <<'EOF'
 #!/bin/sh
 here="$(dirname "$(readlink -f "$0")")"
-export LD_LIBRARY_PATH="$here/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 exec "$here/usr/bin/Orion" "$@"
 EOF
 chmod +x "$app/AppRun"
@@ -51,6 +59,8 @@ Comment=Fast, subscription-free RAW photo editor
 Exec=Orion %F
 Icon=orion
 Categories=Graphics;Photography;
+StartupWMClass=Orion
+MimeType=image/x-sony-arw;image/x-sony-srf;image/x-sony-sr2;image/x-adobe-dng;image/x-nikon-nef;image/x-nikon-nrw;image/x-canon-cr2;image/x-canon-cr3;image/x-canon-crw;image/x-fuji-raf;image/x-olympus-orf;image/x-panasonic-rw2;image/x-panasonic-rw;image/x-pentax-pef;image/x-minolta-mrw;
 EOF
 cp "$root/brand/orion_logo_system_luminous.svg" "$app/orion.svg"
 

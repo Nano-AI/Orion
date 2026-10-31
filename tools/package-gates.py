@@ -74,7 +74,12 @@ BUILD_ACCOUNTS = {"runner", "runneradmin"}  # GitHub Actions' Linux and Windows 
 # Orion, and nothing here can rebuild it. Any other name, in it or elsewhere, still fails.
 EXCUSED = {("MicroCom.Runtime.dll", "kekekeks")}
 
-GPL = re.compile(r"GNU (AFFERO )?GENERAL PUBLIC LICENSE|^\s*License:\s*A?GPL|SPDX-License-Identifier:\s*A?GPL", re.M)
+# The licence's title, a DEP-5 or SPDX line naming it, and the notice GPL code carries
+# in place of the text, "under the terms of the GNU General Public License", in any
+# case (#DEC-pkg). The LGPL's own text says "the ordinary GNU General Public License"
+# and never trips it.
+GPL = re.compile(r"GNU (AFFERO )?GENERAL PUBLIC LICENSE|^\s*License:\s*A?GPL|SPDX-License-Identifier:\s*A?GPL"
+                 r"|(?i:terms\s+of\s+the\s+GNU\s+(Affero\s+)?General\s+Public\s+License)", re.M)
 LGPL = re.compile(r"GNU (LESSER|LIBRARY) GENERAL PUBLIC LICENSE")
 HOME = re.compile(rb"(?:/Users/|/home/|[A-Za-z]:\\+Users\\+)([^/\\\s\x00\"'<>:*?|]+)")
 
