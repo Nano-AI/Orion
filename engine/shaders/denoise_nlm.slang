@@ -102,7 +102,12 @@ void nlmLuma(uint3 tid  : SV_DispatchThreadID,
     const float invN   = 1.0f / float((2 * f + 1) * (2 * f + 1));
     const float floor2 = 2.0f * sigma2;
 
-    float sum = 0.0f, wsum = 0.0f, wmax = 0.0f;
+    // ⚠ **The weights are kept relative to the largest so far**, by the
+    // exponent: w·u / w is unchanged by scaling every w alike, but a small h
+    // puts every absolute exp() near FLT_MIN, where the GPU flushes w·u to
+    // zero while w itself survives. The sum then lost the pixel values its
+    // weights still counted, and sky came out with near-black single pixels.
+    float sum = 0.0f, wsum = 0.0f, emax = -3.0e38f;
     for (int oy = -r; oy <= r; ++oy)
     {
         for (int ox = -r; ox <= r; ++ox)
@@ -117,15 +122,23 @@ void nlmLuma(uint3 tid  : SV_DispatchThreadID,
                     d2 += d * d;
                 }
             }
-            const float w = exp(-max(d2 * invN - floor2, 0.0f) * invH2);
+            const float e = -max(d2 * invN - floor2, 0.0f) * invH2;
+            if (e > emax)
+            {
+                const float rescale = exp(emax - e);
+                sum  *= rescale;
+                wsum *= rescale;
+                emax  = e;
+            }
+            const float w = exp(e - emax);
             sum  += w * tileAt(cx + ox, cy + oy);
             wsum += w;
-            wmax  = max(wmax, w);
         }
     }
-    sum  += wmax * y0;
-    wsum += wmax;
+    // w(p,p) = max_q w(p,q), which is exp(emax - emax) = 1 on this scale.
+    sum  += y0;
+    wsum += 1.0f;
 
-    const float yhat = (wsum > 0.0f) ? sum / wsum : y0;
+    const float yhat = sum / wsum;
     dst[tid.xy] = float4(c + (yhat - y0), 1.0f);
 }
