@@ -100,6 +100,42 @@ static partial class SelfTest {
         }
     }
 
+    /// The memory warning: available memory injected below the estimate, Stack shows the warning (no stack
+    /// runs), and Proceed anyway runs the stack with force. Two links to the open photo in a temporary folder.
+    static void StackMemoryWarning(EngineModel engine) {
+        var list = engine.Photos.ToList();
+        int current = engine.Current;
+        string dir = Directory.CreateTempSubdirectory("orion-stack-memory-").FullName;
+        try {
+            string ext = Path.GetExtension(list[current]), a = Path.Combine(dir, "a" + ext), b = Path.Combine(dir, "b" + ext);
+            File.CreateSymbolicLink(a, list[current]);
+            File.CreateSymbolicLink(b, list[current]);
+            engine.Load([a, b]);
+            LibraryModel.Shared.Select([a, b]);
+            var sheet = new StackSheet();
+            Stack.AvailableOverride = 1_000_000;
+            var press = sheet.Press();
+            Pump(() => press.IsCompleted, 30);
+            string said = sheet.WarningText;
+            bool warned = sheet.WarningShown && !File.Exists(Path.Combine(dir, "b-stack.dng"));
+            var go = sheet.Proceed();
+            Pump(() => go.IsCompleted, 180);
+            for (int i = 0; i < 6000 && engine.Opening; i++) { Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Thread.Sleep(1); }
+            Check(warned && said.StartsWith("These 2 frames need about ") && said.EndsWith(" GB of memory and about 0.0 GB is free. Close other apps to free memory, or proceed anyway."),
+                  $"over the memory available, Stack shows the warning and runs nothing ({said})");
+            Check(Stack.LastForce && !sheet.WarningShown && File.Exists(Path.Combine(dir, "b-stack.dng")),
+                  "Proceed anyway runs the stack with force");
+            Check(StackSheet.MemoryWarning(60, 8_600_000_000, 5_100_000_000)
+                  == "These 60 frames need about 8.6 GB of memory and about 5.1 GB is free. Close other apps to free memory, or proceed anyway.",
+                  "the warning names decimal GB, one decimal, memory and free");
+        } finally {
+            Stack.AvailableOverride = null;
+            engine.Load(list);
+            OpenAndWait(engine, current);
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     /// The Stack sheet (Task 9): who may stack, the command behind it, and the sky painter.
     static void StackSheetChecks() {
         static HdrMergePanel.Candidate C(string camera) => new("x.ARW", camera, 3200, 20, 2.8f);

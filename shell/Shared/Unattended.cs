@@ -34,6 +34,13 @@ sealed partial class App {
             if (Run.Screenshot != null) {
                 Pump(() => Library.StackSuggestion.Scanned.IsCompleted, 10);   // the folder's stack line, posted when its scan lands
                 Dispatcher.UIThread.RunJobs();                                 // and shown
+                // The Stack sheet posed with ORION_STACK_AVAILABLE: press Stack, so the still is its memory warning.
+                if (Target is Border { Child: Sheets.StackSheet sheet } && Sheets.Stack.AvailableOverride != null) {
+                    var press = sheet.Press();
+                    Pump(() => press.IsCompleted, 30);
+                    window.UpdateLayout();
+                    Dispatcher.UIThread.RunJobs();
+                }
                 EngineModel.Shared.Render(preview: false);   // a still is for looking at, not for speed
                 window.UpdateLayout();
                 Dispatcher.UIThread.RunJobs();

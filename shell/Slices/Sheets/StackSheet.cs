@@ -26,6 +26,8 @@ public sealed class StackSheet : Border {
     readonly Rows _actions = new() { Orientation = Orientation.Horizontal, Spacing = Space.Md, HorizontalAlignment = HorizontalAlignment.Right };
     readonly TextBlock _modeNote = SheetKit.Note("", Palette.Dim);
     readonly TextBlock _status = SheetKit.Note("", Palette.Warn);   // why Stack did nothing, or failed
+    readonly TextBlock _warningText = SheetKit.Note("", Palette.Warn);
+    readonly Rows _warning = new() { Spacing = Space.Sm, IsVisible = false };   // over the memory available: the two answers
     readonly StackCalibration _calibration = new();
     Stack.Mode _mode;
     int _reference, _rejection = -1;
@@ -73,7 +75,11 @@ public sealed class StackSheet : Border {
         Idle();
         // As ExportPanel: the choices scroll on a small display; Cancel and Stack stay put. 760, not Export's 540:
         // Landscape with a portrait frame's painter and its brush is about 730 tall (measured in a screenshot).
-        Child = new Rows { Spacing = Space.Pad, Children = { new ScrollViewer { Content = body, MaxHeight = 760 }, _status, _actions } };
+        _warning.Children.AddRange([_warningText, new Rows {
+            Orientation = Orientation.Horizontal, Spacing = Space.Md, HorizontalAlignment = HorizontalAlignment.Right,
+            Children = { SheetKit.Button("Cancel", () => _warning.IsVisible = false), SheetKit.Button("Proceed anyway", () => _ = Proceed()) },
+        }]);
+        Child = new Rows { Spacing = Space.Pad, Children = { new ScrollViewer { Content = body, MaxHeight = 760 }, _status, _warning, _actions } };
         Status(null);
     }
 
@@ -159,12 +165,48 @@ public sealed class StackSheet : Border {
         _stack.IsEnabled = Paintable;
     }
 
-    /// As HdrMergePanel.Merge: what is owed to the open photo lands first (the stack reads files),
-    /// a progress bar and Stop while it runs, then the new DNG is opened like any library photo.
-    async void Run() {
+    void Run() => _ = Press();
+
+    /// Stack pressed: the memory this stack needs against what is free, fresh on every press (closing apps
+    /// can clear it), then the stack, or the warning whose Proceed anyway forces it.
+    internal async Task Press() {
         if (_stacking || !Paintable || Ineligibility(_candidates) != null) return;
         if (!Ready) { Status("Paint the sky first."); return; }
         Status(null);
+        _warning.IsVisible = false;
+        _stacking = true;   // a second press while the check runs is ignored
+        (ulong Need, ulong Free)? memory = null;
+        try {
+            memory = await Stack.Memory(_candidates.Select(c => c.Path).ToList(), _calibration.Darks.Count, _calibration.Flats.Count);
+        } catch (Exception e) {
+            Console.Error.WriteLine($"orion stack: memory check: {e.Message}");   // unknown: the engine checks again
+        } finally {
+            _stacking = false;
+        }
+        if (memory is { Need: var need, Free: var free } && free > 0 && need > free) {
+            _warningText.Text = MemoryWarning(_candidates.Count, need, free);
+            _warning.IsVisible = true;
+            return;
+        }
+        await Start(force: false);
+    }
+
+    internal Task Proceed() {
+        _warning.IsVisible = false;
+        return Start(force: true);
+    }
+
+    internal bool WarningShown => _warning.IsVisible;
+    internal string WarningText => _warningText.Text ?? "";
+
+    /// Decimal GB, one decimal, invariant: "memory" and "free", never "space".
+    internal static string MemoryWarning(int frames, ulong need, ulong free) => FormattableString.Invariant(
+        $"These {frames} frames need about {need / 1e9:0.0} GB of memory and about {free / 1e9:0.0} GB is free. Close other apps to free memory, or proceed anyway.");
+
+    /// As HdrMergePanel.Merge: what is owed to the open photo lands first (the stack reads files),
+    /// a progress bar and Stop while it runs, then the new DNG is opened like any library photo.
+    async Task Start(bool force) {
+        if (_stacking) return;
         _stacking = true;
         try {
             _calibration.IsEnabled = false;
@@ -185,7 +227,7 @@ public sealed class StackSheet : Border {
             using var poll = Avalonia.Threading.DispatcherTimer.Run(() => { bar.Value = Stack.Progress ?? bar.Value; return true; },
                                                                     TimeSpan.FromMilliseconds(150));
             string? failed = await Stack.Run(paths, reference, mode, _rejection, _weight, darks, flats, matte,
-                                             painter?.MatteWidth ?? 0, painter?.MatteHeight ?? 0, output);
+                                             painter?.MatteWidth ?? 0, painter?.MatteHeight ?? 0, output, force);
             Dismiss?.Invoke();
             if (failed != null) {
                 Console.Error.WriteLine($"orion stack: failed: {failed}");
@@ -199,7 +241,7 @@ public sealed class StackSheet : Border {
             EngineModel.Shared.Say(skipped == 0 ? $"Stacked {paths.Count} frames into {name}"
                 : $"Stacked {paths.Count - skipped} of {paths.Count} frames ({skipped} did not align) into {name}");
         } catch (Exception e) {
-            // async void: an exception escaping here would take the process down.
+            // Run discards this Task: an exception escaping here would go unobserved.
             Console.Error.WriteLine($"orion stack: {e}");
             Status(e.Message);
             EngineModel.Shared.Say(e.Message);   // in case the sheet has already closed

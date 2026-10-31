@@ -57,7 +57,7 @@ static partial class CommandLineModes {
     /// reference, rejection automatic, no weighting, no calibration. Landscape has no matte here, so the
     /// engine's refusal is the answer. Like --hdr-merge, the file it wrote must open and render.
     public static int StackMode(string[] args) {
-        const string usage = "usage: Orion --stack <output.dng> [--mode noise|stars|landscape] <frame> <frame> [frame...]";
+        const string usage = "usage: Orion --stack <output.dng> [--mode noise|stars|landscape] [--force] <frame> <frame> [frame...]";
         int i = Array.IndexOf(args, "--stack");
         if (i < 0 || i + 1 >= args.Length) { Console.Error.WriteLine(usage); return 2; }
         string output = Path.GetFullPath(args[i + 1]);
@@ -68,10 +68,11 @@ static partial class CommandLineModes {
                 || !Enum.TryParse(rest[m + 1], true, out mode)) { Console.Error.WriteLine(usage); return 2; }
             rest.RemoveRange(m, 2);
         }
+        bool force = rest.Remove("--force");   // run even over the memory available
         var frames = rest.Select(Path.GetFullPath).ToList();
         if (frames.Count < 2) { Console.Error.WriteLine(usage); return 2; }
         // Task.Run for the reason HdrMergeMode gives.
-        if (Task.Run(() => Stack.Run(frames, 0, mode, -1, false, [], [], null, 0, 0, output)).GetAwaiter().GetResult() is { } why) {
+        if (Task.Run(() => Stack.Run(frames, 0, mode, -1, false, [], [], null, 0, 0, output, force)).GetAwaiter().GetResult() is { } why) {
             Console.Error.WriteLine($"orion: stack failed: {why}");
             return 1;
         }
