@@ -240,11 +240,10 @@ void testStackFacadeRefuses() {
         {   // An existing output is an error, and the file is untouched.
             std::ofstream(out) << "keep";
             CHECK(stackFiles(engine, files, 0, 1, out) != ORION_OK);
-            std::ifstream in(out);
             std::string s;
-            in >> s;
+            std::ifstream(out) >> s;   // closed before the remove: Windows will not delete an open file
             report(s == "keep", "an existing output is left untouched");
-            std::remove(out.c_str());
+            report(std::remove(out.c_str()) == 0, "the kept output is removed");
         }
 
         CHECK(stackFiles(engine, files, 0, 2, out) != ORION_OK);
