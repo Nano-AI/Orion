@@ -220,6 +220,44 @@ void testStackNormalizesAndWeights() {
         CHECK(std::fabs(r.scale[1] - 1.0f) <= 0.02f);   // 150 stars: single taps 1.030, 3x3 boxes 0.971
     }
 
+    section("stack integrate: peaks with no box excess do not set the scale");
+    {
+        // 300 fake peaks: a +0.1 core whose 48 box neighbours sit 0.1/48 low, so the 7x7
+        // excess is 0 ± noise, against 60 real stars. Their ratios are noise/noise; unguarded
+        // they outvote the stars and k lands far from 0.8.
+        constexpr std::uint32_t w = 640, h = 480;
+        auto a = stackfix::starField(19, 60, w, h, persp::identity(), 0.002f, 0.05f, 701);
+        auto b = stackfix::starField(19, 60, w, h, persp::identity(), 0.002f, 0.05f, 702).rgb;
+        for (float& v : b) v = 0.8f * v + 0.05f;
+        int fakes = 0;
+        for (std::uint32_t y = 8; y + 8 < h && fakes < 300; y += 12)
+            for (std::uint32_t x = 8; x + 8 < w && fakes < 300; x += 12) {
+                bool clear = true;
+                for (const Star& s : a.reference) clear &= std::hypot(s.x - float(x), s.y - float(y)) > 12.0f;
+                if (!clear) continue;
+                ++fakes;
+                for (int dy = -3; dy <= 3; ++dy)
+                    for (int dx = -3; dx <= 3; ++dx) {
+                        const float d = (dx == 0 && dy == 0) ? 0.1f : -0.1f / 48.0f;
+                        const std::size_t p = (std::size_t(int(y) + dy) * w + std::size_t(int(x) + dx)) * 3;
+                        for (int c = 0; c < 3; ++c) {
+                            a.rgb[p + std::size_t(c)] += d;
+                            b[p + std::size_t(c)] += 0.8f * d;
+                        }
+                    }
+            }
+        Stack s;
+        s.w = w; s.h = h;
+        s.add(a.rgb, persp::identity());
+        s.add(b, persp::identity());
+        Options o;
+        o.rejection = Rejection::None;
+        const auto r = integrate(s.frames, 0, nullptr, o);
+        std::printf("    %d fake peaks: k = %.4f (want 0.8 within 2%%)\n", fakes, r.scale[1]);
+        CHECK(fakes == 300);
+        CHECK(std::fabs(r.scale[1] - 0.8f) <= 0.02f * 0.8f);
+    }
+
     section("stack integrate: noise weights favour the cleaner frame");
     {
         Stack s;

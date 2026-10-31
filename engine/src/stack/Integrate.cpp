@@ -14,7 +14,9 @@ namespace {
 
 constexpr double kGridSamples = 50000.0;   // UNSOURCED §22
 constexpr float kBrightSigmas = 10.0f;     // UNSOURCED §22
-constexpr std::size_t kMinBright = 200;    // UNSOURCED §22, also the sky subset's minimum
+constexpr std::size_t kMinBright = 200;    // UNSOURCED §22: the sky subset's minimum
+constexpr std::size_t kMinCores = 50;      // UNSOURCED §22: star cores needed before k is believed
+constexpr float kClip = 0.98f;             // UNSOURCED §22: a box touching this is clipped, no flux to measure
 constexpr float kNoiseFloor = 1e-6f;       // a noiseless synthetic frame keeps a finite weight
 constexpr float kMinScale = 0.1f, kMaxScale = 10.0f;   // UNSOURCED §22: outside, the scale is not believed
 constexpr float kMaxWeightRatio = 10.0f;   // UNSOURCED §22: no frame outweighs the median frame by more
@@ -44,7 +46,7 @@ bool tap(const Frame& f, const persp::Matrix3& h, float x, float y, float out[3]
 }
 
 /// Σ luma over the 7x7 box about reference texel (x, y), each texel through `h`;
-/// false when any is outside. A star's flux survives a sub-pixel bilinear tap
+/// false when any is outside or clipped (>= kClip in any channel). A star's flux survives a sub-pixel bilinear tap
 /// where its peak does not (box half-width 3.5 px: a σ 1.2 px star loses < 1%
 /// to the blur of a half-pixel tap; a 3x3 box loses ~3%, see UNSOURCED §22).
 bool boxLuma(const Frame& f, const persp::Matrix3& h, std::uint32_t x, std::uint32_t y, float& sum) noexcept {
@@ -53,6 +55,7 @@ bool boxLuma(const Frame& f, const persp::Matrix3& h, std::uint32_t x, std::uint
         for (int dx = -kAperture; dx <= kAperture; ++dx) {
             float t[3];
             if (!tap(f, h, float(x) + float(dx), float(y) + float(dy), t)) return false;
+            if (t[0] >= kClip || t[1] >= kClip || t[2] >= kClip) return false;
             sum += (t[0] + t[1] + t[2]) * (1.0f / 3.0f);
         }
     return true;
@@ -125,7 +128,8 @@ Result integrate(const std::vector<Frame>& frames, int reference, const float* s
         Lref[c] = median(a, 0.0f);
     }
     const float lumaLref = (Lref[0] + Lref[1] + Lref[2]) / 3.0f;
-    const float brightFloor = lumaLref + kBrightSigmas * noiseSigma(ref, step);
+    const float sigmaRef = noiseSigma(ref, step);
+    const float brightFloor = lumaLref + kBrightSigmas * sigmaRef;
 
     // The scale's sample: every reference pixel >= 10σ over its background that is a local
     // maximum (a star's core, so the box holds its flux), found at full resolution (stars are
@@ -139,10 +143,15 @@ Result integrate(const std::vector<Frame>& frames, int reference, const float* s
             if (skyOnly && !(skyMatte[p] >= 0.5f)) continue;
             const float v = luma(ref, p);
             if (v < brightFloor) continue;
+            // Strictly above the neighbours before it in raster order, at least the ones after:
+            // a plateau (a flat-topped core) yields one maximum, not one per texel.
             bool peak = true;
             for (int dy = -1; dy <= 1 && peak; ++dy)
-                for (int dx = -1; dx <= 1 && peak; ++dx)
-                    peak = (dx == 0 && dy == 0) || luma(ref, std::size_t(std::ptrdiff_t(p) + dy * std::ptrdiff_t(W) + dx)) <= v;
+                for (int dx = -1; dx <= 1 && peak; ++dx) {
+                    if (dx == 0 && dy == 0) continue;
+                    const float u = luma(ref, std::size_t(std::ptrdiff_t(p) + dy * std::ptrdiff_t(W) + dx));
+                    peak = (dy < 0 || (dy == 0 && dx < 0)) ? u < v : u <= v;
+                }
             if (peak) bright.push_back(p);
         }
     const std::size_t stride = bright.size() / std::size_t(kGridSamples) + 1;
@@ -150,7 +159,10 @@ Result integrate(const std::vector<Frame>& frames, int reference, const float* s
     std::vector<float> refBox;
     for (std::size_t j = 0; j < bright.size(); j += stride) {
         float s;
-        (void)boxLuma(ref, persp::identity(), std::uint32_t(bright[j] % W), std::uint32_t(bright[j] / W), s);
+        if (!boxLuma(ref, persp::identity(), std::uint32_t(bright[j] % W), std::uint32_t(bright[j] / W), s)) continue;
+        // The ratio's denominator: a core whose box holds no real excess (a lone noise peak)
+        // would hand the median noise/noise.
+        if (!(s - kBoxArea * lumaLref > kBrightSigmas * sigmaRef)) continue;
         pick.push_back(bright[j]);
         refBox.push_back(s - kBoxArea * lumaLref);
     }
@@ -172,10 +184,11 @@ Result integrate(const std::vector<Frame>& frames, int reference, const float* s
         ratios.clear();
         for (std::size_t j = 0; j < pick.size(); ++j) {
             float s;
-            if (boxLuma(f, f.refToSource, std::uint32_t(pick[j] % W), std::uint32_t(pick[j] / W), s))
-                ratios.push_back((s - kBoxArea * lumaL) / refBox[j]);
+            if (!boxLuma(f, f.refToSource, std::uint32_t(pick[j] % W), std::uint32_t(pick[j] / W), s)) continue;
+            const float r = (s - kBoxArea * lumaL) / refBox[j];
+            if (std::isfinite(r)) ratios.push_back(r);   // a NaN breaks nth_element's ordering
         }
-        if (ratios.size() >= kMinBright) nm.k = median(ratios, 1.0f);
+        if (ratios.size() >= kMinCores) nm.k = median(ratios, 1.0f);
         if (!(nm.k >= kMinScale && nm.k <= kMaxScale)) nm.k = 1.0f;   // NaN included
         if (options.weightByNoise) {
             const float s = noiseSigma(f, step);

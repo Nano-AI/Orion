@@ -22,7 +22,8 @@
  *  tap flattens a star's peak but nearly conserves its flux.
  *
  *  ⚠ Ours, not published (research/UNSOURCED.md §22): the 10σ bright-pixel
- *  floor and the 200-sample minimum for the scale, the ~50k-sample grid and
+ *  floor (and 10σ minimum box excess), the 50-core minimum for the scale, the
+ *  0.98 clip that drops a box, the ~50k-sample grid and
  *  pair cap, the 7x7 box at local maxima, the [0.1, 10] range a scale must fall in, the 10x
  *  median cap on a noise weight, the matte >= 0.5 sky subset for the
  *  statistics, the 1e-6 noise floor.
