@@ -137,12 +137,15 @@ public sealed class StackSheet : Border {
 
     /// The mode's note, and in Landscape the Sky row for the reference frame, seeded when the reference changes.
     void ShowMode() {
+        Status(null);   // "Paint the sky first." answered by a change of mode or frame
         _modeNote.Text = ModeNotes[(int)_mode];
         _split.IsVisible = _mode == Stack.Mode.Landscape;
         string path = _candidates[_reference].Path;
         if (_split.IsVisible && _splitFor != path) {
             _splitFor = path;
             _painter = StackSplit.For(path);
+            // ...or by painting (the painter handles its own presses, hence handledEventsToo).
+            _painter?.AddHandler(Avalonia.Input.InputElement.PointerPressedEvent, (_, _) => Status(null), handledEventsToo: true);
             _split.Children.Clear();
             _split.Children.Add(SheetKit.Row("Sky", _painter?.Editor() ?? SheetKit.Note("This raw carries no preview to paint the sky on.", Palette.Warn)));
         }
@@ -190,8 +193,7 @@ public sealed class StackSheet : Border {
                 return;
             }
             Console.Error.WriteLine($"orion stack: wrote {output}");
-            StackSuggestion.DismissFrames(paths);   // the new DNG's rescan must not offer these frames again
-            LibraryFiles.OpenPhoto(output);
+            Opened(paths, output);
             int skipped = Stack.Skipped;
             string name = System.IO.Path.GetFileName(output);
             EngineModel.Shared.Say(skipped == 0 ? $"Stacked {paths.Count} frames into {name}"
@@ -206,6 +208,14 @@ public sealed class StackSheet : Border {
         } finally {
             _stacking = false;
         }
+    }
+
+    /// The stack is written: open it like any library photo, then dismiss its frames' suggestion so the
+    /// rescan the new DNG causes does not offer them again. In that order: opening loads the folder, and
+    /// FolderLoaded clears the dismissals.
+    internal static void Opened(IReadOnlyList<string> paths, string output) {
+        LibraryFiles.OpenPhoto(output);
+        StackSuggestion.DismissFrames(paths);
     }
 
     /// Why these frames cannot stack, or null: HDR merge's camera rule, in a stack's words for too few.

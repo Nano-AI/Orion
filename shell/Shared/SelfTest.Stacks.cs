@@ -77,6 +77,29 @@ static partial class SelfTest {
         StackSheetChecks();
     }
 
+    /// A finished stack opens its DNG and its frames must stay dismissed. Opening loads the folder, whose
+    /// FolderLoaded clears dismissals, so StackSheet.Opened dismisses after it: the real OpenPhoto path,
+    /// on links to the open photo in a temporary folder.
+    static void StackDismissal(EngineModel engine) {
+        var list = engine.Photos.ToList();
+        int current = engine.Current;
+        string dir = Directory.CreateTempSubdirectory("orion-stack-dismiss-").FullName;
+        try {
+            string ext = Path.GetExtension(list[current]);
+            var frames = Enumerable.Range(1, 5).Select(i => Path.Combine(dir, $"f{i}{ext}")).ToList();
+            string output = Path.Combine(dir, "f3-stack" + ext);
+            foreach (var f in frames.Append(output)) File.CreateSymbolicLink(f, list[current]);
+            StackSheet.Opened(frames, output);
+            for (int i = 0; i < 6000 && engine.Opening; i++) { Avalonia.Threading.Dispatcher.UIThread.RunJobs(); Thread.Sleep(1); }
+            Check(engine.Photos.Contains(output) && StackSuggestion.Pick([new StackGroup(frames, false)], StackSuggestion.Dismissed) == null,
+                  "after a stack opens its DNG, its frames' suggestion stays dismissed (opening clears dismissals first)");
+        } finally {
+            engine.Load(list);
+            OpenAndWait(engine, current);
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     /// The Stack sheet (Task 9): who may stack, the command behind it, and the sky painter.
     static void StackSheetChecks() {
         static HdrMergePanel.Candidate C(string camera) => new("x.ARW", camera, 3200, 20, 2.8f);

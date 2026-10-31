@@ -19,7 +19,12 @@ sealed class StackSuggestion : Border {
 
     readonly TextBlock _text = new() { FontSize = Faces.Label, Foreground = Palette.Dim, VerticalAlignment = VerticalAlignment.Center };
     // Each dismissed group's first path. Static: a stack the sheet just made dismisses its frames too (DismissFrames).
+    // Cleared when a folder loads, subscribed once with the set, not per bar.
     static readonly HashSet<string> _dismissed = new();
+    static StackSuggestion() => EngineModel.Shared.FolderLoaded += _dismissed.Clear;
+
+    /// What Pick is asked against: the selftest reads it.
+    internal static IReadOnlySet<string> Dismissed => _dismissed;
     IReadOnlyList<StackGroup> _groups = [];
     StackGroup? _shown;
 
@@ -54,7 +59,6 @@ sealed class StackSuggestion : Border {
         IsVisible = false;
 
         var engine = EngineModel.Shared;
-        engine.FolderLoaded += _dismissed.Clear;
         engine.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(EngineModel.Photos)) Scan(); };
         Scan();   // a folder opened before the strip was built
     }

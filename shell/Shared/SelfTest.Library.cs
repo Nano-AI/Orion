@@ -24,6 +24,7 @@ static partial class SelfTest {
         StackGroupChecks();
         var engine = EngineModel.Shared;
         if (engine.Handle == 0) return;   // Run already failed for want of a photo
+        StackDismissal(engine);
         string dir = Directory.CreateTempSubdirectory("orion-library-").FullName;
         try {
             string photo = Path.Combine(dir, "photo" + Path.GetExtension(engine.Photos[engine.Current]));
