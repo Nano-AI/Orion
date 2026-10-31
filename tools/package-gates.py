@@ -46,6 +46,7 @@ RULES = [
      ["HarfBuzzSharp-MIT.txt", "libHarfBuzzSharp-THIRD-PARTY-NOTICES.txt"], "HarfBuzzSharp"),
     (["NeoSmart.Unicode.dll"], ["Unicode.net-MIT.txt"], "Unicode.net"),
     (["Iciclecreek.Avalonia.Terminal.dll"], [], "Iciclecreek"),
+    (["Velopack.dll"], [], "Velopack"),
     (["XTerm.NET.dll"], [], "XTerm.NET"),
     (["Porta.Pty.dll", "libporta_pty.so"], [], "Porta.Pty"),
     (["Wcwidth.dll"], [], "Wcwidth"),

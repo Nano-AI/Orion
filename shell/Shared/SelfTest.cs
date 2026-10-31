@@ -72,6 +72,7 @@ static partial class SelfTest {
               $"Icons draws all {symbols.Count} SF Symbols the app names" + (missing.Count > 0 ? $"; missing {string.Join(", ", missing)}" : ""));
 
         CommandChecks();
+        UpdateChecks();
         PhotoListNavigation();
 
         // The field table came from orion.h.

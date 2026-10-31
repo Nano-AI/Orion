@@ -104,8 +104,9 @@
       for (const release of releases) {
         if (release.draft) continue;
         for (const system of Object.keys(FILES)) {
+          // and an installer before a zip: Velopack's Orion-win-Setup.exe before its Portable.zip (#389)
           const asset = found[system] ? null : release.assets.filter(a => FILES[system](a.name))
-            .sort((a, b) => ARM.test(a.name) - ARM.test(b.name))[0];
+            .sort((a, b) => ARM.test(a.name) - ARM.test(b.name) || /\.zip$/i.test(a.name) - /\.zip$/i.test(b.name))[0];
           if (asset) found[system] = { release, asset };
         }
       }

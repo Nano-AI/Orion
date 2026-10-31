@@ -1,7 +1,8 @@
 #!/bin/bash
 #
 # Packages Orion (the Avalonia app in shell/) as a Mac app a stranger can run:
-# Orion.app and Orion-<label>.dmg, ad-hoc signed, not notarized.
+# Orion.app and Orion-<label>.dmg, ad-hoc signed, not notarized, and the
+# Velopack release an installed Orion updates from (releases/, #389).
 #
 # Until decision #380 this file packaged the SwiftUI app, and this script was
 # tools/package-avalonia.sh beside it. The Swift script solved most of these
@@ -36,7 +37,9 @@
 #         wrong binary.
 # Needs:  cmake + Xcode's Metal toolchain, Homebrew libraw and opencv, dotnet 10
 #         (DOTNET_ROOT defaults to Homebrew's), node and npm, and a sample RAW
-#         for the check-agent run (ORION_SAMPLES, see tools/check-agent.py).
+#         for the check-agent run (ORION_SAMPLES, see tools/check-agent.py),
+#         and vpk (`dotnet tool install -g vpk`, the version build.yml pins;
+#         or $VPK). The label must be SemVer once its v is dropped.
 
 set -euo pipefail
 
@@ -219,10 +222,11 @@ copy_license "Unicode.net-MIT.txt" "$NUGET/unicode.net/$(locked Unicode.net)/LIC
 copy_license "SkiaSharp.HarfBuzz-MIT.txt" "$NUGET/skiasharp.harfbuzz/$(locked SkiaSharp.HarfBuzz)/LICENSE.txt"
 # dotnet/runtime's own notices. Homebrew's source-built SDK unpacks the runtime
 # pack without them; the ILCompiler package beside it is built from the same
-# repository and carries the file.
+# repository and carries the file. Microsoft's SDK (CI's, #389) has it at its root,
+# where tools/package-gates.py reads it.
 ILC="$(ls "$DOTNET_ROOT"/library-packs/Microsoft.DotNet.ILCompiler.*.nupkg 2>/dev/null | tail -1 || true)"
-[[ -f "$ILC" ]] || { echo "error: no Microsoft.DotNet.ILCompiler package under $DOTNET_ROOT for the runtime's notices" >&2; exit 1; }
-unzip -p "$ILC" THIRD-PARTY-NOTICES.TXT > "$RES/licenses/dotnet-runtime-THIRD-PARTY-NOTICES.txt"
+if [[ -f "$ILC" ]]; then unzip -p "$ILC" THIRD-PARTY-NOTICES.TXT > "$RES/licenses/dotnet-runtime-THIRD-PARTY-NOTICES.txt"
+else ILC="$DOTNET_ROOT/ThirdPartyNotices.txt"; cp "$ILC" "$RES/licenses/dotnet-runtime-THIRD-PARTY-NOTICES.txt" 2>/dev/null || true; fi
 [[ -s "$RES/licenses/dotnet-runtime-THIRD-PARTY-NOTICES.txt" ]] || { echo "error: $ILC has no THIRD-PARTY-NOTICES.TXT" >&2; exit 1; }
 copy_license "OFL-1.1.txt" "$SRC/Assets/Fonts/OFL.txt"   # Barlow, and Inter inside Avalonia.Fonts.Inter
 # orion-mcp is Node, and carries the MCP SDK's npm tree inside its bundle.
@@ -331,7 +335,7 @@ licence_of() {
         SkiaSharp.HarfBuzz.dll)     echo SkiaSharp.HarfBuzz-MIT.txt ;;
         SkiaSharp.dll|libSkiaSharp.dylib) echo SkiaSharp-MIT.txt libSkiaSharp-THIRD-PARTY-NOTICES.txt ;;
         HarfBuzzSharp.dll|libHarfBuzzSharp.dylib) echo HarfBuzzSharp-MIT.txt libHarfBuzzSharp-THIRD-PARTY-NOTICES.txt ;;
-        Iciclecreek.Avalonia.Terminal.dll|XTerm.NET.dll|Porta.Pty.dll|libporta_pty.dylib|Wcwidth.dll)
+        Iciclecreek.Avalonia.Terminal.dll|XTerm.NET.dll|Porta.Pty.dll|libporta_pty.dylib|Wcwidth.dll|Velopack.dll)
                                     echo NOTICE.txt ;;
         NeoSmart.Unicode.dll)       echo Unicode.net-MIT.txt ;;
         orion-mcp)                  echo node-MIT-and-bundled.txt orion-mcp-npm-packages.txt ;;
@@ -415,16 +419,45 @@ strip -S "$SHIM"
 # For a non-Mach-O file that signature lives in extended attributes, which
 # cp -R, hdiutil and Finder all carry. Avalonia's macOS deployment guide signs
 # the same way.
-MACHOS=()
-while IFS= read -r f; do
-    if file -b "$f" | grep -q Mach-O; then MACHOS+=("$f"); fi
-done < <(find "$MACOS" "$FW" -type f)
+find_machos() {
+    MACHOS=()
+    while IFS= read -r f; do
+        if file -b "$f" | grep -q Mach-O; then MACHOS+=("$f"); fi
+    done < <(find "$MACOS" "$FW" -type f)
+}
+find_machos
 while IFS= read -r f; do
     err="$(codesign --force --sign - "$f" 2>&1)" || { echo "error: $err" >&2; exit 1; }
 done < <(find "$MACOS" "$FW" -type f ! -path "$MACOS/Orion")
 codesign --force --sign - "$APP"
 codesign --verify --deep --strict "$APP"
 echo "  signed    ad-hoc, ${#MACHOS[@]} Mach-O files"
+
+# ── Velopack: the update feed, and the app that can update itself ──────────
+#
+# vpk adds UpdateMac and sq.version to a copy of the bundle, signs it again
+# and writes the release into $OUT/releases (#389): Orion-<v>-osx-full.nupkg
+# and releases.osx.json are what an installed Orion reads from GitHub Releases.
+# The app the disk image carries is that copy, unzipped over $APP, so every
+# check below runs on the bundle that ships and a dragged-in Orion updates.
+#
+# ⚠ **`--signAppIdentity -` is ad-hoc**, the same signature as above: without
+# an identity vpk signs nothing and leaves the bundle's seal broken by its own
+# two files. `--signDisableDeep` keeps the per-file signatures made above; a
+# Developer ID later goes here, with --notaryProfile (decision #389). The
+# apphost gets the hardened runtime and vpk's default .NET entitlements (JIT,
+# no library validation). `--noInst`: no .pkg; the disk image is the first install.
+# ⚠ The .nupkg an update installs drops xattrs, so the managed .dlls' signatures
+# above (see Sign) are lost and an updated bundle fails `codesign --verify`. It
+# runs, unquarantined; a notarized build must fix it first (#389).
+VPK_VERSION="${LABEL#v}"   # the tag without its v: v0.5.0-alpha.6 is 0.5.0-alpha.6, SemVer as vpk needs
+"${VPK:-vpk}" pack --packId "$NAME" --packVersion "$VPK_VERSION" --packDir "$APP" --mainExe Orion \
+    --signAppIdentity - --signDisableDeep --noInst --outputDir "$OUT/releases" >/dev/null
+rm -rf "$APP"
+ditto -x -k "$OUT/releases/$NAME-osx-Portable.zip" "$OUT"   # ditto: the .dlls' signatures live in xattrs
+codesign --verify --deep --strict "$APP"
+find_machos   # again: vpk adds UpdateMac and leaves out createdump
+echo "  velopack  $VPK_VERSION, $(ls "$OUT/releases" | wc -l | tr -d ' ') files in releases/"
 
 # ── Verify it is self-contained ─────────────────────────────────────────────
 #
@@ -451,17 +484,20 @@ echo "  verified  no paths outside the bundle, and none searched"
 # carried its author's /Users/<name>/Downloads/Logs, which a check for this
 # machine's user name passes without a word.
 #
-# ⚠ Two names excused, each in one file. libAvaloniaNative.dylib, prebuilt on
-# NuGet, carries /Users/runner/, the GitHub Actions macOS build account that
-# compiled it; orion-mcp carries /Users/admin/ some three thousand times,
-# nodejs.org's release machine's paths, in every official macOS Node. Both name
-# a build account, not a person. The builder's home and git email are still
-# searched in both like anywhere else.
+# ⚠ Two names excused. /Users/runner/ anywhere: GitHub's and Azure's macOS
+# build account (tools/package-gates.py's BUILD_ACCOUNTS), in prebuilt
+# libAvaloniaNative.dylib, Velopack's UpdateMac and, in CI's Microsoft SDK, the
+# .NET runtime (#389). /Users/admin/ in orion-mcp only, some three thousand
+# times: nodejs.org's release machine's paths, in every official macOS Node.
+# Both name a build account, not a person. The builder's home and git email are
+# still searched everywhere, except on CI (#389), where the home is that build
+# account, as tools/package-gates.py has it.
 literal=( -e "$HOME/" )
+if [[ -n "${CI:-}" ]]; then literal=( -e "/nonexistent-home/" ); fi
 email="$(git -C "$ROOT" config user.email 2>/dev/null || true)"
 if [[ -n "$email" ]]; then literal+=( -e "$email" ); fi
 leaks="$( { grep -raoE '/Users/[^/[:space:]]+/' "$APP" | sort -u \
-                | grep -vxF -e "$MACOS/libAvaloniaNative.dylib:/Users/runner/" -e "$MCP:/Users/admin/" | cut -d: -f1
+                | grep -v ':/Users/runner/$' | grep -vxF -e "$MCP:/Users/admin/" | cut -d: -f1
             grep -rlaF "${literal[@]}" "$APP"; } | sort -u || true)"
 if [[ -n "$leaks" ]]; then
     echo "error: the bundle names a person, in:" >&2
@@ -476,9 +512,15 @@ echo "  verified  no home directory, user name or git email inside"
 # unset: a real render, a real approve, and the sibling lookup that makes a
 # downloaded app need no configuration. The `.ts` passing in the checkout says
 # nothing about what was bundled.
-"$ROOT/tools/check-agent.py" --server "$MCP" >/dev/null \
-    || { echo "error: check-agent --server failed on the packaged orion-mcp" >&2; exit 1; }
-echo "  verified  check-agent green against the packaged orion-mcp"
+# ⚠ A stated skip on CI only, which has no sample RAW (#389); anywhere else a
+# missing sample still fails the build.
+if [[ -n "${CI:-}" && -z "${ORION_SAMPLES:-}" ]]; then
+    echo "  skipped   check-agent: no sample RAW on CI (stated skip, #389)"
+else
+    "$ROOT/tools/check-agent.py" --server "$MCP" >/dev/null \
+        || { echo "error: check-agent --server failed on the packaged orion-mcp" >&2; exit 1; }
+    echo "  verified  check-agent green against the packaged orion-mcp"
+fi
 
 # ── The disk image ──────────────────────────────────────────────────────────
 STAGE="$(mktemp -d)"

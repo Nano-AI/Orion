@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# Linux: Orion-<version>-linux-x86_64.AppImage from a built tree (decision #376).
+# Linux: Velopack's Orion AppImage, with the update feed beside it, in
+# OUT_DIR/releases from a built tree (decisions #376, #389).
 # The shell self-contained, the shim and every library it loads that is not part
 # of the base system, the shaders, lensfun, and the licence notices.
 #
 #   tools/package-linux.sh SHELL_DIR BUILD_DIR OUT_DIR
 #
-# Needs: dotnet, and appimagetool on PATH (or $APPIMAGETOOL). Run on the oldest
+# Needs: dotnet, mksquashfs (squashfs-tools), and vpk on PATH (or $VPK). Run on the oldest
 # system the AppImage should start on: it carries no glibc of its own.
 set -euo pipefail
 shell=$1 build=$(cd "$2" && pwd) out=$3   # build absolute: ldd answers absolute paths
 root=$(cd "$(dirname "$0")/.." && pwd)
 version=$(git -C "$root" describe --tags --always)
-app=$out/AppDir
+app=$out/Orion.AppDir
 rm -rf "$app"; mkdir -p "$app/usr/bin" "$app/usr/lib" "$app/usr/share/doc/orion/licenses"
 
 dotnet publish "$shell" -c Release -r linux-x64 --self-contained -o "$app/usr/bin"
@@ -56,5 +57,10 @@ cp "$root/brand/orion_logo_system_luminous.svg" "$app/orion.svg"
 # Every licence text collected and every file mapped to one, no GPL, nobody named.
 python3 "$root/tools/package-gates.py" linux "$app" "$app/usr/share/doc/orion/licenses" "$build" "$shell"
 
-ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "${APPIMAGETOOL:-appimagetool}" "$app" "$out/Orion-$version-linux-x86_64.AppImage"
-echo "$out/Orion-$version-linux-x86_64.AppImage"
+# Velopack (#389), in place of appimagetool: the AppImage, which updates itself,
+# and the feed beside it in OUT_DIR/releases. vpk takes this AppDir as it is (its
+# name must end in .AppDir) and adds UpdateNix and sq.version to usr/bin. The
+# version is the tag without its v, SemVer as vpk needs.
+"${VPK:-vpk}" pack --packId Orion --packVersion "${version#v}" --packDir "$app" --mainExe Orion \
+    --packTitle Orion --outputDir "$out/releases"
+ls "$out/releases"

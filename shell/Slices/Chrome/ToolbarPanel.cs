@@ -69,6 +69,8 @@ public sealed class ToolbarPanel : Grid {
         open.Flyout = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedLeft, Items = {
             Item("Open photo…", () => Commands.Run("open-photo")),
             Item("Open folder…", () => Commands.Run("open-folder")),
+            new Separator(),
+            Item("Check for updates", () => Commands.Run("check-for-updates")),
         } };
         return open;
     }

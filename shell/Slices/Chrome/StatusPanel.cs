@@ -21,7 +21,7 @@ public sealed class StatusPanel : Border {
         BorderBrush = Palette.Line;
         BorderThickness = new Thickness(0, 1, 0, 0);
         Padding = new Thickness(Space.Pad, Space.Sm);
-        Child = new StackPanel { Spacing = Space.Sm, Children = { new ProposalFooter(), _message, Keys() } };
+        Child = new StackPanel { Spacing = Space.Sm, Children = { new ProposalFooter(), _message, new UpdateNotice(), Keys() } };
     }
 
     // Listening only while on screen: a footer that has left its window (a closed
@@ -31,12 +31,14 @@ public sealed class StatusPanel : Border {
         base.OnAttachedToVisualTree(e);
         EngineModel.Shared.PropertyChanged += OnEngineChanged;   // Timing, Tool, Current: every render and open
         Autosave.Shared.Changed += Refresh;                      // a write failed, or landed after failing
+        Updates.Changed += Refresh;                              // an update downloaded: the footer shows even with no photo
         Refresh();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e) {
         EngineModel.Shared.PropertyChanged -= OnEngineChanged;
         Autosave.Shared.Changed -= Refresh;
+        Updates.Changed -= Refresh;
         base.OnDetachedFromVisualTree(e);
     }
 
@@ -59,7 +61,7 @@ public sealed class StatusPanel : Border {
         _message.Text = warning ?? Hint(engine);
         _message.Foreground = warning != null ? Palette.Warn : Palette.Dim;
         _message.IsVisible = _message.Text.Length > 0;
-        IsVisible = engine.Photos.Count > 0 || warning != null;
+        IsVisible = engine.Photos.Count > 0 || warning != null || Updates.Ready != null;
     }
 
     /// The armed tool wins: it is the one state where a click on the photo
