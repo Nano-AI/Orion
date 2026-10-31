@@ -818,7 +818,8 @@ OrionStatus orion_engine_hdr_merge_cancel(OrionEngine* engine);
  *            camera and kind (mosaic raw or linear DNG) as the frames, else a
  *            refusal. The master dark is their per-sample median, subtracted;
  *            the master flat is the flats' median minus the master dark,
- *            normalized to mean 1 per CFA channel, divided. A raw is
+ *            normalized to mean 1 per CFA channel (per RGB channel
+ *            for a linear DNG), divided; a clipped sample stays clipped. A raw is
  *            calibrated on its mosaic, before demosaic (research/stacking.md §7).
  * sky_matte: landscape only, matte_width*matte_height floats 0..1, 1 = sky,
  *            UPRIGHT (as displayed); the engine undoes the reference's EXIF

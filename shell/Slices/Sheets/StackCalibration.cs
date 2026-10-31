@@ -25,21 +25,26 @@ sealed class StackCalibration : Rows {
         Show();
     }
 
-    /// A pick replaces that list; cancelling the picker keeps it.
+    /// A pick replaces that list; cancelling the picker keeps it. async void, so nothing may escape it.
     async void Pick(string title, List<string> into) {
-        if (TopLevel.GetTopLevel(this)?.StorageProvider is not { CanOpen: true } storage) {
-            EngineModel.Shared.Say("no file dialog in this window");
-            return;
+        try {
+            if (TopLevel.GetTopLevel(this)?.StorageProvider is not { CanOpen: true } storage) {
+                EngineModel.Shared.Say("no file dialog in this window");
+                return;
+            }
+            var chosen = await storage.OpenFilePickerAsync(new FilePickerOpenOptions {
+                Title = title, AllowMultiple = true,
+                FileTypeFilter = [new FilePickerFileType("Raw photos") { Patterns = Program.RawExtensions.Select(e => "*." + e).ToArray() }],
+            });
+            var paths = chosen.Select(f => f.TryGetLocalPath()).OfType<string>().ToList();
+            if (paths.Count == 0) return;
+            into.Clear();
+            into.AddRange(paths);
+            Show();
+        } catch (Exception e) {
+            Console.Error.WriteLine($"orion stack: {title} picker failed: {e}");
+            EngineModel.Shared.Say($"Could not choose {title.ToLowerInvariant()}: {e.Message}");
         }
-        var chosen = await storage.OpenFilePickerAsync(new FilePickerOpenOptions {
-            Title = title, AllowMultiple = true,
-            FileTypeFilter = [new FilePickerFileType("Raw photos") { Patterns = Program.RawExtensions.Select(e => "*." + e).ToArray() }],
-        });
-        var paths = chosen.Select(f => f.TryGetLocalPath()).OfType<string>().ToList();
-        if (paths.Count == 0) return;
-        into.Clear();
-        into.AddRange(paths);
-        Show();
     }
 
     void Show() {

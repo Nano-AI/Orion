@@ -28,6 +28,7 @@
 #include <array>
 #include <cstdio>
 #include <filesystem>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 #include <variant>
@@ -59,12 +60,13 @@ struct Masters {
     int bayer = -1;   // -1: none built; else whether they are mosaics
     std::uint32_t width = 0, height = 0;
 
+    /// A mosaic's clipped samples are kept by storeMosaic; a linear DNG's clip is 1.
     void apply(std::vector<float>& samples, bool isBayer, std::uint32_t w, std::uint32_t h) const {
         if (bayer < 0) return;
         if (bayer != int(isBayer))
             throw std::runtime_error("the dark and flat frames are not the same kind of raw as the lights");
         if (w != width || h != height) throw std::runtime_error("the dark and flat frames do not match the lights' size");
-        calibrate(samples.data(), samples.size(), dark, gain);
+        calibrate(samples.data(), samples.size(), dark, gain, isBayer ? std::numeric_limits<float>::infinity() : 1.0f);
     }
 };
 

@@ -24,20 +24,30 @@ std::vector<float> medianOf(const std::vector<std::vector<float>>& frames) {
 std::vector<float> flatGain(const std::vector<float>& flat, const std::vector<float>& dark,
                             const std::vector<std::uint8_t>& channel) {
     std::vector<float> gain(flat.size());
-    std::array<double, 4> sum{}, count{};
+    // Two passes: the channel's mean over samples with signal, then again without those under kNoSignal of it,
+    // so the gains that are kept have mean 1 exactly.
+    std::array<double, 4> sum{}, count{}, floor{};
     for (std::size_t i = 0; i < flat.size(); ++i) {
         gain[i] = flat[i] - (dark.empty() ? 0.0f : dark[i]);
         if (gain[i] > 0.0f) { sum[channel[i]] += gain[i]; count[channel[i]] += 1; }
     }
+    for (std::size_t c = 0; c < 4; ++c) {
+        floor[c] = count[c] > 0 ? kNoSignal * sum[c] / count[c] : 0.0;
+        sum[c] = count[c] = 0;
+    }
+    for (std::size_t i = 0; i < gain.size(); ++i)
+        if (gain[i] > 0.0f && gain[i] >= floor[channel[i]]) { sum[channel[i]] += gain[i]; count[channel[i]] += 1; }
     for (std::size_t i = 0; i < gain.size(); ++i) {
         const auto c = channel[i];
-        gain[i] = gain[i] > 0.0f ? float(gain[i] * count[c] / sum[c]) : 1.0f;
+        gain[i] = gain[i] > 0.0f && gain[i] >= floor[c] ? float(gain[i] * count[c] / sum[c]) : 1.0f;
     }
     return gain;
 }
 
-void calibrate(float* samples, std::size_t n, const std::vector<float>& dark, const std::vector<float>& gain) {
+void calibrate(float* samples, std::size_t n, const std::vector<float>& dark, const std::vector<float>& gain,
+               float clip) {
     for (std::size_t i = 0; i < n; ++i) {
+        if (samples[i] >= clip) continue;
         if (!dark.empty()) samples[i] -= dark[i];
         if (!gain.empty()) samples[i] /= gain[i];
     }
@@ -61,8 +71,9 @@ std::vector<float> mosaicOf(const raw::BayerImage& image) {
 void storeMosaic(raw::BayerImage& image, const std::vector<float>& mosaic) {
     const auto ch = channelsOf(image);
     for (std::size_t i = 0; i < mosaic.size(); ++i) {
+        if (image.samples[i] >= image.white) continue;   // clipped: no value to calibrate, and it must stay clipped
         const float b = image.black[ch[i]];
-        image.samples[i] = std::uint16_t(std::clamp(std::lround(mosaic[i] + b), long(b), std::max(long(b), long(image.white))));
+        image.samples[i] = std::uint16_t(std::lround(std::clamp(mosaic[i] + b, b, std::max(b, float(image.white)))));
     }
 }
 

@@ -90,17 +90,20 @@ void testStackFlatGain() {
             }
     constexpr std::size_t kDead = (30 * W + 40) * 3 + 1;   // a dead sample in the flat: no signal over the dark
     flat[kDead] = kDark;
+    constexpr std::size_t kWeak = (10 * W + 10) * 3;   // barely over the dark: a dust core, not a gain to divide by
+    flat[kWeak] = kDark + 0.001f;
 
     const auto gain = flatGain(flat, dark, channel);
     CHECK(gain.size() == flat.size());
     if (gain.size() != flat.size()) return;
     report(gain[kDead] == 1.0f, "a sample with no signal gets gain 1");
+    report(gain[kWeak] == 1.0f, "a sample barely over the dark gets gain 1, not a tiny divisor");
     calibrate(light.data(), light.size(), dark, gain);
     for (int c = 0; c < 3; ++c) {
         double sum = 0, n = 0;
         float lo = 1e9f, hi = -1e9f;
         for (std::size_t i = std::size_t(c); i < gain.size(); i += 3) {
-            if (i == kDead) continue;
+            if (i == kDead || i == kWeak) continue;
             sum += gain[i]; n += 1;
             lo = std::min(lo, light[i]);
             hi = std::max(hi, light[i]);
@@ -110,6 +113,11 @@ void testStackFlatGain() {
         CHECK(std::abs(sum / n - 1.0) < 1e-4);
         CHECK((hi - lo) / lo < 0.01f);
     }
+
+    // A clipped sample stays clipped through the dark and a flat that would pull it down (gain > 1 here).
+    std::vector<float> clipped = {1.0f, 0.5f};
+    calibrate(clipped.data(), 2, {0.05f, 0.05f}, {1.2f, 1.2f}, 1.0f);
+    report(clipped[0] == 1.0f && std::abs(clipped[1] - 0.375f) < 1e-6f, "a clipped linear sample stays at the clip");
 }
 
 void testStackBayerRoundTrip() {
@@ -147,8 +155,12 @@ void testStackBayerRoundTrip() {
     edge[0] = -100.0f;   // R: below black
     edge[1] = 1e6f;      // G: over white
     edge[2] = 3.6f;      // R: rounds
+    back.samples[0] = back.samples[1] = back.samples[2] = 1000;   // unclipped, whatever the seed drew
+    back.samples[3] = img.white;   // G: clipped in the light
+    edge[3] = 9000.0f;             // what a dark and a flat made of it
     orion::stack::storeMosaic(back, edge);
     CHECK(back.samples[0] == 512 && back.samples[1] == 15000 && back.samples[2] == 516);
+    report(back.samples[3] == img.white, "a clipped mosaic sample stays at white");
 }
 
 void testStackFacadeCalibrated() {
