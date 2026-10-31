@@ -178,6 +178,7 @@ public sealed class FilmstripPanel : Grid {
     internal static List<Control> Menu(LibraryModel.Photo photo) {
         var items = LibraryUi.CullItems(photo);
         var scope = LibraryModel.Shared.CullScope(photo);
+        items.AddRange([new Separator(), LibraryUi.CompareItem(photo)]);
         if (scope.Count > 1)
             items.AddRange([new Separator(), LibraryUi.Item("Merge to HDR…" + LibraryUi.Suffix(scope), () => Commands.Run("hdr-merge")),
                             new Separator(), LibraryUi.Item("Export…" + LibraryUi.Suffix(scope), () => Commands.Run("export"))]);

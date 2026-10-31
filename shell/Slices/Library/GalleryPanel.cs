@@ -156,7 +156,7 @@ public sealed class GalleryPanel : DockPanel {
     /// Over the selection when the photo is part of one, counted (GalleryView.menu).
     static List<Control> Menu(LibraryModel.Photo photo) {
         var scope = LibraryModel.Shared.CullScope(photo);
-        var items = new List<Control> { LibraryUi.Item("Open in Develop", () => GalleryMode.Open(photo)), new Separator() };
+        var items = new List<Control> { LibraryUi.Item("Open in Develop", () => GalleryMode.Open(photo)), LibraryUi.CompareItem(photo), new Separator() };
         items.AddRange(LibraryUi.CullItems(photo));
         if (scope.Count > 1) items.AddRange([new Separator(), LibraryUi.Item("Export…" + LibraryUi.Suffix(scope), () => Commands.Run("export"))]);
         items.Add(new Separator());

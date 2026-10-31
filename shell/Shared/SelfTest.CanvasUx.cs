@@ -124,6 +124,9 @@ static partial class SelfTest {
         window.MouseWheel(At(window, canvas, p), new Vector(0, 1), RawInputModifiers.None);
         Check(vp.Zoom > z, "a mouse wheel's whole notch zooms (Swift: a scroll without precise deltas)");
         z = vp.Zoom;
+        window.MouseWheel(At(window, canvas, p), new Vector(0, 0.125), RawInputModifiers.None);
+        Check(vp.Zoom > z, "a high-resolution wheel's eighth of a notch zooms too (libinput's v120 on Linux), not pans");
+        z = vp.Zoom;
         var c = vp.Center;
         window.MouseWheel(At(window, canvas, p), new Vector(0.4, 0.3), RawInputModifiers.None);
         Check(vp.Zoom == z && vp.Center.X < c.X && vp.Center.Y < c.Y, "a trackpad's two-finger scroll pans and does not zoom");

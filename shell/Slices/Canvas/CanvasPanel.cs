@@ -269,12 +269,7 @@ public sealed class CanvasPanel : Panel {
     /// the pointer; a trackpad's two fingers pan, the content under them 1:1.
     void Wheel(object? sender, PointerWheelEventArgs e) {
         var d = e.Delta;
-        // Avalonia's AppKit view hands over NSEvent.scrollingDelta ÷ 50 from a trackpad
-        // and ÷ 5 from a wheel (libAvaloniaNative, AvnView mouseEvent); undone, Swift's
-        // 0.01 a point applies as it is. Elsewhere a notch is 1.0, read as 10 points,
-        // and a fraction or a sideways delta means a precision touchpad.
-        bool precise = CanvasNative.PreciseScroll() ?? (d.X != 0 || d.Y != Math.Round(d.Y));
-        double points = precise ? 50 : OperatingSystem.IsMacOS() ? 5 : 10;
+        var (precise, points) = Scroll.Read(e);   // a wheel zooms, a touchpad pans
         var vp = Hold();
         if (!precise || e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control))
             vp.ZoomBy(Math.Exp(0.01 * d.Y * points), Anchor(e.GetPosition(this)));

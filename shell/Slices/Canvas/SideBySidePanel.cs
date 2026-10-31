@@ -171,8 +171,7 @@ sealed class ComparePane : Grid {
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e) {
         base.OnPointerWheelChanged(e);
         var d = e.Delta;
-        bool precise = CanvasNative.PreciseScroll() ?? (d.X != 0 || d.Y != Math.Round(d.Y));
-        double points = precise ? 50 : OperatingSystem.IsMacOS() ? 5 : 10;
+        var (precise, points) = Scroll.Read(e);   // as the canvas reads it
         var vp = Hold(e.KeyModifiers);
         if (!precise || e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control))
             vp.ZoomBy(Math.Exp(0.01 * d.Y * points), Anchor(e.GetPosition(this)));

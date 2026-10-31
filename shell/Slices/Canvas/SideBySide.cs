@@ -82,9 +82,11 @@ static class SideBySide {
 
     /// The pair to compare: the two selected (the photo open or focused on the
     /// left when it is one of them), or with no selection the photo and the next.
-    public static (int Select, int Candidate)? Pair() {
+    public static (int Select, int Candidate)? Pair(LibraryModel.Photo? candidate = null) {
         var lib = LibraryModel.Shared;
         var first = GalleryMode.On ? GalleryMode.Focus : lib.Open;
+        // A photo named by the strip's or the gallery's menu, beside the one open: that pair, selection or not.
+        if (first != null && candidate != null && candidate != first) return (first.Index, candidate.Index);
         var pool = lib.HasExplicitSelection ? lib.Targets : lib.Visible.ToList();
         if (first == null || !pool.Contains(first)) first = pool.FirstOrDefault();
         if (first == null || pool.Count < 2) return null;
@@ -94,9 +96,10 @@ static class SideBySide {
     }
 
     /// `wait`: decode the candidate here rather than on a worker (a posed screenshot).
-    public static void Enter(bool wait = false) {
+    /// `with`: the candidate a menu named, else the pair C takes (Pair).
+    public static void Enter(bool wait = false, LibraryModel.Photo? with = null) {
         if (On) return;
-        if (Pair() is not var (select, candidate)) { E.Say("Compare needs two photos in view: clear the filter, or select two."); return; }
+        if (Pair(with) is not var (select, candidate)) { E.Say("Compare needs two photos in view: clear the filter, or select two."); return; }
         if (GalleryMode.On) GalleryMode.Leave();
         if (E.Current != select && !E.Open(select)) return;
         On = true;
