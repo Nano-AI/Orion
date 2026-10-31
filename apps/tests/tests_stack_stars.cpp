@@ -130,3 +130,81 @@ void testStarAlignRefuses() {
            "an unrelated field refuses, with identity",
            "inliers " + std::to_string(unrelated.inliers));
 }
+
+namespace {
+
+/// The sky's turn over `seconds` as a tripod camera sees it: a pure rotation about the celestial pole,
+/// which images as H = K·R·K⁻¹ ([HZ04] §8.4.2). A W x H frame, focal length fPx in pixels, principal
+/// point at the centre; the camera looks at azimuth azDeg (from north, toward east), altitude altDeg,
+/// from latitude latDeg. Reference pixel -> frame pixel, as starField draws.
+persp::Matrix3 skyTurn(double W, double H, double fPx, double seconds, double latDeg, double altDeg, double azDeg) {
+    const double rad = 3.14159265358979 / 180.0;
+    const double alt = altDeg * rad, az = azDeg * rad, lat = latDeg * rad;
+    // World: x east, y north, z up. Camera rows: right, down, forward.
+    const double fwd[3] = {std::sin(az) * std::cos(alt), std::cos(az) * std::cos(alt), std::sin(alt)};
+    const double rn = std::hypot(fwd[0], fwd[1]);
+    const double right[3] = {fwd[1] / rn, -fwd[0] / rn, 0.0};   // fwd x up
+    const double down[3] = {fwd[1] * right[2] - fwd[2] * right[1], fwd[2] * right[0] - fwd[0] * right[2],
+                            fwd[0] * right[1] - fwd[1] * right[0]};   // fwd x right
+    const double* C[3] = {right, down, fwd};
+    // Rodrigues about the pole, at the sidereal rate of 15.041"/s.
+    const double a[3] = {0.0, std::cos(lat), std::sin(lat)};
+    const double t = seconds * 15.041 / 3600.0 * rad, c = std::cos(t), s = std::sin(t);
+    double Rw[3][3];
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j) {
+            const double cross = i == j ? 0.0 : ((i + 1) % 3 == j ? -a[3 - i - j] : a[3 - i - j]);
+            Rw[i][j] = (i == j ? c : 0.0) + (1 - c) * a[i] * a[j] + s * cross;
+        }
+    double R[3][3] = {};   // C · Rw · Cᵀ, the turn in camera axes
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j)
+            for (int k = 0; k < 3; ++k)
+                for (int l = 0; l < 3; ++l) R[i][j] += C[i][k] * Rw[k][l] * C[j][l];
+    const double K[3][3] = {{fPx, 0, W / 2}, {0, fPx, H / 2}, {0, 0, 1}};
+    const double Ki[3][3] = {{1 / fPx, 0, -W / 2 / fPx}, {0, 1 / fPx, -H / 2 / fPx}, {0, 0, 1}};
+    double KR[3][3] = {}, Hm[3][3] = {};
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j)
+            for (int k = 0; k < 3; ++k) KR[i][j] += K[i][k] * R[k][j];
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j)
+            for (int k = 0; k < 3; ++k) Hm[i][j] += KR[i][k] * Ki[k][j];
+    persp::Matrix3 m;
+    for (int k = 0; k < 9; ++k) m.m[k] = float(Hm[k / 3][k % 3] / Hm[2][2]);
+    return m;
+}
+
+}  // namespace
+
+void testStarAlignWideField() {
+    section("stack stars: a 14 mm sky turn registers as a homography");
+
+    // Full frame, 6000 x 4000 at 6 um: 14 mm is 2333 px. 200 s of sidereal turn, latitude 45 deg,
+    // looking south at 20 deg altitude. The best similarity misses this by ~15 px median, ~43 px max
+    // (and with the 2 px RANSAC gate refused the frame outright: 0 inliers). Measured with the
+    // homography: median 0.004 px, max 0.016 px.
+    constexpr std::uint32_t W = 6000, H = 4000;
+    const auto truth = skyTurn(W, H, 14.0 / 0.006, 200.0, 45.0, 20.0, 180.0);
+    const auto refStars =
+        detectStars(stackfix::starField(51, 400, W, H, persp::identity(), kNoise, kBackground, 301).rgb.data(), W, H);
+    const auto moved = stackfix::starField(51, 400, W, H, truth, kNoise, kBackground, 302);
+    const auto got = alignStars(detectStars(moved.rgb.data(), W, H), refStars);
+
+    // Every reference star that lands in the frame, through the fit vs through the truth.
+    std::vector<float> err;
+    for (const Star& s : moved.reference) {
+        float tx = s.x, ty = s.y, gx = s.x, gy = s.y;
+        persp::apply(truth, tx, ty);
+        if (tx < 0 || ty < 0 || tx > float(W - 1) || ty > float(H - 1)) continue;
+        persp::apply(got.refToSource, gx, gy);
+        err.push_back(std::hypot(gx - tx, gy - ty));
+    }
+    std::sort(err.begin(), err.end());
+    const float med = err.empty() ? 1e9f : err[err.size() / 2], worst = err.empty() ? 1e9f : err.back();
+    std::printf("    measured median %.4f px, max %.4f px over %zu stars, %d inliers (ok %d)\n",
+                med, worst, err.size(), got.inliers, int(got.ok));
+    report(got.ok, "a 14 mm, 200 s sky turn registers", "inliers " + std::to_string(got.inliers));
+    report(got.ok && med < 0.02f && worst < 0.1f, "median under 0.02 px, max under 0.1 px",
+           std::to_string(med) + " / " + std::to_string(worst) + " px");
+}

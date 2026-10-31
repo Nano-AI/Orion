@@ -12,10 +12,14 @@
  *  C(5,3) = 10 triangles; a triangle's shape is (L2/L1, L1/L0) with sides
  *  L2 >= L1 >= L0, and its vertices are ordered by the side they face, so two
  *  triangles of one shape pair their stars. Every vertex pair of every matched
- *  triangle is a vote; RANSAC [FB81] keeps the votes one similarity explains.
+ *  triangle is a vote; RANSAC [FB81] keeps the votes one homography explains.
+ *  A homography, not a similarity: a tripod camera sees the sky turn as a
+ *  pure 3D rotation, which images as H = K·R·K⁻¹ [HZ04] §8.4.2 — at 14 mm
+ *  over 200 s the best similarity misses by ~15 px median, ~43 px max.
+ *  Lens distortion is the remaining ceiling: no homography models it.
  *
  *  The constants (5 sigma, area 2-400, peak share 0.5, 60 stars, radius 0.1,
- *  2 px, 6 inliers)
+ *  2 px, 8 inliers)
  *  are research/UNSOURCED.md §32's.
  */
 
@@ -23,7 +27,7 @@
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
-// estimateAffinePartial2D: geometry on OpenCV 5, calib3d on 4 (#376).
+// findHomography: geometry on OpenCV 5, calib3d on 4 (#376).
 #if __has_include(<opencv2/geometry.hpp>)
 #include <opencv2/geometry.hpp>
 #else
@@ -42,7 +46,7 @@ namespace {
 constexpr int   kMaxStars    = 60;
 constexpr int   kNeighbours  = 4;
 constexpr float kMatchRadius = 0.1f;
-constexpr int   kMinInliers  = 6;
+constexpr int   kMinInliers  = 8;   // a homography has 8 degrees of freedom: margin over its 4 points
 /// DAOPHOT's sharpness test [S87]: a component whose brightest unsmoothed
 /// pixel carries more than this share of its flux is a hot pixel or a cosmic
 /// ray, not a star. A sigma 1.2 star's peak carries ~0.11, a sigma 0.7 one
@@ -181,8 +185,8 @@ merge::AlignResult alignStars(const std::vector<Star>& frame, const std::vector<
         framePts.emplace_back(frame[std::size_t(f)].x, frame[std::size_t(f)].y);
     }
     cv::Mat inl;
-    const cv::Mat a = cv::estimateAffinePartial2D(refPts, framePts, inl, cv::RANSAC, 2.0);
-    if (a.empty()) return result;
+    const cv::Mat a = cv::findHomography(refPts, framePts, cv::RANSAC, 2.0, inl);
+    if (a.empty() || std::fabs(a.at<double>(2, 2)) < 1e-12) return result;
 
     // Inliers are counted in distinct stars on both sides: a collapsed fit
     // (scale ~0) sends many reference stars to one frame star and must not
@@ -195,7 +199,7 @@ merge::AlignResult alignStars(const std::vector<Star>& frame, const std::vector<
     const int inliers = int(std::min(refUsed.size(), frameUsed.size()));
     if (inliers < kMinInliers) return result;
 
-    for (int k = 0; k < 6; ++k) result.refToSource.m[k] = float(a.at<double>(k / 3, k % 3));
+    for (int k = 0; k < 9; ++k) result.refToSource.m[k] = float(a.at<double>(k / 3, k % 3) / a.at<double>(2, 2));
     result.inliers = inliers;
     result.ok = true;
     return result;
