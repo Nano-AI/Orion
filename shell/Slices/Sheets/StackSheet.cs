@@ -25,6 +25,7 @@ public sealed class StackSheet : Border {
     readonly Rows _split = new();
     readonly Rows _actions = new() { Orientation = Orientation.Horizontal, Spacing = Space.Md, HorizontalAlignment = HorizontalAlignment.Right };
     readonly TextBlock _modeNote = SheetKit.Note("", Palette.Dim);
+    readonly StackCalibration _calibration = new();
     Stack.Mode _mode;
     int _reference, _rejection = -1;
     bool _weight, _stacking;
@@ -100,6 +101,7 @@ public sealed class StackSheet : Border {
             SheetKit.Row("Mode", mode, _modeNote),
             SheetKit.Row("Rejection", rejection),
             weight,
+            SheetKit.Row("Calibration", _calibration),
             SheetKit.Row("Reference frame", new ScrollViewer { MaxHeight = 140, Content = _rows }),
             _split,
         ];
@@ -148,21 +150,24 @@ public sealed class StackSheet : Border {
     async void Run() {
         if (_stacking || !Ready || Ineligibility(_candidates) != null) return;
         _stacking = true;
+        _calibration.IsEnabled = false;
         var paths = _candidates.Select(c => c.Path).ToList();
+        var darks = _calibration.Darks.ToList();
+        var flats = _calibration.Flats.ToList();
         int reference = _reference;
         var mode = _mode;
         string output = Stack.OutputPath(paths[reference]);
         // The matte as painted now, copied: a stroke made while the stack runs cannot reach the engine's reads.
         var painter = mode == Stack.Mode.Landscape ? _painter : null;
         float[]? matte = (float[]?)painter?.Matte.Clone();
-        Console.Error.WriteLine($"orion stack: start ref={reference} mode={mode} -> {output}");
+        Console.Error.WriteLine($"orion stack: start ref={reference} mode={mode} darks={darks.Count} flats={flats.Count} -> {output}");
         Autosave.Shared.Flush();
         var bar = new ProgressBar { Minimum = 0, Maximum = 1, Width = 300, MinHeight = 0, Height = 4, VerticalAlignment = VerticalAlignment.Center };
         _actions.Children.Clear();
         _actions.Children.AddRange([bar, SheetKit.Button("Stop", Stack.Cancel)]);
         using var poll = Avalonia.Threading.DispatcherTimer.Run(() => { bar.Value = Stack.Progress ?? bar.Value; return true; },
                                                                 TimeSpan.FromMilliseconds(150));
-        string? failed = await Stack.Run(paths, reference, mode, _rejection, _weight, [], [], matte,
+        string? failed = await Stack.Run(paths, reference, mode, _rejection, _weight, darks, flats, matte,
                                          painter?.MatteWidth ?? 0, painter?.MatteHeight ?? 0, output);
         _stacking = false;
         Dismiss?.Invoke();

@@ -87,6 +87,9 @@ static partial class SelfTest {
         Check(StackSheet.AutoRejection(2) == "None" && StackSheet.AutoRejection(6) == "Percentile"
               && StackSheet.AutoRejection(7) == "Winsorized" && StackSheet.AutoRejection(21) == "Linear fit",
               "Auto names what the engine picks for the count (Rejection.cpp autoRejection)");
+        Check(StackCalibration.Count(3, 5) == "3 darks · 5 flats" && StackCalibration.Count(1, 0) == "1 dark"
+              && StackCalibration.Count(0, 1) == "1 flat" && StackCalibration.Count(0, 0) == "none",
+              "the calibration line counts darks and flats");
 
         // A disc of radius 2 around (4.5, 4.5) on a 9×9 matte: inside set, outside untouched.
         var m = Enumerable.Repeat(0.5f, 81).ToArray();
