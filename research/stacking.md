@@ -143,7 +143,7 @@ Astro tag: shutter ≥ 5 s and ISO ≥ 800 (and, when checked, a dark thumbnail)
 
 ## Measured (2026-10-30)
 
-Synthetic data unless said; `orion-tests` 1559 checks, 0 failures. These are checks of the implementation against the published methods above, not a claim about real frames: the thresholds in UNSOURCED §32 are untuned on real star, flat and dark frames.
+Synthetic data unless said; `orion-tests` 1567 checks, 0 failures. These are checks of the implementation against the published methods above, not a claim about real frames: the thresholds in UNSOURCED §32 are untuned on real star, flat and dark frames.
 
 | What | Result |
 |---|---|

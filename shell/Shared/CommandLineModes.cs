@@ -73,7 +73,7 @@ static partial class CommandLineModes {
         if (frames.Count < 2) { Console.Error.WriteLine(usage); return 2; }
         // Task.Run for the reason HdrMergeMode gives.
         if (Task.Run(() => Stack.Run(frames, 0, mode, -1, false, [], [], null, 0, 0, output, force)).GetAwaiter().GetResult() is { } why) {
-            Console.Error.WriteLine($"orion: stack failed: {why}" + (Stack.LastStatus == Stack.NotEnoughMemory ? " Pass --force to proceed anyway." : ""));
+            Console.Error.WriteLine($"orion: stack failed: {why}" + (Stack.LastStatus == Stack.NotEnoughMemory ? " (--force does that here.)" : ""));
             return 1;
         }
         using var stacked = Session.Open(output, headless: true);
