@@ -31,9 +31,9 @@ static class Program {
                          .Select(Path.GetFullPath).SelectMany(Expand).ToArray();
 
         // The command-line tools: the MCP server's verbs (`--agent`, #310) and the
-        // two modes tools/check-modes.py runs. Their file arguments are made
+        // three modes tools/check-modes.py runs. Their file arguments are made
         // absolute first, since the working directory moves below.
-        bool tool = args.Contains("--agent") || args.Contains("--batch-export") || args.Contains("--hdr-merge");
+        bool tool = args.Contains("--agent") || args.Contains("--batch-export") || args.Contains("--hdr-merge") || args.Contains("--stack");
         if (tool) {
             string[] values = ["--agent", "--max", "--region", "--rating", "--reject", "--kind", "--groups", "--mode"];
             args = args.Select((a, i) => a.StartsWith("--") || (i > 0 && values.Contains(args[i - 1])) ? a : Path.GetFullPath(a)).ToArray();
@@ -53,7 +53,7 @@ static class Program {
             AppBuilder.Configure<App>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
             return args.Contains("--agent") ? Agent.AgentCli.Execute(args)
-                 : args.Contains("--batch-export") ? CommandLineModes.BatchExport(args) : CommandLineModes.HdrMergeMode(args);
+                 : args.Contains("--batch-export") ? CommandLineModes.BatchExport(args) : args.Contains("--hdr-merge") ? CommandLineModes.HdrMergeMode(args) : CommandLineModes.StackMode(args);
         }
         if (args.Contains("--list")) {
             foreach (var e in Panels.All) Console.WriteLine($"{e.Name}\t{e.Region}\t{e.Type.Name}");

@@ -37,6 +37,7 @@ window.
 | `--agent VERB RAW …` | the MCP server's verbs (`Agent/`): JSON on stdout, exit 2 usage, 1 failure; `tools/check-agent.py` |
 | `--batch-export DIR RAW…` | export each photo with its sidecar's edit; exit 1 if any failed; `tools/check-modes.py` |
 | `--hdr-merge OUT.dng RAW RAW…` | merge, then open and render what it wrote; `tools/check-modes.py` |
+| `--stack OUT.dng [--mode noise\|stars\|landscape] RAW RAW…` | stack (frame 0 is the reference; landscape needs a matte, so is refused here), then open and render what it wrote; `tools/check-modes.py` |
 
 | Path | What |
 |---|---|

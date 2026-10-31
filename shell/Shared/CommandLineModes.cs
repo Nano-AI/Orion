@@ -3,10 +3,10 @@ using OrionShell.Sheets;
 
 namespace OrionShell;
 
-/// `--batch-export` and `--hdr-merge`: the product's batch and merge run from
+/// `--batch-export`, `--hdr-merge` and `--stack`: the product's batch and merge run from
 /// the command line, so the features are run rather than only unit-tested
 /// (the Swift app's BatchExportDriver and HdrMergeDriver, #121). Each asserts
-/// its own outcome in its exit code: tools/check-modes.py runs both.
+/// its own outcome in its exit code: tools/check-modes.py runs all three.
 static partial class CommandLineModes {
     /// `Orion --batch-export <folder> <photo> [photo...]`: each photo with its
     /// sidecar's edit, at the export sheet's defaults and with no watermark (the
@@ -50,6 +50,36 @@ static partial class CommandLineModes {
             return 1;
         }
         Console.Error.WriteLine($"orion: merged {frames.Count} frames into {output}");
+        return 0;
+    }
+
+    /// `Orion --stack <output.dng> [--mode noise|stars|landscape] <frame> <frame> [frame...]`: frame 0 is the
+    /// reference, rejection automatic, no weighting, no calibration. Landscape has no matte here, so the
+    /// engine's refusal is the answer. Like --hdr-merge, the file it wrote must open and render.
+    public static int StackMode(string[] args) {
+        const string usage = "usage: Orion --stack <output.dng> [--mode noise|stars|landscape] <frame> <frame> [frame...]";
+        int i = Array.IndexOf(args, "--stack");
+        if (i < 0 || i + 1 >= args.Length) { Console.Error.WriteLine(usage); return 2; }
+        string output = Path.GetFullPath(args[i + 1]);
+        var rest = args[(i + 2)..].ToList();
+        var mode = Stack.Mode.Noise;
+        if (rest.IndexOf("--mode") is var m and >= 0) {
+            if (m + 1 >= rest.Count || !Enum.TryParse(rest[m + 1], true, out mode) || !Enum.IsDefined(mode)) { Console.Error.WriteLine(usage); return 2; }
+            rest.RemoveRange(m, 2);
+        }
+        var frames = rest.Select(Path.GetFullPath).ToList();
+        if (frames.Count < 2) { Console.Error.WriteLine(usage); return 2; }
+        // Task.Run for the reason HdrMergeMode gives.
+        if (Task.Run(() => Stack.Run(frames, 0, mode, -1, false, [], [], null, 0, 0, output)).GetAwaiter().GetResult() is { } why) {
+            Console.Error.WriteLine($"orion: stack failed: {why}");
+            return 1;
+        }
+        using var stacked = Session.Open(output, headless: true);
+        if (stacked == null || stacked.Render(preview: false) != Graph.Full) {
+            Console.Error.WriteLine($"orion: stacked file does not open: {stacked?.LastError ?? output}");
+            return 1;
+        }
+        Console.Error.WriteLine($"orion: stacked {frames.Count} frames into {output}");
         return 0;
     }
 

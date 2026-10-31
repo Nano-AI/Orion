@@ -19,7 +19,8 @@ public static class StackGroups {
     /// ponytail: a run is judged against its first frame and its first cadence; a slowly drifting interval
     /// (an intervalometer ramp) splits into several groups. Compare to the previous gap if that proves too strict.
     public static List<StackGroup> Find(IReadOnlyList<Shot> shots, Func<string, bool>? dark = null) {
-        var timed = shots.Where(s => s.Captured != null).OrderBy(s => s.Captured).ThenBy(s => s.Path, StringComparer.Ordinal).ToList();
+        // Unknown exposure (shutter or ISO unread) is no evidence of a stack: left out of every group.
+        var timed = shots.Where(s => s.Captured != null && s.Shutter > 0 && s.Iso > 0).OrderBy(s => s.Captured).ThenBy(s => s.Path, StringComparer.Ordinal).ToList();
         var groups = new List<StackGroup>();
         var run = new List<Shot>();
         double c0 = 0;

@@ -1,4 +1,5 @@
 using OrionShell.Library;
+using OrionShell.Sheets;
 
 namespace OrionShell;
 
@@ -33,6 +34,9 @@ static partial class SelfTest {
         var steady = StackGroups.Find(Frames(8, 0.005f, 100, 0, (i, s) => s with { Captured = T0.AddSeconds(i / 3) }));
         Check(steady.Count == 1, "a burst across second boundaries stays one group (timestamps are whole seconds)");
 
+        Check(StackGroups.Find(Frames(8, 0, 100, 5)).Count == 0 && StackGroups.Find(Frames(8, 0.005f, 0, 0)).Count == 0,
+              "frames with an unknown shutter or ISO make no group");
+
         var calls = new List<string>();
         var bright = StackGroups.Find(Frames(14, 20, 3200, 25), p => { calls.Add(p); return false; });
         Check(bright.Count == 1 && !bright[0].Astro && calls.Count == 1 && calls[0] == "f08", $"a bright middle frame is not astro, asked once of the middle ({string.Join(",", calls)})");
@@ -43,6 +47,12 @@ static partial class SelfTest {
 
         var shuffled = StackGroups.Find(Frames(14, 20, 3200, 25).OrderBy(s => s.Path.Last() % 3).ThenByDescending(s => s.Path).ToList());
         Check(shuffled.Count == 1 && shuffled[0].Paths.SequenceEqual(sky[0].Paths), "input order does not matter, groups are in capture order");
+
+        // A stack never writes over a file: a.ARW -> a-stack.dng, then a-stack-2.dng.
+        var taken = new HashSet<string> { Path.Combine("d", "a-stack.dng") };
+        Check(Stack.OutputPath(Path.Combine("d", "a.ARW"), _ => false) == Path.Combine("d", "a-stack.dng")
+              && Stack.OutputPath(Path.Combine("d", "a.ARW"), taken.Contains) == Path.Combine("d", "a-stack-2.dng"),
+              "a stack is named <stem>-stack.dng, then -stack-2, never over a file");
 
         // Of / Cached: one scan shared by the Library and the Stack sheet, keyed by the list instance.
         IReadOnlyList<string> none = new List<string>(), other = new List<string>();

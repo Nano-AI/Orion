@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
-"""Run the two command-line modes that nothing else runs.
+"""Run the three command-line modes that nothing else runs.
 
     ./tools/check-modes.py            (ORION_SAMPLES names a folder of RAWs)
 
 ⚠ **Why this exists.** Each command-line mode is a short dispatch in
 `Program.cs`, and **deleting one used to be green on every gate** (#121,
 mutations M1/M3/M4; #179). `tools/check-screens.py` closes `--screenshot`,
-`tools/check-agent.py` closes `--agent`. These are the other two:
+`tools/check-agent.py` closes `--agent`. These are the others:
 
   --batch-export   exports a list of photographs into a folder and exits 1 if
                    any of them failed (each with its sidecar's edit).
   --hdr-merge      merges frames into one DNG, then opens and renders that DNG
                    and exits 1 if it will not.
+  --stack          stacks frames into one linear DNG, then opens and renders
+                   it and exits 1 if it will not. Run on one sample copied
+                   three times: identical frames, which noise mode aligns
+                   trivially, so a failure is the pipeline's and not the
+                   scene's.
 
 ⚠ **Ported to the Avalonia app (decision #380), and two modes did not come.**
 The Swift app's `--save-safety` (20 checks of autosave's departure paths) is now
@@ -38,6 +43,7 @@ proved only by raising their constants and watching the branch fire.
 """
 
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -71,6 +77,10 @@ MIN_EXPORT_BYTES = 500_000
 # A merged fp16 DNG of a 24 MP frame is ~140 MB; a header with no strips is
 # kilobytes. Same floor-not-oracle reasoning as MIN_EXPORT_BYTES.
 MIN_MERGE_BYTES = 10_000_000
+
+# A stacked linear DNG of a 24 MP frame is tens of MB; a header with no strips
+# is kilobytes. Same floor-not-oracle reasoning as the two above.
+MIN_STACK_BYTES = 10_000_000
 
 # Measured 2026-08-07 on the Swift app: --batch-export 1.55s for two frames.
 # ⚠ Generous by a wide margin on purpose — deleting a dispatch does not make
@@ -171,6 +181,34 @@ def main():
             else:
                 mb = os.path.getsize(merged) / 1_048_576
                 notes.append(f"--hdr-merge {mb:.0f} MB DNG")
+
+    # --stack: one sample three times (identical frames, so alignment is
+    # trivial) into one DNG that must itself open.
+    with tempfile.TemporaryDirectory() as tmp:
+        frames = []
+        for n in "abc":
+            frames.append(os.path.join(tmp, f"{n}.ARW"))
+            shutil.copyfile(SAMPLES / EXPORTS[0], frames[-1])
+        stacked = os.path.join(tmp, "stacked.dng")
+        r = run(["--stack", stacked, "--mode", "noise"] + frames, problems, "--stack")
+        if r is not None:
+            out = (r.stderr or "") + (r.stdout or "")
+            if r.returncode != 0:
+                detail = out.strip()[-500:] or "(no output)"
+                problems.append(f"--stack exited {r.returncode}\n"
+                                f"      {detail}")
+            elif not os.path.isfile(stacked):
+                problems.append(
+                    "--stack exited 0 and wrote nothing. The mode asserts "
+                    "its own output opens, so this means the assertion is gone")
+            elif os.path.getsize(stacked) < MIN_STACK_BYTES:
+                problems.append(
+                    f"--stack wrote {os.path.getsize(stacked)} bytes, under "
+                    f"the {MIN_STACK_BYTES} floor. A full-resolution DNG does "
+                    f"not fit there; a header with no strips does")
+            else:
+                mb = os.path.getsize(stacked) / 1_048_576
+                notes.append(f"--stack {mb:.0f} MB DNG")
 
     if problems:
         print(f"check-modes: {len(problems)} problem(s)\n")
