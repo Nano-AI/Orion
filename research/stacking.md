@@ -73,8 +73,9 @@ CPU, not GPU: per-pixel rejection sorts N values per channel, a divergent loop w
 | 4–20 | winsorized [HR09][PI] | σ from clamped values: clamp to m ± 1.5σ, σ' = 1.134·std(clamped), repeat to convergence, once, on the full sample; then iterate: re-centre m on the survivors, reject beyond m ± 3σ'. σ' stays fixed: re-estimated from survivors already cut at 3σ' it shrinks each round, since 1.134 assumes an uncut Gaussian |
 | > 20 | linear fit [PI] | sort survivors; least-squares line of value on rank; σ = mean \|residual\|; reject \|residual\| > 3σ; iterate |
 
-Rejection never leaves fewer than 3 values. A manual override picks any row.
-Auto departs from the forum rule of thumb (sigma or percentile below 10 frames). Sigma: the code's 3σ, σ the sample std centred on the median, cannot reject a lone outlier of any size when n ≤ 7 (σ = d·√(n−1)/n, so 3σ ≥ d) and works from n = 8. Percentile: its window (20 % / 10 % of the median) is narrower than a dark sky's noise, so it keeps a satellite trail — measured on a sky of 0.02 with noise 0.02 and a trail 0.5 above it, the trail survives on 976, 928 and 891 of 1000 pixels at 4, 5 and 6 frames, and its asymmetric clip costs noise (a reviewer's simulation: gain 1.76 against √5 on bright scenes). Winsorizing shrinks σ to the noise floor first and rejected the trail on all 1000 at 4–6 frames (`tests_stack_rejection`), so 4–20 use it; percentile and sigma stay as manual choices.
+Rejection never leaves fewer than 3 values: a pass that would leave fewer is not applied at all, so at n = 4 two outliers in one pixel are both kept. A manual override picks any row.
+Winsorized's own cost on clean Gaussian data (`tests_stack_rejection`, 20,000 pixels each): at n = 4 a noise gain of 1.87 against √4 = 2, a clean value rejected on 16.8 % of pixels; at n = 5, 2.04 against √5 = 2.24, 18.8 %.
+Auto departs from the forum rule of thumb (sigma or percentile below 10 frames). Sigma: the code's 3σ window, centred on the median with σ the std of the values about their mean, cannot reject a lone outlier of any size when n ≤ 7 (σ = d·√(n−1)/n, so 3σ ≥ d) and works from n = 8. Percentile: its window (20 % / 10 % of the median) is narrower than a dark sky's noise, so it keeps a satellite trail — measured on a sky of 0.02 with noise 0.02 and a trail 0.5 above it, the trail survives on 976, 928 and 891 of 1000 pixels at 4, 5 and 6 frames, and its asymmetric clip costs noise (a reviewer's simulation: gain 1.76 against √5 on bright scenes). Winsorizing shrinks σ to the noise floor first and rejected the trail on all 1000 at 4–6 frames (`tests_stack_rejection`), so 4–20 use it; percentile and sigma stay as manual choices.
 The **1.134** is `1 / sqrt(E[min(|z|, 1.5)²])` for z ~ N(0,1) = 1/0.8823 = 1.1334, recomputed for this file (2026-10-30) so the number is checkable and not a remembered constant.
 ⚠ PixInsight's winsorization cutoff was quoted to us as 5σ; that is a different parameter from Huber's c, could not be checked against the documentation text, and is **not** what Orion uses.
 
@@ -110,11 +111,11 @@ A component whose brightest unsmoothed pixel carries more than half its flux is 
 | Triangles | for each of the 60 stars, its 4 nearest neighbours → all C(5,3) = 10 triangles of the star plus its 4 neighbours, deduplicated | [BCS20] |
 | Invariants | sides sorted L2 ≥ L1 ≥ L0; (L2/L1, L1/L0) | [G86][V95][BCS20] |
 | Match | nearest invariant pair by brute force (~400 × 400 triangles) within radius 0.1; vertices ordered by the side they are opposite, giving star-to-star votes | [BCS20] |
-| Fit | homography by RANSAC: `cv::findHomography`, reprojection threshold 2 px, ≥ 8 distinct-star inliers (8 degrees of freedom need margin over the 4-point minimum) or the frame is refused (identity, `ok = false`) | [HZ04][FB81] |
+| Fit | homography by RANSAC: `cv::findHomography`, reprojection threshold 2 px, ≥ 8 distinct-star inliers (8 degrees of freedom need margin over the 4-point minimum) or the frame is refused (identity, `ok = false`; `inliers` still reports what the fit found). A fit is also refused when, at any of the frame's four corners, w (m[8] = 1) leaves [0.5, 2] or the Jacobian determinant is ≤ 0: a fold or a mirror, which `persp::apply`'s divide by w would stack as mirrored pixels | [HZ04][FB81] |
 
 OpenCV (Apache-2.0) supplies the estimator; Orion's code is the detector and the triangle voting.
-The Earth turns 15°/hour: 20 frames × 20 s turns the sky ≈ 1.7°. A tripod camera sees that as a pure 3D rotation, H = K·R·K⁻¹ [HZ04], which a similarity only approximates: at 14 mm on full frame over 200 s (latitude 45°, looking south at 20° altitude) the best similarity misses by ≈ 15 px median, 43 px max, and with the 2 px gate the old similarity fit refused the frame outright; the homography lands within 0.016 px (Measured).
-⚠ Lens distortion is the remaining ceiling: no homography models it (UNSOURCED §32).
+The Earth turns 15°/hour: 20 frames × 20 s turns the sky ≈ 1.7°. A tripod camera sees that as a pure 3D rotation, H = K·R·K⁻¹ [HZ04], which a similarity only approximates: at 14 mm on full frame over 200 s (latitude 45°, looking south at 20° altitude) the best similarity misses by ≈ 15 px median, 43 px max, and with the 2 px gate the old similarity fit refused the frame outright (fewer than 6 inliers within 2 px); the homography lands within 0.010 px at half resolution (Measured).
+⚠ Lens distortion is the remaining ceiling: no homography models it; and with inliers clustered in one part of the frame (clouds over the rest) the homography's error grows quadratically away from the cluster, with no affine fallback (UNSOURCED §32).
 
 ## 6. Landscape split
 
@@ -142,12 +143,13 @@ Astro tag: shutter ≥ 5 s and ISO ≥ 800 (and, when checked, a dark thumbnail)
 
 ## Measured (2026-10-30)
 
-Synthetic data unless said; `orion-tests` 1542 checks, 0 failures. These are checks of the implementation against the published methods above, not a claim about real frames: the thresholds in UNSOURCED §32 are untuned on real star, flat and dark frames.
+Synthetic data unless said; `orion-tests` 1551 checks, 0 failures. These are checks of the implementation against the published methods above, not a claim about real frames: the thresholds in UNSOURCED §32 are untuned on real star, flat and dark frames.
 
 | What | Result |
 |---|---|
 | Star registration (homography), max corner error | 0.0279 px (59 inliers); 0.0244 px with 40 fixed hot pixels (the similarity it replaced: 0.0124 / 0.0136) |
-| 14 mm sky turn, 6000×4000, 200 s (H = K·R·K⁻¹) | homography: median 0.0040 px, max 0.0157 px over 394 stars, 59 inliers; the old similarity refused the frame (0 inliers) |
+| 14 mm sky turn, 200 s (H = K·R·K⁻¹), full frame at half resolution: 3000×2000, f = 1167 px | homography: median 0.0028 px, max 0.0098 px over 395 stars, 59 inliers; the old similarity refused the frame (fewer than 6 inliers within 2 px) |
+| A mirrored star field (same triangles, exact reflection) | refused by the corner check, 60 inliers reported |
 | Through the facade: stacked DNG's median star error | 0.029 px, 59 of 60 stars matched |
 | Noise vs √N, integrate, 16 frames, integer shifts | σ ratio 3.860 vs 4 (0.965·√N) |
 | Noise vs √N, facade noise mode, 8 frames | 2.930 vs √8 = 2.828; RMS against the true scene 0.00351 (identity registration 0.01206, fails) |
