@@ -154,6 +154,7 @@ int main() {
     testStackFacadeLandscape();
     testStackFacadeRefuses();
     testStackCancelIsAtomic();
+    testStackMemory();
     testStackMasterDark();
     testStackFlatGain();
     testStackBayerRoundTrip();

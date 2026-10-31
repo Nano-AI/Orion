@@ -11,6 +11,7 @@
 #include "orion/orion.h"
 
 #include "pipe/CubeLut.h"
+#include "util/Memory.h"
 #include "util/Utf8Path.h"
 
 #include <fstream>
@@ -723,7 +724,7 @@ OrionStatus orion_engine_stack(OrionEngine* engine, const char* const* paths, in
                                const char* const* darks, int32_t dark_count,
                                const char* const* flats, int32_t flat_count,
                                const float* sky_matte, int32_t matte_width, int32_t matte_height,
-                               const char* output_path) {
+                               const char* output_path, int32_t force) {
     if (engine == nullptr || paths == nullptr || count < 2 || output_path == nullptr ||
         mode < 0 || mode > 2 || rejection < -1 || rejection > 4 ||
         dark_count < 0 || flat_count < 0 || (dark_count > 0 && darks == nullptr) ||
@@ -754,9 +755,37 @@ OrionStatus orion_engine_stack(OrionEngine* engine, const char* const* paths, in
             r.matteHeight = matte_height;
         }
         r.output = output_path;
-        engine->impl.runStack(r);
+        r.force = force != 0;
+        try {
+            engine->impl.runStack(r);
+        } catch (const orion::stack::NotEnoughMemory& e) {
+            engine->impl.setError(e.what());
+            return ORION_ERR_MEMORY;
+        }
         return ORION_OK;
     });
+}
+
+OrionStatus orion_engine_stack_estimate(OrionEngine* engine, const char* const* paths, int32_t count,
+                                        const char* const* darks, int32_t dark_count,
+                                        const char* const* flats, int32_t flat_count, uint64_t* out_bytes) {
+    if (engine == nullptr || paths == nullptr || paths[0] == nullptr || count < 1 || dark_count < 0 ||
+        flat_count < 0 || out_bytes == nullptr) {
+        return ORION_ERR_BAD_ARG;
+    }
+    (void)darks;   // counted, not read: the estimate is the lights' size
+    (void)flats;
+    return guard(engine, [&]() -> OrionStatus {
+        *out_bytes = orion::stack::estimateBytes(std::string(paths[0]), std::size_t(count), std::size_t(dark_count),
+                                                 std::size_t(flat_count));
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_available_memory(uint64_t* out_bytes) {
+    if (out_bytes == nullptr) return ORION_ERR_BAD_ARG;
+    *out_bytes = orion::util::availableMemory();   // noexcept
+    return ORION_OK;
 }
 
 OrionStatus orion_engine_stack_progress(OrionEngine* engine, float* out) {
@@ -859,6 +888,7 @@ const char* orion_status_string(OrionStatus status) {
         case ORION_ERR_NO_GPU:   return "no usable GPU";
         case ORION_ERR_BAD_ARG:  return "invalid argument";
         case ORION_ERR_INTERNAL: return "internal error";
+        case ORION_ERR_MEMORY:   return "not enough memory";
     }
     return "unrecognized status";
 }

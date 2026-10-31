@@ -47,7 +47,7 @@ OrionStatus stackFiles(OrionEngine* e, const std::vector<std::string>& files, in
     std::vector<const char*> p;
     for (const auto& f : files) p.push_back(f.c_str());
     return orion_engine_stack(e, p.data(), int32_t(p.size()), ref, mode, -1, 0, nullptr, 0, nullptr, 0,
-                              matte, mw, mh, out.c_str());
+                              matte, mw, mh, out.c_str(), 0);
 }
 
 void removeAll(const std::vector<std::string>& files) {
@@ -251,22 +251,12 @@ void testStackFacadeRefuses() {
         report(std::strstr(orion_last_error(engine), "sky") != nullptr, "landscape without a matte names the sky",
                orion_last_error(engine));
 
-        {   // Over the memory budget: refused from the reference's metadata alone. The other 13,999 paths do
-            // not exist, so any readInfo or decode of them would fail with another sentence.
-            // 6 GiB / (320 * 240 * 6 bytes) = 13,981 frames.
-            std::vector<std::string> many(14000, "/tmp/orion-stack-missing.dng");
-            many[0] = files[0];
-            CHECK(stackFiles(engine, many, 0, 1, out) != ORION_OK);
-            report(std::strstr(orion_last_error(engine), "over 13981 frames at this size are not supported yet") != nullptr,
-                   "a stack over the memory budget is refused before any decode", orion_last_error(engine));
-        }
-
         {   // Mixed sets refuse before any decode: an odd size last of six, another camera, a dark of another size.
             writeFrame(odd, stackfix::starField(23, 60, 336, 240, persp::identity(), 0.005f, 0.05f).rgb, 336, 240);
             const char* dark[1] = {odd.c_str()};
             std::vector<const char*> p;
             for (const auto& f : files) p.push_back(f.c_str());
-            CHECK(orion_engine_stack(engine, p.data(), 6, 0, 1, -1, 0, dark, 1, nullptr, 0, nullptr, 0, 0, out.c_str()) !=
+            CHECK(orion_engine_stack(engine, p.data(), 6, 0, 1, -1, 0, dark, 1, nullptr, 0, nullptr, 0, 0, out.c_str(), 0) !=
                   ORION_OK);
             report(std::strstr(orion_last_error(engine), "dark frames do not match the lights' size") != nullptr,
                    "a dark of another size is refused", orion_last_error(engine));
@@ -282,13 +272,13 @@ void testStackFacadeRefuses() {
             report(std::strstr(orion_last_error(engine), "different cameras") != nullptr,
                    "another camera's frame is refused", orion_last_error(engine));
             const char* flat[1] = {other.c_str()};
-            CHECK(orion_engine_stack(engine, p.data(), 6, 0, 1, -1, 0, nullptr, 0, flat, 1, nullptr, 0, 0, out.c_str()) !=
+            CHECK(orion_engine_stack(engine, p.data(), 6, 0, 1, -1, 0, nullptr, 0, flat, 1, nullptr, 0, 0, out.c_str(), 0) !=
                   ORION_OK);
             report(std::strstr(orion_last_error(engine), "flat frames do not match the lights' camera") != nullptr,
                    "another camera's flat is refused", orion_last_error(engine));
             // A turned camera passes the metadata check (as displayed), but this one's sensor really is 240x320.
             writeFrame(odd, stackfix::starField(23, 60, 240, 320, persp::identity(), 0.005f, 0.05f).rgb, 240, 320);
-            CHECK(orion_engine_stack(engine, p.data(), 6, 0, 1, -1, 0, dark, 1, nullptr, 0, nullptr, 0, 0, out.c_str()) !=
+            CHECK(orion_engine_stack(engine, p.data(), 6, 0, 1, -1, 0, dark, 1, nullptr, 0, nullptr, 0, 0, out.c_str(), 0) !=
                   ORION_OK);
             report(std::strstr(orion_last_error(engine), "do not match the lights' size") != nullptr,
                    "a transposed dark is refused after decode", orion_last_error(engine));
@@ -403,4 +393,74 @@ void testStackBench() {
     }
     std::error_code ec;
     fs::remove_all(dir, ec);
+}
+
+void testStackMemory() {
+    section("stack: over the memory available, refused before any decode unless forced");
+    std::vector<std::string> files;
+    const std::string out = "/tmp/orion-stack-memory.dng";
+    std::remove(out.c_str());
+    OrionEngine* engine = nullptr;
+    try {
+        files = starFiles("/tmp/orion-stack-m", 3);
+        if (orion_engine_create(&engine) != ORION_OK) throw std::runtime_error(gpuProblem());
+        std::vector<const char*> p;
+        for (const auto& f : files) p.push_back(f.c_str());
+        const std::vector<const char*> many(21, files[0].c_str());
+
+        // The estimate is the formula on the first light's size: 320 x 240 x (max(6n, 4 max(d, f)) + 44).
+        std::uint64_t est = 0, cal = 0, avail = 0;
+        CHECK(orion_engine_stack_estimate(engine, p.data(), 3, nullptr, 0, nullptr, 0, &est) == ORION_OK);
+        CHECK(orion_engine_stack_estimate(engine, p.data(), 3, many.data(), 21, many.data(), 2, &cal) == ORION_OK);
+        report(est == 320ull * 240 * (6 * 3 + 44) && cal == 320ull * 240 * (4 * 21 + 44),
+               "the estimate is W x H x (max(6 lights, 4 max(darks, flats)) + 44)",
+               std::to_string(est) + ", " + std::to_string(cal));
+        CHECK(orion_available_memory(&avail) == ORION_OK);
+        std::printf("    available now: %.1f GB\n", double(avail) / 1e9);
+        report(avail > 0, "this machine says how much memory is available");
+
+        // Through the facade: enough frames that the estimate passes 1.5x what is available. All but the first
+        // are missing, so any readInfo or decode would fail with another sentence.
+        const std::size_t n = std::size_t(1.5 * double(avail) / (320.0 * 240 * 6)) + 10;
+        std::vector<std::string> lots(n, "/tmp/orion-stack-missing.dng");
+        lots[0] = files[0];
+        std::vector<const char*> lp;
+        for (const auto& f : lots) lp.push_back(f.c_str());
+        const OrionStatus refused = orion_engine_stack(engine, lp.data(), int32_t(n), 0, 1, -1, 0, nullptr, 0, nullptr, 0,
+                                                       nullptr, 0, 0, out.c_str(), 0);
+        const std::string why = orion_last_error(engine);
+        report(refused == ORION_ERR_MEMORY && why.find("frames need about") != std::string::npos &&
+                   why.find("GB of memory") != std::string::npos && why.find("is free") != std::string::npos,
+               "without force, over the memory available is ORION_ERR_MEMORY with a sentence", why);
+        const OrionStatus forced = orion_engine_stack(engine, lp.data(), int32_t(n), 0, 1, -1, 0, nullptr, 0, nullptr, 0,
+                                                      nullptr, 0, 0, out.c_str(), 1);
+        report(forced != ORION_OK && forced != ORION_ERR_MEMORY &&
+                   std::strstr(orion_last_error(engine), "orion-stack-missing") != nullptr,
+               "with force it goes on, to the missing frames' own refusal", orion_last_error(engine));
+        report(!fs::exists(out), "no output after either");
+
+        // A forced run over an injected budget writes the stack.
+        auto device = orion::gpu::Device::create();
+        orion::stack::Stacker stacker(*device, ORION_SHADER_DIR);
+        orion::stack::Request rq;
+        rq.paths = files;
+        rq.mode = orion::stack::Mode::Stars;
+        rq.output = out;
+        rq.availableBytes = 1;
+        bool threw = false;
+        try {
+            stacker.run(rq);
+        } catch (const orion::stack::NotEnoughMemory&) {
+            threw = true;
+        }
+        report(threw && !fs::exists(out), "1 byte available refuses the 3 frames");
+        rq.force = true;
+        stacker.run(rq);
+        report(fs::exists(out), "forced, the same request writes the stack");
+    } catch (const std::exception& e) {
+        report(false, "memory fixture", e.what());
+    }
+    if (engine) orion_engine_destroy(engine);
+    removeAll(files);
+    std::remove(out.c_str());
 }

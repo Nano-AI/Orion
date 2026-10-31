@@ -163,6 +163,7 @@ void testStackFacadeStars();
 void testStackFacadeLandscape();
 void testStackFacadeRefuses();
 void testStackCancelIsAtomic();
+void testStackMemory();
 void testStackMasterDark();
 void testStackFlatGain();
 void testStackBayerRoundTrip();

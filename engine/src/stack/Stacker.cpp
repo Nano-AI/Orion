@@ -23,8 +23,10 @@
 #include "stack/StarAlign.h"
 #include "util/DngWriter.h"
 #include "util/Half.h"
+#include "util/Memory.h"
 #include "util/Utf8Path.h"
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <filesystem>
@@ -35,10 +37,6 @@
 
 namespace orion::stack {
 namespace {
-
-/// The held half planes' ceiling: 6 GiB, a quarter of a 24 GB laptop, past which swap thrash
-/// has crashed one. research/UNSOURCED.md §32.
-constexpr std::uint64_t kHeldBudgetBytes = 6ull << 30;
 
 /// The reference's metadata, for the container.
 struct Meta {
@@ -128,6 +126,21 @@ std::vector<std::uint16_t> toHalf(const std::vector<float>& rgb) {
 
 }  // namespace
 
+std::uint64_t estimateBytes(std::uint64_t pixels, std::size_t lights, std::size_t darks, std::size_t flats) noexcept {
+    // Bytes a pixel (research/UNSOURCED.md §32): the held lights as half RGB (6 each), or the calibration
+    // frames held as float mosaics while their median is taken (4 each; a linear DNG's RGB is 12); the two
+    // phases do not overlap. Plus 44 fixed: a frame in flight (decoded 2-8, float RGB 12, detectStars 13),
+    // Noise mode's reference float 12, the masters 8, the matte 4; the float result (12) replaces the frame
+    // in flight during integration. The worst phase measured from the code is ~39; 44 keeps a margin.
+    constexpr std::uint64_t kLight = 6, kCalibration = 4, kFixed = 44;
+    return pixels * (std::max(kLight * lights, kCalibration * std::max(darks, flats)) + kFixed);
+}
+
+std::uint64_t estimateBytes(const std::string& light, std::size_t lights, std::size_t darks, std::size_t flats) {
+    const raw::RawInfo info = raw::readInfo(light);
+    return estimateBytes(std::uint64_t(info.width) * info.height, lights, darks, flats);
+}
+
 Stacker::Stacker(gpu::Device& device, std::string shaderDir)
     : device_(device), shaderDir_(std::move(shaderDir)) {}
 
@@ -153,12 +166,20 @@ void Stacker::run(const Request& rq) {
     // Refuse a mixed set before paying for any decode (metadata only); the decode loop re-checks size.
     const auto ref = std::size_t(rq.reference);
     const raw::RawInfo refInfo = raw::readInfo(rq.paths[ref]);
-    // Every registered frame is held as half RGB, 6 bytes a pixel, and the frames must all be the reference's size.
-    // ponytail: refuse over the budget; streaming the integration over strips of rows is the upgrade.
-    const std::uint64_t frameBytes = std::uint64_t(refInfo.width) * refInfo.height * 6;
-    if (frameBytes > 0 && std::uint64_t(n) * frameBytes > kHeldBudgetBytes)
-        throw std::runtime_error("Stacks over " + std::to_string(kHeldBudgetBytes / frameBytes) +
-                                 " frames at this size are not supported yet; select fewer.");
+    // Before any other read: what this run needs against what is available now (0 = the OS will not say).
+    if (!rq.force) {
+        const std::uint64_t need = estimateBytes(std::uint64_t(refInfo.width) * refInfo.height, n, rq.darks.size(),
+                                                 rq.flats.size());
+        const std::uint64_t have = rq.availableBytes ? rq.availableBytes : util::availableMemory();
+        if (have > 0 && need > have) {
+            char sentence[200];
+            std::snprintf(sentence, sizeof sentence,
+                          "These %zu frames need about %.1f GB of memory and about %.1f GB is free. "
+                          "Close other apps to free memory, or proceed anyway.",
+                          n, double(need) / 1e9, double(have) / 1e9);
+            throw NotEnoughMemory(sentence);
+        }
+    }
     const auto named = [](const std::string& c) { return c.find_first_not_of(' ') != std::string::npos; };
     const auto otherCamera = [&](const raw::RawInfo& info) {
         return named(info.camera) && named(refInfo.camera) && info.camera != refInfo.camera;

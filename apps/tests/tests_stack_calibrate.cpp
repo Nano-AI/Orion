@@ -213,10 +213,10 @@ void testStackFacadeCalibrated() {
         for (const auto& s : darks) d.push_back(s.c_str());
         for (const auto& s : flats) f.push_back(s.c_str());
         const OrionStatus st0 = orion_engine_stack(engine, l.data(), 4, 0, 0, -1, 0, nullptr, 0, nullptr, 0, nullptr, 0, 0,
-                                                   plain.c_str());
+                                                   plain.c_str(), 0);
         report(st0 == ORION_OK, "the uncalibrated stack succeeds", st0 == ORION_OK ? "" : orion_last_error(engine));
         const OrionStatus st = orion_engine_stack(engine, l.data(), 4, 0, 0, -1, 0, d.data(), 3, f.data(), 3, nullptr, 0, 0,
-                                                  out.c_str());
+                                                  out.c_str(), 0);
         report(st == ORION_OK, "the calibrated stack succeeds", st == ORION_OK ? "" : orion_last_error(engine));
 
         std::uint32_t w = 0, h = 0;
@@ -278,7 +278,7 @@ void testStackCalibratedRaws() {
         bool finite = true;
         for (int k = 0; k < 3; ++k) {
             const OrionStatus st = orion_engine_stack(engine, lights, 2, 0, 0, -1, 0, k ? dark : nullptr, k ? 1 : 0,
-                                                      k == 2 ? flat : nullptr, k == 2 ? 1 : 0, nullptr, 0, 0, outs[k].c_str());
+                                                      k == 2 ? flat : nullptr, k == 2 ? 1 : 0, nullptr, 0, 0, outs[k].c_str(), 0);
             report(st == ORION_OK, "raw stack " + std::to_string(k) + " succeeds", st == ORION_OK ? "" : orion_last_error(engine));
             std::uint32_t w = 0, h = 0;
             const auto rgb = stackfix::reopen(outs[k], w, h);

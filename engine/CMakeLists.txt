@@ -48,6 +48,7 @@ add_library(orion_engine STATIC
     src/util/ExportOps.cpp
     src/util/DngWriter.cpp
     src/util/JxlWriter.cpp
+    src/util/Memory.cpp
     src/merge/Merge.cpp
     src/merge/MergeRender.cpp
     src/merge/Align.cpp
