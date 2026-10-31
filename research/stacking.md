@@ -158,7 +158,7 @@ Synthetic data unless said; `orion-tests` 1559 checks, 0 failures. These are che
 | Fixed hot pixel (rejection) | 0 of 72 landings outside 4σ |
 | Calibration | tripod hot pixel 0.6807 → 0.0679 with darks; vignette corner/centre 0.846 → 0.995 with flats |
 | 24 MP (6000x4000), star mode, CPU on 10 cores, low priority | 10 frames 15.6 s; 20 frames 29.8 s; peak RSS 3.9 GB (half-float frames) |
-| Real raw (not synthetic) | `Orion --stack --mode noise` on three copies of a 42 MP Sony ARW: 2.44 s, 145.7 MB DNG; `check-modes` runs it |
+| Real raw (not synthetic) | `Orion --stack --mode noise` on three copies of a 24 MP Sony ARW (ILCE-7M3): 2.44 s, 145.7 MB DNG; `check-modes` runs it |
 
 Open: tune the sharpness 0.5, flat 0.1 and dark 0.15 thresholds on real frames; frames are held in memory as half floats; the stack's estimated peak memory (from the first frame's metadata, no decode) is checked against the memory available now: over it, the Stack sheet warns inline ("These 60 frames need about 8.6 GB of memory and about 5.1 GB is free. Close other apps to free memory, or proceed anyway.") with Proceed anyway and Cancel, re-checked on every press; the engine refuses with ORION_ERR_MEMORY unless forced (`force`, `--stack --force`) (UNSOURCED §32 has the estimate). Band streaming, frames spilled to disk and integrated in row bands as Siril and DeepSkyStacker do, is the follow-up that removes the limit.
 
