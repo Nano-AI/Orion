@@ -12,7 +12,7 @@ public static class StackGroups {
     public const int MinFrames = 5;
     public const double CadenceTolerance = 2.0;   // seconds, on (gap − shutter); timestamps are whole seconds
     const double MinOverlap = -1;                 // a gap may undershoot the shutter by this much (rounding), no more
-    const float AstroShutter = 5, AstroIso = 800; // research/UNSOURCED.md §22
+    const float AstroShutter = 5, AstroIso = 800; // research/UNSOURCED.md §32
 
     /// Contiguous runs (in capture order) of ≥ MinFrames with identical camera, ISO, shutter, aperture and focal
     /// length and a steady cadence. `dark` (optional) is asked once per candidate astro group, of its middle frame.

@@ -1531,7 +1531,7 @@ The shapes are sourced; the numbers that set how hard each one bites are chosen.
 
 ---
 
-## 22. Stacking's chosen constants - added 2026-10-30
+## §32 — Stacking's chosen constants - added 2026-10-30
 
 [stacking.md](stacking.md), `engine/src/stack/`, the Library's stack finder. Decision #391. None of these is a published value; each is a starting point to be measured on real frames.
 

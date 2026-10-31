@@ -14,7 +14,7 @@ namespace OrionShell.Library;
 /// headers), which also fills StackGroups.Cached, so the `stack` command finds the open photo's group.
 sealed class StackSuggestion : Border {
     /// The embedded preview's mean luma (Rec. 709 weights on its encoded values) under which a candidate
-    /// astro group's middle frame is a night sky. research/UNSOURCED.md §22.
+    /// astro group's middle frame is a night sky. research/UNSOURCED.md §32.
     const double DarkLuma = 0.15;
 
     readonly TextBlock _text = new() { FontSize = Faces.Label, Foreground = Palette.Dim, VerticalAlignment = VerticalAlignment.Center };

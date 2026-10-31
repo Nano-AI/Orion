@@ -14,7 +14,7 @@
  *  real flats show it.
  *
  *  The masters' constants (gain 1 where the flat has no signal) are ours:
- *  research/UNSOURCED.md §22.
+ *  research/UNSOURCED.md §32.
  */
 
 #pragma once
@@ -33,7 +33,7 @@ namespace orion::stack {
 [[nodiscard]] std::vector<float> medianOf(const std::vector<std::vector<float>>& frames);
 
 /// A flat sample under this fraction of its channel's mean has no signal (a dead pixel, a dust core, a flat
-/// at the dark): dividing by it would make a hot pixel a tripod stack cannot reject. UNSOURCED §22.
+/// at the dark): dividing by it would make a hot pixel a tripod stack cannot reject. UNSOURCED §32.
 inline constexpr double kNoSignal = 0.1;
 
 /// (flat − dark) normalized so each channel's mean is 1; channel[i] names sample i's channel (0..3).

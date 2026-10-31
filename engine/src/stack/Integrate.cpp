@@ -12,15 +12,15 @@
 namespace orion::stack {
 namespace {
 
-constexpr double kGridSamples = 50000.0;   // UNSOURCED §22
-constexpr float kBrightSigmas = 10.0f;     // UNSOURCED §22
-constexpr std::size_t kMinBright = 200;    // UNSOURCED §22: the sky subset's minimum
-constexpr std::size_t kMinCores = 50;      // UNSOURCED §22: star cores needed before k is believed
-constexpr float kClip = 0.98f;             // UNSOURCED §22: a box touching this is clipped, no flux to measure
+constexpr double kGridSamples = 50000.0;   // UNSOURCED §32
+constexpr float kBrightSigmas = 10.0f;     // UNSOURCED §32
+constexpr std::size_t kMinBright = 200;    // UNSOURCED §32: the sky subset's minimum
+constexpr std::size_t kMinCores = 50;      // UNSOURCED §32: star cores needed before k is believed
+constexpr float kClip = 0.98f;             // UNSOURCED §32: a box touching this is clipped, no flux to measure
 constexpr float kNoiseFloor = 1e-6f;       // a noiseless synthetic frame keeps a finite weight
-constexpr float kMinScale = 0.1f, kMaxScale = 10.0f;   // UNSOURCED §22: outside, the scale is not believed
-constexpr float kMaxWeightRatio = 10.0f;   // UNSOURCED §22: no frame outweighs the median frame by more
-constexpr int kAperture = 3;               // UNSOURCED §22: 7x7 flux box, half-width 3
+constexpr float kMinScale = 0.1f, kMaxScale = 10.0f;   // UNSOURCED §32: outside, the scale is not believed
+constexpr float kMaxWeightRatio = 10.0f;   // UNSOURCED §32: no frame outweighs the median frame by more
+constexpr int kAperture = 3;               // UNSOURCED §32: 7x7 flux box, half-width 3
 constexpr float kBoxArea = float((2 * kAperture + 1) * (2 * kAperture + 1));
 
 /// Bilinear tap of `f` at reference texel (x, y) through `h` (dest->source),
@@ -48,7 +48,7 @@ bool tap(const Frame& f, const persp::Matrix3& h, float x, float y, float out[3]
 /// Σ luma over the 7x7 box about reference texel (x, y), each texel through `h`;
 /// false when any is outside or clipped (>= kClip in any channel). A star's flux survives a sub-pixel bilinear tap
 /// where its peak does not (box half-width 3.5 px: a σ 1.2 px star loses < 1%
-/// to the blur of a half-pixel tap; a 3x3 box loses ~3%, see UNSOURCED §22).
+/// to the blur of a half-pixel tap; a 3x3 box loses ~3%, see UNSOURCED §32).
 bool boxLuma(const Frame& f, const persp::Matrix3& h, std::uint32_t x, std::uint32_t y, float& sum) noexcept {
     sum = 0.0f;
     for (int dy = -kAperture; dy <= kAperture; ++dy)

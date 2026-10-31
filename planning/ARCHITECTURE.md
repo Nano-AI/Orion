@@ -99,6 +99,8 @@ Rules the codebase holds to:
 
 The engine ships as a standalone C++ library with a narrow C API. The UI is a *client*. That is what let the SwiftUI app be replaced (#380) without touching the engine.
 
+`engine/src/stack/` is photo stacking (#391, `research/stacking.md`): `Stacker` drives it, `StarAlign` registers, `Integrate` normalizes and combines, `Rejection` rejects, `SkySplit` and `Calibrate` do the landscape seam and the darks and flats, all on the CPU. It sits behind one flat facade call, `orion_engine_stack`. The shell side is `shell/Slices/Sheets/Stack*.cs` (the sheet) and `shell/Slices/Library/StackGroups.cs` and `StackSuggestion.cs` (the finder).
+
 ## UI shell: Avalonia 12 on .NET 10 (#315, #316, #380)
 
 `shell/`, one C# app for macOS, Windows and Linux; it replaced the SwiftUI app, whose history is in git (`UI-DECISION.md` has the original evaluation). It ships as `Orion.app` on macOS; Windows and Linux packages are CI artifacts (#376).

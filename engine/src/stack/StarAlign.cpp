@@ -16,7 +16,7 @@
  *
  *  The constants (5 sigma, area 2-400, peak share 0.5, 60 stars, radius 0.1,
  *  2 px, 6 inliers)
- *  are research/UNSOURCED.md §22's.
+ *  are research/UNSOURCED.md §32's.
  */
 
 #include "stack/StarAlign.h"
@@ -46,7 +46,7 @@ constexpr int   kMinInliers  = 6;
 /// DAOPHOT's sharpness test [S87]: a component whose brightest unsmoothed
 /// pixel carries more than this share of its flux is a hot pixel or a cosmic
 /// ray, not a star. A sigma 1.2 star's peak carries ~0.11, a sigma 0.7 one
-/// ~0.32, a lone spike ~1. research/UNSOURCED.md §22.
+/// ~0.32, a lone spike ~1. research/UNSOURCED.md §32.
 constexpr float kMaxPeakShare = 0.5f;
 
 /// Median of v (reorders it).

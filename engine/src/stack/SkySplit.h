@@ -6,7 +6,7 @@
  *  SubjectMatte.cs UndoTurns, is "a clockwise turn sent (x, y) to (h-1-y, x)"),
  *  bilinear-resample to the frame, and feather the seam.
  *
- *  Ours, not published (research/UNSOURCED.md §22): the 1%-of-long-edge
+ *  Ours, not published (research/UNSOURCED.md §32): the 1%-of-long-edge
  *  feather radius, two box passes.
  */
 

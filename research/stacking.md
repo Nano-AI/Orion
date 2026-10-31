@@ -5,7 +5,7 @@ Plan: `planning/plans/stacking.md`; ledger row: #391. This file is the algorithm
 
 ⚠ **Siril is GPL-3.** Its *documentation* is cited; its source was never opened, and neither was darktable's, RawTherapee's or HDRMerge's.
 Astroalign is MIT; it is cited through its paper and Orion implements from the paper's description.
-Every constant that is ours is in [`UNSOURCED.md`](UNSOURCED.md) §22, not here.
+Every constant that is ours is in [`UNSOURCED.md`](UNSOURCED.md) §32, not here.
 
 ---
 
@@ -37,7 +37,7 @@ Every constant that is ours is in [`UNSOURCED.md`](UNSOURCED.md) §22, not here.
 | Winsorizing: clamp values beyond cσ to the boundary before estimating σ; consistency factor 1/√E[min(\|z\|,c)²] = 1.134 at c = 1.5 | [HR09]; the factor is recomputed here (§2), not read off a page |
 | Linear-fit clipping: fit a straight line through each pixel's sorted stack and reject by residual; "performs very well with large stacks and sky gradients" | [PI], [SIRIL] for the idea; Orion's fit is a plain least-squares line on rank, the plan's choice |
 | Generalized ESD as the alternative for large stacks ([SIRIL]: "more 50 images") — **cited, not built** | [R83] |
-| Rule of thumb by frame count (< 10 sigma/percentile, 10–20 winsorized, > 20 linear fit) | astro-imaging forum practice (BAA); not a publication. Orion's own table is in UNSOURCED §22 |
+| Rule of thumb by frame count (< 10 sigma/percentile, 10–20 winsorized, > 20 linear fit) | astro-imaging forum practice (BAA); not a publication. Orion's own table is in UNSOURCED §32 |
 | Additive + scaling normalization for light frames; median and MAD as the fast estimators | [SIRIL] (it defaults to IKSS estimators; Orion takes the median/MAD option) |
 | Weight by background noise | [SIRIL] ("Noise" weighting); the form 1/σ'² is inverse variance, as hdr-merge.md's [HDF10] |
 | The scale between two linear frames is one scalar ratio, estimable from pixel pairs | [GN03], specialized to a linear response as in hdr-merge.md |
@@ -59,7 +59,7 @@ decode ─ (calibrate on the mosaic) ─ demosaic ─ register ─ normalize ─
 
 Averaging N frames cuts noise by ≈ √N; a median by ≈ 0.8·√N (the median is for dark and flat masters, not the stack).
 Returns diminish past 15–25 frames.
-CPU, not GPU: per-pixel rejection sorts N values per channel, a divergent loop whose work depends on N; the measured cost goes in #391 when Task 12 lands.
+CPU, not GPU: per-pixel rejection sorts N values per channel, a divergent loop whose work depends on N; measured under "Measured" below and in #391: 24 MP, 10 frames 15.6 s.
 
 ## 2. Rejection (per pixel, per channel, over the N normalized values)
 
@@ -87,7 +87,7 @@ v'    = (v − L_i)/k_i + L_ref
 ```
 
 The scale is one scalar per frame, [GN03] specialized to a linear response; sampling only bright pixels keeps the ratio away from the noise floor, where it would be a ratio of noises.
-Orion takes v as a 7×7 luma box sum about each bright local maximum (a star's core) rather than the pixel: registration taps at sub-pixel positions, and a bilinear tap lowers a star's peak while nearly conserving its flux. The box size is ours (UNSOURCED §22). The bright pixels are found at full resolution (stars cover ~0.1% of a sky, too few for a coarse grid).
+Orion takes v as a 7×7 luma box sum about each bright local maximum (a star's core) rather than the pixel: registration taps at sub-pixel positions, and a bilinear tap lowers a star's peak while nearly conserving its flux. The box size is ours (UNSOURCED §32). The bright pixels are found at full resolution (stars cover ~0.1% of a sky, too few for a coarse grid).
 σ_i for the weight comes from pixel differences, 1.4826·MAD of horizontal neighbour differences / √2, which ignores slowly varying signal.
 Weight w_i = (k_i/σ_i)² when noise weighting is on (inverse variance after scaling), else 1.
 
@@ -133,9 +133,28 @@ Both are the standard calibration steps of the pipeline in [SIRIL]; doing them o
 
 [LR] groups contiguous photos whose capture-time gaps are under a user threshold.
 Orion's rule is stricter, because a stack needs identical settings: ≥ 5 contiguous frames from the same camera with the same ISO, shutter, aperture and focal length, whose (gap − shutter) agrees within ±2 s.
-Astro tag: shutter ≥ 5 s and ISO ≥ 800 (and, when checked, a dark thumbnail). All the thresholds are ours: UNSOURCED §22.
+Astro tag: shutter ≥ 5 s and ISO ≥ 800 (and, when checked, a dark thumbnail). All the thresholds are ours: UNSOURCED §32.
 
 ---
+
+## Measured (2026-10-30)
+
+Synthetic data unless said; `orion-tests` 1537 checks, 0 failures. These are checks of the implementation against the published methods above, not a claim about real frames: the thresholds in UNSOURCED §32 are untuned on real star, flat and dark frames.
+
+| What | Result |
+|---|---|
+| Star registration, max corner error | 0.0124 px (59 inliers); 0.0136 px with 40 fixed hot pixels |
+| Through the facade: stacked DNG's median star error | 0.031 px, 59 of 60 stars matched |
+| Noise vs √N, integrate, 16 frames, integer shifts | σ ratio 3.860 vs 4 (0.965·√N) |
+| Noise vs √N, facade noise mode, 8 frames | 2.930 vs √8 = 2.828; RMS against the true scene 0.00351 (identity registration 0.01206, fails) |
+| Landscape | ground edge 1.000, star peak 0.995 of a single frame |
+| Satellite streak (rejection) | 0 of 480 pixels outside 4σ |
+| Fixed hot pixel (registration) | 0 of 72 landings outside |
+| Calibration | tripod hot pixel 0.6807 → 0.0696 with darks; vignette corner/centre 0.844 → 0.997 with flats |
+| 24 MP (6000x4000), star mode, CPU on 10 cores, low priority | 10 frames 15.6 s; 20 frames 29.8 s; peak RSS 3.9 GB (half-float frames). No GPU node: the CPU is fast enough |
+| Real raw (not synthetic) | `Orion --stack --mode noise` on three copies of a 42 MP Sony ARW: 2.44 s, 145.7 MB DNG; `check-modes` runs it |
+
+Open: tune the sharpness 0.5, flat 0.1 and dark 0.15 thresholds on real frames; frames are held in memory, so streaming is the next step past ~50 frames at 24 MP.
 
 ## ⚠ Patents
 

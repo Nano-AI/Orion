@@ -22,7 +22,7 @@
  *  Sigma is manual only: autoRejection never picks it (see research/stacking.md §2).
  *
  *  ⚠ The frame-count thresholds in autoRejection and the percentile bounds
- *  (0.2 low, 0.1 high) are ours, not published — research/UNSOURCED.md §22.
+ *  (0.2 low, 0.1 high) are ours, not published — research/UNSOURCED.md §32.
  */
 
 #pragma once
