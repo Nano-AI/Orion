@@ -814,10 +814,13 @@ OrionStatus orion_engine_hdr_merge_cancel(OrionEngine* engine);
  *       blended over sky_matte).
  * rejection: -1 auto, 0 none, 1 percentile, 2 sigma, 3 winsorized, 4 linear fit.
  * weight_by_noise: nonzero weights each frame by its inverse noise variance.
- * darks/flats: optional calibration frames (NULL/0 for none).
+ * darks/flats: optional calibration frames (NULL/0 for none). For now any
+ *            dark or flat refuses with "calibration frames are not built yet".
  * sky_matte: landscape only, matte_width*matte_height floats 0..1, 1 = sky,
  *            UPRIGHT (as displayed); the engine undoes the reference's EXIF
- *            turn. Required for mode 2.
+ *            turn. Required for mode 2; ignored in modes 0 and 1, though a
+ *            non-NULL matte's dimensions are still validated.
+ * Frames of different sizes or cameras are refused before any decode.
  * A frame that does not register is left out; fewer than two left is an
  * error. Blocking; progress and cancel from any thread, as
  * orion_engine_hdr_merge ("stack cancelled", never a partial file). */

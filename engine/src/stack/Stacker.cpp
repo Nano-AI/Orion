@@ -53,6 +53,12 @@ std::vector<float> decodeFrame(const std::string& path, merge::MergeRender& rend
     return rgb;
 }
 
+std::vector<std::uint16_t> toHalf(const std::vector<float>& rgb) {
+    std::vector<std::uint16_t> half(rgb.size());
+    for (std::size_t p = 0; p < rgb.size(); ++p) half[p] = util::floatToHalf(rgb[p]);
+    return half;
+}
+
 }  // namespace
 
 Stacker::Stacker(gpu::Device& device, std::string shaderDir)
@@ -80,9 +86,20 @@ void Stacker::run(const Request& rq) {
     // ponytail: Task 11 builds calibration; until then a dark or flat is refused, not ignored.
     if (!rq.darks.empty() || !rq.flats.empty()) throw std::runtime_error("calibration frames are not built yet");
 
+    // Refuse a mixed set before paying for any decode (metadata only); the decode loop re-checks size.
+    const auto ref = std::size_t(rq.reference);
+    const raw::RawInfo refInfo = raw::readInfo(rq.paths[ref]);
+    for (const auto& path : rq.paths) {
+        const raw::RawInfo info = raw::readInfo(path);
+        if (info.width != refInfo.width || info.height != refInfo.height)
+            throw std::runtime_error("the frames are different sizes — a stack comes from one camera");
+        const auto named = [](const std::string& c) { return c.find_first_not_of(' ') != std::string::npos; };
+        if (named(info.camera) && named(refInfo.camera) && info.camera != refInfo.camera)
+            throw std::runtime_error("the frames come from different cameras: " + refInfo.camera + ", " + info.camera);
+    }
+
     // ── Decode and register, one frame at a time, the reference first ─────
     merge::MergeRender render(device_, shaderDir_);
-    const auto ref = std::size_t(rq.reference);
     Meta refMeta;
     std::vector<float> refFloat;     // Noise mode: kept until every frame is aligned
     std::vector<Star> refStars;      // Stars and Landscape
@@ -101,8 +118,6 @@ void Stacker::run(const Request& rq) {
             throw std::runtime_error("the frames are different sizes — a stack comes from one camera");
         }
         const std::uint32_t W = meta.width, H = meta.height;
-        std::vector<std::uint16_t> half(rgb.size());
-        for (std::size_t p = 0; p < rgb.size(); ++p) half[p] = util::floatToHalf(rgb[p]);
 
         Frame f{W, H, nullptr, persp::identity(), persp::identity()};
         if (k == 0) {
@@ -130,7 +145,8 @@ void Stacker::run(const Request& rq) {
             f.refToSource = a.refToSource;   // the ground (Landscape) stays identity: the camera did not move
         }
 
-        planes.push_back(std::move(half));
+        // Halves only for a frame that registered; the Noise reference's float now lives in refFloat.
+        planes.push_back(toHalf(k == 0 && rq.mode == Mode::Noise ? refFloat : rgb));
         frames.push_back(f);
     }
     refFloat = {};
@@ -139,6 +155,7 @@ void Stacker::run(const Request& rq) {
 
     step(0.8f);
     const Result result = integrate(frames, 0, landscape ? matte.data() : nullptr, rq.options);
+    frames = {};   // they point into planes
     planes = {};
 
     // ── The container, as HdrMerge's ──────────────────────────────────────

@@ -35,14 +35,15 @@ namespace fs = std::filesystem;
 namespace persp = orion::pipe::persp;
 using orion::stack::Star;
 
-void writeFrame(const std::string& path, const std::vector<float>& rgb, std::uint32_t w, std::uint32_t h) {
+void writeFrame(const std::string& path, const std::vector<float>& rgb, std::uint32_t w, std::uint32_t h,
+                const std::string& camera = "SONY ILCE-7RM3") {
     orion::util::DngLinearImage img;
     img.width = w;
     img.height = h;
     img.rgb = rgb.data();
     img.xyzToCam = {0.6640f, -0.1847f, -0.0503f, -0.5238f, 1.3465f, 0.1916f, -0.0879f, 0.1636f, 0.6271f};
     img.asShotNeutral = {0.4548f, 1.0f, 0.7130f};
-    img.camera = "SONY ILCE-7RM3";
+    img.camera = camera;
     orion::util::writeDngLinear(path, img);
 }
 
@@ -139,6 +140,16 @@ void testStackFacadeNoise() {
                 }
             return std::sqrt(s2 / n - (s / n) * (s / n));
         };
+        // And over every pixel, tile edges included: a frame warped to the wrong place shows there.
+        double r2 = 0, rn = 0;
+        for (std::uint32_t y = 8; y + 8 < kTH; ++y)
+            for (std::uint32_t x = 8; x + 8 < kTW; ++x) {
+                const double r = stacked[(std::size_t(y) * kTW + x) * 3 + 1] - tile(float(x), float(y));
+                r2 += r * r; rn += 1;
+            }
+        const double rms = std::sqrt(r2 / rn);
+        std::printf("    RMS against the scene, edges included: %.5f (need <= 0.006)\n", rms);
+        CHECK(rms <= 0.006);
         const double ratio = sigma(single) / sigma(stacked);
         std::printf("    sigma(single)/sigma(stack) = %.3f (sqrt 8 = 2.828; need >= %.3f)\n", ratio, 0.8 * std::sqrt(8.0));
         CHECK(ratio >= 0.8 * std::sqrt(8.0));
@@ -256,7 +267,7 @@ void testStackFacadeRefuses() {
     section("stack facade: refusals, and a frame that does not register is skipped");
     std::vector<std::string> files;
     const std::string out = "/tmp/orion-stack-refuse.dng", odd = "/tmp/orion-stack-odd.dng",
-                      blank = "/tmp/orion-stack-blank.dng";
+                      blank = "/tmp/orion-stack-blank.dng", other = "/tmp/orion-stack-other.dng";
     OrionEngine* engine = nullptr;
     try {
         files = starFiles("/tmp/orion-stack-r", 6);
@@ -285,9 +296,21 @@ void testStackFacadeRefuses() {
         CHECK(orion_engine_stack(engine, p.data(), 6, 0, 1, -1, 0, dark, 1, nullptr, 0, nullptr, 0, 0, out.c_str()) !=
               ORION_OK);
 
-        writeFrame(odd, stackfix::starField(23, 60, 336, 240, persp::identity(), 0.005f, 0.05f).rgb, 336, 240);
-        CHECK(stackFiles(engine, {files[0], files[1], odd}, 0, 1, out) != ORION_OK);
-        report(!fs::exists(out), "no output after a refusal");
+        {   // Mixed sets refuse before any decode: an odd size last of six, another camera.
+            writeFrame(odd, stackfix::starField(23, 60, 336, 240, persp::identity(), 0.005f, 0.05f).rgb, 336, 240);
+            auto mixed = files;
+            mixed.back() = odd;
+            CHECK(stackFiles(engine, mixed, 0, 1, out) != ORION_OK);
+            report(std::strstr(orion_last_error(engine), "different sizes") != nullptr,
+                   "an odd-size frame names the size", orion_last_error(engine));
+            writeFrame(other, stackfix::starField(23, 60, 320, 240, persp::identity(), 0.005f, 0.05f).rgb, 320, 240,
+                       "NIKON Z 6");
+            mixed.back() = other;
+            CHECK(stackFiles(engine, mixed, 0, 1, out) != ORION_OK);
+            report(std::strstr(orion_last_error(engine), "different cameras") != nullptr,
+                   "another camera's frame is refused", orion_last_error(engine));
+            report(!fs::exists(out), "no output after a refusal");
+        }
 
         // A blank frame among six star frames: skipped, not fatal.
         writeFrame(blank, stackfix::starField(23, 0, 320, 240, persp::identity(), 0.005f, 0.05f).rgb, 320, 240);
@@ -307,7 +330,7 @@ void testStackFacadeRefuses() {
     }
     if (engine) orion_engine_destroy(engine);
     removeAll(files);
-    removeAll({out, odd, blank});
+    removeAll({out, odd, blank, other});
 }
 
 void testStackCancelIsAtomic() {
@@ -332,6 +355,7 @@ void testStackCancelIsAtomic() {
             threw = true;
         }
         canceller.join();
+        std::printf("    the run %s\n", threw ? "was cancelled" : "completed before the cancel landed");
         if (threw) report(!fs::exists(out), "a cancelled stack leaves no file");
         else report(fs::exists(out) && fs::file_size(out) > 0, "a completed stack leaves a whole file");
         report(!fs::exists(out + ".part"), "and never a partial one");
