@@ -17,43 +17,124 @@ namespace OrionShell.CanvasSlice;
 sealed class NodeGarden : Control {
     /// The pattern's tile, 376 x 396, drawn at 1.5 so a node is about 3.6 px.
     const double W = 376, H = 396, Scale = 1.5, R = 2.4;
-    static readonly Geometry Links = Build(LinkData, 4), Nodes = Build(NodeData, 2);
     static readonly IPen Thread = new Pen(Palette.Hover, 0.9, lineCap: PenLineCap.Round);
-    static readonly Point[] Points = Parse(NodeData);
+    /// A node is a zero-length stroke with round caps: a dot, at a fraction of an arc's cost.
+    static readonly IPen Dot = new Pen(Palette.Line, 2 * R * Scale, lineCap: PenLineCap.Round);
+    static readonly Point[] Points = Pairs(Numbers(NodeData));
+    /// Each link as its two end nodes: a node's index in the tile, and which neighbouring tile it is in.
+    static readonly (int A, int Ax, int Ay, int B, int Bx, int By)[] Joins = Join(Numbers(LinkData));
     // Ten steps of the accent, so a frame allocates no brushes.
     static readonly IBrush[] Glow = [.. Enumerable.Range(1, 10).Select(i => new Avalonia.Media.Immutable.ImmutableSolidColorBrush(((ISolidColorBrush)Palette.Accent).Color, i / 10.0))];
-    double _t;
 
-    /// Where the pointer is over the welcome, or null: the nodes under it light up.
+    // The garden is a small physics sim: every node is a spring tied to its place in the
+    // pattern, a slow divergence-free flow (a stream function, so it swirls like water
+    // rather than bunching) leans on it, and the pointer pushes the nodes aside and drags
+    // them along the way it moves. Links follow their nodes, so the whole net flexes.
+    const double Stiffness = 38, Damping = 3.2, Flow = 7, Reach = 150, Push = 2600, Stir = 0.9, MaxOffset = 36;
+    double _t, _x0, _y0;
+    int _cols, _rows;
+    double[] _dx = [], _dy = [], _vx = [], _vy = [];
+    Point? _last;
+    Vector _hand;   // the pointer's velocity, smoothed, in px/s
+
+    /// Where the pointer is over the welcome, or null: it stirs the nodes and lights them.
     public Point? Pointer { get; set; }
 
     public NodeGarden() => IsHitTestVisible = false;
 
-    /// One frame of the drifting light.
-    public void Advance(double dt) { _t += dt; InvalidateVisual(); }
+    /// One frame of the sim.
+    public void Advance(double dt) {
+        dt = Math.Min(dt, 1 / 30.0);   // a long frame (or Reduce Motion's one-second steps) must not blow the springs up
+        _t += dt;
+        Layout();
+        if (Pointer is { } p) {
+            var v = _last is { } l ? (p - l) / Math.Max(dt, 1e-3) : default;
+            _hand = _hand * 0.8 + v * 0.2;
+            _last = p;
+        } else { _hand = default; _last = null; }
+        int n = Points.Length;
+        for (int ty = 0; ty < _rows; ty++)
+            for (int tx = 0; tx < _cols; tx++)
+                for (int i = 0; i < n; i++) {
+                    int k = (ty * _cols + tx) * n + i;
+                    var rest = Rest(tx, ty, i);
+                    // The flow: velocity of psi = sin(ax + ut) sin(by + vt), taken as where the node leans.
+                    double sx = Math.Sin(rest.X * 0.0062 + _t * 0.45), cx = Math.Cos(rest.X * 0.0062 + _t * 0.45);
+                    double sy = Math.Sin(rest.Y * 0.0081 - _t * 0.37), cy = Math.Cos(rest.Y * 0.0081 - _t * 0.37);
+                    double lx = Flow * sx * cy, ly = -Flow * cx * sy;
+                    double ax = -Stiffness * (_dx[k] - lx) - Damping * _vx[k], ay = -Stiffness * (_dy[k] - ly) - Damping * _vy[k];
+                    if (Pointer is { } q) {
+                        double ex = rest.X + _dx[k] - q.X, ey = rest.Y + _dy[k] - q.Y, d = Math.Sqrt(ex * ex + ey * ey);
+                        if (d < Reach) {
+                            double f = (1 - d / Reach) * (1 - d / Reach);
+                            if (d > 0.5) { ax += Push * f * ex / d; ay += Push * f * ey / d; }
+                            ax += Stir * f * _hand.X; ay += Stir * f * _hand.Y;
+                        }
+                    }
+                    _vx[k] += ax * dt; _vy[k] += ay * dt;
+                    _dx[k] = Math.Clamp(_dx[k] + _vx[k] * dt, -MaxOffset, MaxOffset);
+                    _dy[k] = Math.Clamp(_dy[k] + _vy[k] * dt, -MaxOffset, MaxOffset);
+                }
+        InvalidateVisual();
+    }
 
-    public override void Render(DrawingContext c) {
-        // Centred, so the window's middle is the tile's middle at any size.
+    /// The tile grid that covers the control, centred so the window's middle is a tile's middle.
+    void Layout() {
         double w = W * Scale, h = H * Scale;
         double x0 = (Bounds.Width - w) / 2 % w - w, y0 = (Bounds.Height - h) / 2 % h - h;
+        int cols = (int)Math.Ceiling((Bounds.Width - x0) / w), rows = (int)Math.Ceiling((Bounds.Height - y0) / h);
+        if (cols == _cols && rows == _rows && x0 == _x0 && y0 == _y0) return;
+        (_cols, _rows, _x0, _y0) = (Math.Max(cols, 0), Math.Max(rows, 0), x0, y0);
+        int count = _cols * _rows * Points.Length;
+        (_dx, _dy, _vx, _vy) = (new double[count], new double[count], new double[count], new double[count]);
+    }
+
+    Point Rest(int tx, int ty, int i) => new(_x0 + tx * W * Scale + Points[i].X * Scale, _y0 + ty * H * Scale + Points[i].Y * Scale);
+
+    /// Where node i of tile (tx, ty) is drawn now: its rest place plus the sim's offset, or the rest place past the grid.
+    Point At(int tx, int ty, int i) {
+        var rest = Rest(tx, ty, i);
+        if (tx < 0 || ty < 0 || tx >= _cols || ty >= _rows) return rest;
+        int k = (ty * _cols + tx) * Points.Length + i;
+        return k < _dx.Length ? new Point(rest.X + _dx[k], rest.Y + _dy[k]) : rest;
+    }
+
+    public override void Render(DrawingContext c) {
+        Layout();
         using var clip = c.PushClip(new Rect(Bounds.Size));
-        for (double y = y0; y < Bounds.Height; y += h)
-            for (double x = x0; x < Bounds.Width; x += w)
-                using (c.PushTransform(Matrix.CreateScale(Scale, Scale) * Matrix.CreateTranslation(x, y))) {
-                    c.DrawGeometry(null, Thread, Links);
-                    c.DrawGeometry(Palette.Line, null, Nodes);
-                }
+        int n = Points.Length;
+        var links = new StreamGeometry();
+        using (var s = links.Open())
+            for (int ty = 0; ty < _rows; ty++)
+                for (int tx = 0; tx < _cols; tx++)
+                    foreach (var j in Joins) {
+                        s.BeginFigure(At(tx + j.Ax, ty + j.Ay, j.A), false);
+                        s.LineTo(At(tx + j.Bx, ty + j.By, j.B));
+                        s.EndFigure(false);
+                    }
+        c.DrawGeometry(null, Thread, links);
+        double r = R * Scale;
+        var nodes = new StreamGeometry();
+        using (var s = nodes.Open())
+            for (int ty = 0; ty < _rows; ty++)
+                for (int tx = 0; tx < _cols; tx++)
+                    for (int i = 0; i < n; i++) {
+                        var at = At(tx, ty, i);
+                        s.BeginFigure(at, false);
+                        s.LineTo(new Point(at.X + 0.01, at.Y));
+                        s.EndFigure(false);
+                    }
+        c.DrawGeometry(null, Dot, nodes);
         // Two lights over the garden: one drifting slowly on its own, one under the pointer.
-        // Only the nodes inside a light are drawn again, in the accent, so a frame stays cheap.
         var drift = new Point(Bounds.Width * (0.5 + 0.34 * Math.Cos(_t * 0.11)), Bounds.Height * (0.5 + 0.3 * Math.Sin(_t * 0.157)));
-        for (double y = y0; y < Bounds.Height; y += h)
-            for (double x = x0; x < Bounds.Width; x += w)
-                foreach (var p in Points) {
-                    var at = new Point(x + p.X * Scale, y + p.Y * Scale);
+        for (int ty = 0; ty < _rows; ty++)
+            for (int tx = 0; tx < _cols; tx++)
+                for (int i = 0; i < n; i++) {
+                    var at = At(tx, ty, i);
                     double a = Math.Max(Light(at, drift, 300) * 0.5, Pointer is { } q ? Light(at, q, 170) * 0.85 : 0);
                     if (a < 0.05) continue;
-                    double r = R * Scale * (1 + 0.4 * a);
-                    c.DrawEllipse(Glow[Math.Clamp((int)(a * 10), 0, 9)], null, at, r, r);
+                    double g = r * (1 + 0.4 * a);
+                    c.DrawEllipse(Glow[Math.Clamp((int)(a * 10), 0, 9)], null, at, g, g);
                 }
     }
 
@@ -63,32 +144,31 @@ sealed class NodeGarden : Control {
         return d >= 1 ? 0 : (1 - d) * (1 - d);
     }
 
-    static Point[] Parse(string data) {
-        var v = data.Split((char[])[' ', ',', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries)
-                    .Select(t => double.Parse(t, CultureInfo.InvariantCulture)).ToArray();
-        return [.. Enumerable.Range(0, v.Length / 2).Select(i => new Point(v[2 * i], v[2 * i + 1]))];
-    }
+    static double[] Numbers(string data) =>
+        [.. data.Split((char[])[' ', ',', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries).Select(t => double.Parse(t, CultureInfo.InvariantCulture))];
 
-    /// Segments (four numbers each) or dots (two).
-    static Geometry Build(string data, int n) {
-        var v = data.Split((char[])[' ', ',', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries)
-                    .Select(t => double.Parse(t, CultureInfo.InvariantCulture)).ToArray();
-        var g = new StreamGeometry();
-        using var s = g.Open();
-        for (int i = 0; i + n <= v.Length; i += n) {
-            if (n == 4) {
-                s.BeginFigure(new Point(v[i], v[i + 1]), false);
-                s.LineTo(new Point(v[i + 2], v[i + 3]));
-                s.EndFigure(false);
-                continue;
-            }
-            Point left = new(v[i] - R, v[i + 1]), right = new(v[i] + R, v[i + 1]);
-            s.BeginFigure(left, true);
-            s.ArcTo(right, new Size(R, R), 0, false, SweepDirection.Clockwise);
-            s.ArcTo(left, new Size(R, R), 0, false, SweepDirection.Clockwise);
-            s.EndFigure(true);
+    static Point[] Pairs(double[] v) => [.. Enumerable.Range(0, v.Length / 2).Select(i => new Point(v[2 * i], v[2 * i + 1]))];
+
+    /// Each segment's ends, matched to the nearest node in this tile or a neighbouring one.
+    static (int, int, int, int, int, int)[] Join(double[] v) {
+        (int I, int X, int Y) Nearest(double x, double y) {
+            (int I, int X, int Y) best = (0, 0, 0);
+            double bestD = double.MaxValue;
+            for (int oy = -1; oy <= 1; oy++)
+                for (int ox = -1; ox <= 1; ox++)
+                    for (int i = 0; i < Points.Length; i++) {
+                        double dx = Points[i].X + ox * W - x, dy = Points[i].Y + oy * H - y, d = dx * dx + dy * dy;
+                        if (d < bestD) (bestD, best) = (d, (i, ox, oy));
+                    }
+            return best;
         }
-        return g;
+        var joins = new List<(int, int, int, int, int, int)>();
+        for (int i = 0; i + 4 <= v.Length; i += 4) {
+            var (a, ax, ay) = Nearest(v[i], v[i + 1]);
+            var (b, bx, by) = Nearest(v[i + 2], v[i + 3]);
+            joins.Add((a, ax, ay, b, bx, by));
+        }
+        return [.. joins];
     }
 
     // x,y per node

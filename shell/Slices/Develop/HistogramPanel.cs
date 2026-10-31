@@ -75,6 +75,8 @@ public sealed class HistogramPanel : StackPanel {
     const double PlateHeight = 92, FlagsHeight = 18;
     /// Most swaps fill the plate in about 300 ms (#324); a pulse for those would flash on every arrow press.
     static readonly TimeSpan PulseAfter = TimeSpan.FromMilliseconds(500);
+    /// The last photo's curve while this one's is measured: there, but plainly not a reading.
+    const double Stale = 0.28;
     /// Opacity only; a little under one cycle a second, nowhere near a slow sway.
     // ponytail: runs under Reduce Motion too (opacity is the kind it keeps); hold it still once u5's Motion.Reduced lands.
     static readonly Animation Pulse = new() {
@@ -129,13 +131,14 @@ public sealed class HistogramPanel : StackPanel {
 
     void Refresh() {
         var bins = Levels.Bins;
-        bool had = _plate.Bins.Length > 0, has = bins.Length > 0;
-        _plate.Bins = bins;
-        _plate.InvalidateVisual();
-        // Gone at once; an arrival after a swap fades in. The panel's first curve (a new
-        // window, a --screenshot) is simply there.
-        if (!has) Fade(0, animate: false);
-        else if (!had) Fade(1, animate: _arrived);
+        bool has = bins.Length > 0;
+        // While a swap is measured, the last curve stays, dimmed: the plate says at once that
+        // it is working, and never shows the old photo's shape at full strength as this one's.
+        // The new curve then grows out of the old one. The panel's first curve (a new window,
+        // a --screenshot) is simply there; with no curve before it, the plate empties.
+        if (has) { _plate.MorphTo(bins); Fade(1, animate: _arrived); }
+        else if (_plate.Bins.Length > 0) Fade(Stale, animate: true);
+        else Fade(0, animate: false);
         _arrived |= has;
         _shadows.Child = has ? Flag(Levels.Clipped(bins, true), true) : null;
         _highlights.Child = has ? Flag(Levels.Clipped(bins, false), false) : null;
@@ -195,7 +198,38 @@ public sealed class HistogramPanel : StackPanel {
 /// a DrawingContext has no per-draw screen blend; 2 px per point, like Retina.
 sealed class HistogramPlate : Control {
     const double Scale = 2;
+    /// The morph from one photo's curve to the next, in seconds.
+    const double MorphTime = 0.28;
     public uint[] Bins = [];
+    double[] _shown = [], _from = [];   // the plotted heights last drawn, and where a morph started
+    double _t = 1;
+    int _morph;
+
+    /// Shows `bins`, growing the curve out of the one on show. A task, not a timer or the
+    /// frame clock: the headless selftest pumps jobs but neither of those.
+    public async void MorphTo(uint[] bins) {
+        _from = _shown.Length == bins.Length && !OrionShell.Motion.Reduced ? _shown : [];
+        Bins = bins;
+        _t = _from.Length > 0 ? 0 : 1;
+        InvalidateVisual();
+        for (int me = ++_morph; _t < 1; ) {
+            await Task.Delay(16);
+            if (me != _morph) return;   // a newer curve took over
+            _t = Math.Min(1, _t + 0.016 / MorphTime);
+            InvalidateVisual();
+        }
+    }
+
+    /// The heights to draw: the bins' own, or part way from the last curve while a morph runs.
+    double[] Plot(int n) {
+        double ceiling = Math.Max(Ceiling(n), 1);
+        var to = new double[3 * n];
+        for (int k = 0; k < to.Length; k++) to[k] = Plotted(Bins[k] / ceiling);
+        if (_t >= 1 || _from.Length != to.Length) return to;
+        double e = OrionShell.Motion.EaseOut.Ease(_t);
+        for (int k = 0; k < to.Length; k++) to[k] = _from[k] + (to[k] - _from[k]) * e;
+        return to;
+    }
 
     public override void Render(DrawingContext context) {
         int w = (int)(Bounds.Width * Scale), h = (int)(Bounds.Height * Scale), n = Bins.Length / 3;
@@ -203,14 +237,14 @@ sealed class HistogramPlate : Control {
         var pixels = new byte[w * h * 4];
         var ground = Rgb(Palette.FilmBase);
         Color[] inks = [((ISolidColorBrush)Palette.ChanR).Color, ((ISolidColorBrush)Palette.ChanG).Color, ((ISolidColorBrush)Palette.ChanB).Color];
-        double ceiling = Math.Max(Ceiling(n), 1);
+        var plot = _shown = Plot(n);
         var heights = new double[3];
         for (int x = 0; x < w; x++) {
             // The path joins bin i at x = width * i / (n - 1): interpolate between the two either side.
             double f = (x + 0.5) / w * (n - 1);
             int i0 = Math.Min((int)f, n - 2);
             for (int c = 0; c < 3; c++) {
-                double a = Plotted(Bins[c * n + i0] / ceiling), b = Plotted(Bins[c * n + i0 + 1] / ceiling);
+                double a = plot[c * n + i0], b = plot[c * n + i0 + 1];
                 heights[c] = h * (1 - (a + (b - a) * (f - i0)));
             }
             // Quarter divisions, white at 8%, under the curves.

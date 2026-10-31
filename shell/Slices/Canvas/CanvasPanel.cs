@@ -119,6 +119,9 @@ public sealed class CanvasPanel : Panel {
         var top = TopLevel.GetTopLevel(this);
         CanvasState.FollowShell(top);
         Motion.Attach(top);
+        // A scene's motion asked for before there was a window ran once and stopped: start it again on this clock.
+        _was = null;
+        Refresh();
         // The wheel and the pinch work wherever the pointer is on the canvas, the
         // compare divider and the mask handles included: those are this panel's
         // siblings, so their events bubble to the region and never through here.
