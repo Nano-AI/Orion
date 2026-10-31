@@ -203,6 +203,34 @@ gpu::PixelFormat Pipeline::nodeFormat(int nodeId) const {
     return nodes_[nodeId].format;
 }
 
+void Pipeline::setNodeSize(int nodeId, std::uint32_t width, std::uint32_t height) {
+    if (nodeId < 0 || nodeId >= static_cast<int>(nodes_.size())) return;
+    Node& node = nodes_[static_cast<std::size_t>(nodeId)];
+    if (node.outWidth == width && node.outHeight == height) return;
+
+    node.outWidth  = width;
+    node.outHeight = height;
+    if (!compiled_) return;
+
+    // As a format change: the old texture back to the pool, which this
+    // render's end empties, and what it held is gone with it.
+    outputs_[nodeId] = nullptr;
+    pool_.release(std::move(ownedOutputs_[nodeId]));
+    trimPool_ = true;
+    dirty_[nodeId] = true;
+    markDownstreamDirty(nodeId);
+}
+
+std::uint32_t Pipeline::nodeWidth(int nodeId) const {
+    const Node& node = nodes_.at(static_cast<std::size_t>(nodeId));
+    return node.outWidth ? node.outWidth : width_;
+}
+
+std::uint32_t Pipeline::nodeHeight(int nodeId) const {
+    const Node& node = nodes_.at(static_cast<std::size_t>(nodeId));
+    return node.outHeight ? node.outHeight : height_;
+}
+
 int Pipeline::resolve(int nodeId) const {
     // Walk back past disabled nodes to whoever last produced real pixels.
     int id = nodeId;
@@ -461,11 +489,27 @@ double Pipeline::render() {
             if (in != kSource) ensure(resolve(in), batch.get());
         }
         computeOne(id, batch.get());
+        if (releaseEveryRender_ && pool_.idleBytes() > 0) {
+            // ⚠ Lean, a texture handed back is memory given back *now*. Kept in
+            // the pool it is still allocated, and even destroyed, Dawn and Metal
+            // hold a texture until the submit that used it is done: in one batch
+            // every intermediate stays, the sum of them all rather than the most
+            // alive at once. So the batch so far goes, then the pool, then the
+            // memory: at 42 MP a lean render went from 2.5 GB to 1.9 (#399).
+            // A later node of the same shape allocates afresh; that is the price.
+            if (batch) {
+                batch->commitAndWait();
+                total += batch->gpuMilliseconds();
+            }
+            pool_.shrink();
+            device_.reclaim();
+            if (batch) batch = std::make_unique<gpu::CommandBuffer>(device_);
+        }
     }
 
     if (batch) {
         batch->commitAndWait();
-        total = batch->gpuMilliseconds();
+        total += batch->gpuMilliseconds();
     } else {
         // Profiling: every dispatch above already timed itself.
         for (const auto& t : lastRun_) total += t.ms;

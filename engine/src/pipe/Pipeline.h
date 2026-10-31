@@ -89,6 +89,15 @@ public:
 
     [[nodiscard]] gpu::PixelFormat nodeFormat(int nodeId) const;
 
+    /// Changes a node's output size, reallocating on its next dispatch, as
+    /// `setNodeFormat` does: for the one node whose size follows the edit
+    /// (geometry, #399). The caller decides how often; this always obeys.
+    void setNodeSize(int nodeId, std::uint32_t width, std::uint32_t height);
+
+    /// A node's output size: its own, else the graph's working size.
+    [[nodiscard]] std::uint32_t nodeWidth(int nodeId) const;
+    [[nodiscard]] std::uint32_t nodeHeight(int nodeId) const;
+
     /// Which node's texture a consumer should read, following any
     /// disabled nodes back to a live producer.
     [[nodiscard]] int resolve(int nodeId) const;

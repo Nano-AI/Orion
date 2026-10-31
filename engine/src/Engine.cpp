@@ -296,6 +296,18 @@ double Engine::renderRegion(const Region& v, bool interacting) {
         }
         origin = o;
     };
+    // Past fit the canvas shows regions and nothing on screen reads the full
+    // graph: its textures go back (#318's release), ~3.3 GB at 24 MP, before
+    // the window allocates, not after: at 42 MP beside a desktop, the full
+    // graph an export's size estimate had just rendered left every region
+    // out of memory (#400). The next full render (export, an edit the region
+    // refuses) rebuilds them.
+    if (!fullReleased_) {
+        develop_->graph().releaseOutputs();
+        device_->reclaim();
+        fullReleased_ = true;
+        fullCurrent_ = false;
+    }
     std::uint32_t ox = 0, oy = 0, ww = 0, wh = 0;
     span(x0, x1, fw, ox, ww);
     span(y0, y1, fh, oy, wh);
@@ -331,17 +343,18 @@ double Engine::renderRegion(const Region& v, bool interacting) {
         regionView_ = v;
     }
     region_->apply(adj_);
-    const double ms = region_->render();
-    regionCurrent_ = true;
-    // Past fit the canvas shows regions and nothing on screen reads the full
-    // graph: give its textures back (#318's release), ~3.3 GB at 24 MP. The
-    // next full render (export, an edit the region refuses) rebuilds them.
-    if (!fullReleased_) {
-        develop_->graph().releaseOutputs();
+    double ms = 0.0;
+    try {
+        ms = region_->render();
+    } catch (const gpu::OutOfMemory&) {
+        // A window that did not fit keeps nothing: the next one starts from
+        // empty rather than beside this one's half-allocated graph (#400).
+        region_.reset();
+        regionLoaded_ = false;
         device_->reclaim();
-        fullReleased_ = true;
-        fullCurrent_ = false;
+        throw;
     }
+    regionCurrent_ = true;
     return ms;
 }
 
@@ -423,6 +436,9 @@ double Engine::render() {
     // the preview and every other open photo: give it back, as a release would.
     const auto giveBack = [&] {
         develop_->graph().releaseOutputs();
+        // A region graph, if any, is not what is wanted now: the next region rebuilds it (#400).
+        if (region_) region_->graph().releaseOutputs();
+        regionCurrent_ = false;
         device_->reclaim();
         fullReleased_ = true;
         fullCurrent_ = false;
@@ -734,7 +750,7 @@ void Engine::exportImage(const std::string& path, const util::ExportOptions& opt
     WideOutputFor wide(*develop_, options.depth == util::BitDepth::Sixteen);
 
     // Make sure what we write matches what is on screen.
-    develop_->render();
+    renderForExport();
 
     // The orientation node's texture is square; only the oriented rectangle
     // inside it holds pixels.
@@ -752,6 +768,22 @@ void Engine::exportImage(const std::string& path, const util::ExportOptions& opt
                      static_cast<std::size_t>(w) * 4 * sizeof(std::uint16_t), o);
     wide.restore();
     rereleaseFull();
+}
+
+void Engine::renderForExport() {
+    try {
+        develop_->render();
+    } catch (...) {
+        // Out of memory part way, the graph keeps every texture it did get, and
+        // past fit no region frees them again (they are already "released"):
+        // at 42 MP beside a desktop, a size estimate that failed so left 2.2 GB
+        // behind and every region after it out of memory (#400). Give it back.
+        develop_->graph().releaseOutputs();
+        device_->reclaim();
+        fullReleased_ = true;
+        fullCurrent_ = false;
+        throw;
+    }
 }
 
 void Engine::rereleaseFull() noexcept {
@@ -777,7 +809,7 @@ std::vector<std::uint16_t> Engine::exportPixels(const util::ExportOptions& optio
     // The estimate has to encode the same pixels the real write will — which
     // includes the depth, since eight bits is roughly half the PNG.
     WideOutputFor wide(*develop_, options.depth == util::BitDepth::Sixteen);
-    develop_->render();
+    renderForExport();
 
     w = develop_->outputWidth();
     h = develop_->outputHeight();

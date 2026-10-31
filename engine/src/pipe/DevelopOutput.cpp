@@ -156,16 +156,10 @@ void DevelopPipeline::buildOutputNodes() {
                              PixelFormat::RGBA8Unorm, {}, {auxGrainPlate_}});
 
     // Orientation is last, and is the only node whose output dimensions differ
-    // from its input — a quarter turn swaps them.
-    //
-    // Allocate for the worst case so a user rotation never needs a recompile.
-    // 1.5x covers the worst-case straighten bounding box (45 degrees
-    // grows the frame by sqrt(2)).
-    const std::uint32_t maxSide =
-        static_cast<std::uint32_t>(std::max(width_, height_) * 1.45f);
+    // from its input — a quarter turn swaps them. Sized to the frame it writes
+    // by `applyGeometry`, never by a recompile.
     nGeometry_ = pipeline_.add({"geometry", "geometry", {nGrain_},
-                                PixelFormat::RGBA8Unorm, {}, {},
-                                true, maxSide, maxSide});
+                                PixelFormat::RGBA8Unorm, {}, {}});
 }
 
 /// The grain plate. After `compile` rather than beside the node, because it
@@ -487,7 +481,7 @@ void DevelopPipeline::applyGeometry(const Adjustments& adj,
             // sampled into a frame-sized target instead, so the preview costs
             // the same memory at 90 degrees as at zero — it just resolves a
             // little softer, which is what a crop preview can afford. Capped at
-            // the 1.45 the graph allocates for.
+            // 1.45, the bounding box at 45 degrees.
             const float texScale = std::min(m, 1.45f);
             g.outSize[0] = std::max(1u, static_cast<std::uint32_t>(rotW * texScale));
             g.outSize[1] = std::max(1u, static_cast<std::uint32_t>(rotH * texScale));
@@ -502,7 +496,7 @@ void DevelopPipeline::applyGeometry(const Adjustments& adj,
 
             // Only part of the picture, at a size of the caller's choosing:
             // the region graph's view of the screen (#22). Capped at the
-            // texture the graph allocated.
+            // crop preview's largest.
             if (region_.outW > 0 && region_.outH > 0) {
                 g.cropOrigin[0] = cx + region_.x * cw;
                 g.cropOrigin[1] = cy + region_.y * ch;
@@ -512,6 +506,26 @@ void DevelopPipeline::applyGeometry(const Adjustments& adj,
                 g.outSize[0] = std::min(region_.outW, cap);
                 g.outSize[1] = std::min(region_.outH, cap);
             }
+        }
+
+        // The texture holds the frame it writes, not the 1.45x square of the
+        // worst straighten it was once allocated as for every photo: 509 MB for
+        // a 162 MB picture at 42 MP, a GB wide, and why a full render did not
+        // fit beside a desktop on an 8 GB card (#399). It grows with an eighth
+        // to spare, so a straighten drag reallocates every few degrees rather
+        // than every tick, and shrinks once it holds twice the pixels it needs.
+        const std::uint32_t needW = g.outSize[0], needH = g.outSize[1];
+        const std::uint32_t haveW = pipeline_.nodeWidth(nGeometry_);
+        const std::uint32_t haveH = pipeline_.nodeHeight(nGeometry_);
+        const auto cap = static_cast<std::uint32_t>(std::max(width_, height_) * 1.45f);
+        const auto roomy = [cap](std::uint32_t need) {
+            return std::max(need, std::min(cap, need + need / 8));
+        };
+        if (first || std::uint64_t(haveW) * haveH > 2 * std::uint64_t(needW) * needH) {
+            pipeline_.setNodeSize(nGeometry_, needW, needH);
+        } else if (needW > haveW || needH > haveH) {
+            pipeline_.setNodeSize(nGeometry_, needW > haveW ? roomy(needW) : haveW,
+                                  needH > haveH ? roomy(needH) : haveH);
         }
 
         pipeline_.setParams(nGeometry_, &g, sizeof g);
