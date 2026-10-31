@@ -173,14 +173,14 @@ void DevelopPipeline::buildOutputNodes() {
 /// chain is stacked by hand rather than mipmapped.
 
 void DevelopPipeline::uploadGrainPlate() {
-    // per-`Pipeline` because the aux texture is — building it here rather than
-    // caching it statically keeps the ownership obvious and costs one upload
-    // per graph, of which there are two.
-    {
-        const auto plate = grain::buildPlate();
-        pipeline_.updateAux(auxGrainPlate_, plate.data(),
-                            static_cast<std::size_t>(grain::kPlateSize) * sizeof(float));
-    }
+    // One upload per graph, because the aux texture is per `Pipeline`. The
+    // plate itself is built once a process (#DEC-perf): its seed is fixed, so
+    // every build is the same 32 MB, and building it cost ~70 ms of CPU each
+    // time, twice an open (the full graph and the preview), on every photo the
+    // browsing cache decodes.
+    static const std::vector<float> plate = grain::buildPlate();
+    pipeline_.updateAux(auxGrainPlate_, plate.data(),
+                        static_cast<std::size_t>(grain::kPlateSize) * sizeof(float));
 }
 
 void DevelopPipeline::applyGrade(const Adjustments& adj,

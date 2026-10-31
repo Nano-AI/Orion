@@ -11,6 +11,10 @@ public static unsafe partial class Native {
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     public static partial nint shim_open_mode(string path, int headless);
 
+    /// Why this thread's last shim_open_mode returned 0 (a UTF-8 C string, the shim's).
+    [LibraryImport(Lib)]
+    public static partial nint shim_open_error();
+
     [LibraryImport(Lib)]
     public static partial void shim_close(nint shim);
 

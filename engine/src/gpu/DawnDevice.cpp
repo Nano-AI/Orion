@@ -171,9 +171,11 @@ std::shared_ptr<Context> open() {
     if (!c.instance) throw std::runtime_error("Dawn: CreateInstance failed");
 
     // The platform's native API. Where it offers no hardware adapter (a CI
-    // runner, a VM) Dawn's fallback is a software one: WARP on D3D12, a CPU
-    // Vulkan driver such as lavapipe on Linux. ORION_DAWN_ADAPTER=fallback
-    // asks for it outright.
+    // runner, a VM) Dawn's fallback is a software one: WARP on D3D12. On Vulkan
+    // Dawn's only fallback is SwiftShader, which this build has not got; a CPU
+    // driver such as lavapipe is an ordinary adapter, ranked last, and the
+    // loader's own VK_DRIVER_FILES / VK_LOADER_DRIVERS_SELECT choose between
+    // drivers (#DEC-perf). ORION_DAWN_ADAPTER=fallback asks for Dawn's outright.
     const Platform native = platform();
     const char* pick = std::getenv("ORION_DAWN_ADAPTER");
     const bool forced = pick != nullptr && std::strcmp(pick, "fallback") == 0;
@@ -189,7 +191,14 @@ std::shared_ptr<Context> open() {
             }));
         if (c.adapter || fallback) break;
     }
-    if (!c.adapter) throw std::runtime_error("Dawn: no adapter: " + why);
+    // Named, so a person reading it knows which driver to install (#DEC-perf).
+    const char* api = native.backend == wgpu::BackendType::D3D12 ? "D3D12"
+                    : native.backend == wgpu::BackendType::Vulkan ? "Vulkan" : "Metal";
+    if (!c.adapter && forced)
+        throw std::runtime_error(std::string("Dawn: no software fallback adapter on ") + api +
+                                 " (ORION_DAWN_ADAPTER=fallback): " + why);
+    if (!c.adapter) throw std::runtime_error(std::string("Dawn: no ") + api + " adapter (is a " + api +
+                                             " driver installed?): " + why);
 
     // ⚠ Each of these is load-bearing; the engine refuses to run without them
     // rather than render something subtly different.
@@ -209,8 +218,15 @@ std::shared_ptr<Context> open() {
     }
     for (auto f : features) {
         if (!c.adapter.HasFeature(f)) {
+            wgpu::AdapterInfo ai{};
+            c.adapter.GetInfo(&ai);
+            const char* name = f == wgpu::FeatureName::TextureFormatsTier1 ? "TextureFormatsTier1"
+                             : f == wgpu::FeatureName::Float32Filterable ? "Float32Filterable"
+                             : f == wgpu::FeatureName::ImplicitDeviceSynchronization ? "ImplicitDeviceSynchronization"
+                                                                                       : nullptr;
             throw std::runtime_error("Dawn: adapter lacks feature " +
-                                     std::to_string(static_cast<std::uint32_t>(f)));
+                                     (name ? std::string(name) : std::to_string(static_cast<std::uint32_t>(f))) +
+                                     " (" + text(ai.device) + ", " + api + ")");
         }
     }
 

@@ -273,6 +273,10 @@ private:
     /// The region graph and what it was last loaded with (#22).
     std::unique_ptr<pipe::DevelopPipeline> region_;
     std::unique_ptr<pipe::DisplayCopy>     display_;
+    /// histogram_sample.slang and its target, made on the first histogram.
+    std::unique_ptr<gpu::Library>          sampleLibrary_;
+    std::unique_ptr<gpu::Kernel>           sampleKernel_;
+    std::unique_ptr<gpu::Texture>          samples_;
     // ponytail: the whole mosaic stays on the CPU for the region graph to cut
     // windows from (2 bytes a pixel, 48 MB at 24 MP); read windows back from
     // the full graph's source texture if that ever matters.

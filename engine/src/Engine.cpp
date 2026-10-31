@@ -23,7 +23,7 @@ Engine::Engine() : device_(gpu::Device::create()) {
 
 Engine::~Engine() {
     // The Dawn device outlives this engine while another holds it (#DEC-memory).
-    develop_.reset(); preview_.reset(); region_.reset(); display_.reset(); hdrMerge_.reset();
+    develop_.reset(); preview_.reset(); region_.reset(); display_.reset(); samples_.reset(); hdrMerge_.reset();
     device_->reclaim();
 }
 
@@ -362,6 +362,7 @@ void Engine::releaseRenderMemory() noexcept {
     if (preview_) preview_->graph().releaseOutputs();
     if (region_)  region_->graph().releaseOutputs();
     if (display_) display_->release();   // the kernel stays compiled
+    samples_.reset();
     device_->reclaim();
 }
 
@@ -646,19 +647,41 @@ void Engine::histogram(std::uint32_t* out, std::uint32_t bins) {
         ++out[c * bins + bin];
     };
 
+    // ⚠ **Sampled on the GPU, read back small (#DEC-perf).** A full readback of
+    // a 24 MP frame to keep one pixel in 31 cost 82 ms on the UI thread under
+    // Dawn on Linux, every settled render. histogram_sample gathers the same
+    // pixels in the output's own format, so the bins are unchanged.
+    const std::uint32_t n = std::uint32_t((count + kStride - 1) / kStride);
+    const std::uint32_t tw = std::min<std::uint32_t>(n, 2048), th = (n + tw - 1) / tw;
+    const gpu::PixelFormat format = d.output().format();
+    if (!sampleKernel_) {
+        sampleLibrary_ = gpu::Library::createFromFile(*device_, res::shaderDir() + "/histogramSample.metallib");
+        sampleKernel_ = gpu::Kernel::create(*device_, *sampleLibrary_, "histogramSample");
+    }
+    if (!samples_ || samples_->width() != tw || samples_->height() != th || samples_->format() != format)
+        samples_ = gpu::Texture::create(*device_, tw, th, format);   // kept: no allocation a render
+    gpu::Texture* samples = samples_.get();
+    struct {
+        std::uint32_t size[2], width, count, stride, unused;
+    } p{{tw, th}, w, std::uint32_t(count), std::uint32_t(kStride), 0};
+    static_assert(sizeof p == 24);
+    gpu::CommandBuffer cb(*device_);
+    cb.dispatch(*sampleKernel_, {&d.output(), samples}, &p, sizeof p, tw, th);
+    cb.commitAndWait();
+
     // Read only in the output's native format. Expanding every pixel to float
     // used another 16 bytes per pixel even though only one in 31 is sampled.
-    if (d.output().format() == gpu::PixelFormat::RGBA16Float) {
-        std::vector<__fp16> pixels(count * 4);
-        d.output().download(pixels.data(), std::size_t(w) * 4 * sizeof(__fp16), w, h);
-        for (std::size_t i = 0; i < count; i += kStride) {
+    if (format == gpu::PixelFormat::RGBA16Float) {
+        std::vector<__fp16> pixels(std::size_t(tw) * th * 4);
+        samples->download(pixels.data(), std::size_t(tw) * 4 * sizeof(__fp16), tw, th);
+        for (std::size_t i = 0; i < n; ++i) {
             for (std::uint32_t c = 0; c < 3; ++c)
                 add(c, static_cast<float>(pixels[i * 4 + c]));
         }
     } else {
-        std::vector<std::uint8_t> pixels(count * 4);
-        d.output().download(pixels.data(), std::size_t(w) * 4, w, h);
-        for (std::size_t i = 0; i < count; i += kStride) {
+        std::vector<std::uint8_t> pixels(std::size_t(tw) * th * 4);
+        samples->download(pixels.data(), std::size_t(tw) * 4, tw, th);
+        for (std::size_t i = 0; i < n; ++i) {
             for (std::uint32_t c = 0; c < 3; ++c)
                 add(c, pixels[i * 4 + c] / 255.0f);
         }

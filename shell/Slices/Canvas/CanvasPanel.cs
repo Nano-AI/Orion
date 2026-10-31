@@ -110,6 +110,9 @@ public sealed class CanvasPanel : Panel {
         string path = engine.Photos[engine.Current], name = engine.CurrentName;
         if (engine.Timing.StartsWith("render failed: ")) return $"Couldn't render {name}: {engine.Timing["render failed: ".Length..]}";
         if (!File.Exists(path)) return $"Couldn't find {name}: it was moved or deleted.";
+        // Any photo fails the same way with no GPU the engine can use: never "could not decode" (#DEC-perf).
+        if (Session.OpenFailure(path) is { } why && why.StartsWith("the GPU engine", StringComparison.Ordinal))
+            return $"Couldn't open {name}: {why}";
         if (Chrome.CaptureInfo.ReadFile(path) == null) return $"Couldn't read {name}: it isn't a raw file the decoder understands.";
         return $"Couldn't open {name}: the engine could not decode it.";
     }

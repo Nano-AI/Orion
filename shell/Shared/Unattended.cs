@@ -139,7 +139,9 @@ sealed partial class App {
             Dispatcher.UIThread.RunJobs();
             return sw.Elapsed.TotalMilliseconds;
         }
-        static string Ms(List<double> t) => $"{string.Join(", ", t.Select(x => $"{x:0}"))} ms (median {t.Order().ElementAt(t.Count / 2):0})";
+        // One photo has no neighbour to swap to: say so rather than take the median of nothing.
+        static string Ms(List<double> t) => t.Count == 0 ? "none (one photo)"
+            : $"{string.Join(", ", t.Select(x => $"{x:0}"))} ms (median {t.Order().ElementAt(t.Count / 2):0})";
 
         Settle();
         Console.WriteLine($"bench list: {n} photos · settled at photo {engine.Current} · {Kept} · {Memory()}");
@@ -175,7 +177,7 @@ sealed partial class App {
 
         // Back and forth across the list at 60 ms a press, watching memory.
         Settle();
-        double peak = 0;
+        double peak = Footprint().Footprint;   // one photo browses nowhere: still a number
         foreach (int dir in new[] { 1, -1, 1, -1 })
             for (int i = 0; i < Math.Min(15, n - 1); i++) {
                 if (dir > 0) engine.Next(); else engine.Previous();

@@ -80,6 +80,7 @@ set(ORION_SHADERS
     grain:grain
     geometry:geometry
     display_reduce:displayReduce
+    histogram_sample:histogramSample
 )
 
 if(ORION_DAWN)
