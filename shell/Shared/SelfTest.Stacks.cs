@@ -32,6 +32,11 @@ static partial class SelfTest {
         dismissed.Add(iso[1].Paths[0]);
         Check(firstShown && secondShown && StackSuggestion.Pick(iso, dismissed) == null && StackSuggestion.Pick([], new HashSet<string>()) == null,
               "the suggestion shows the first group, the second once the first is dismissed, none once both are");
+        // Stack… makes the group a selection: the sheet must still see it is the astro group.
+        Check(StackSheet.DefaultMode(sky[0].Paths.Reverse().ToList(), sky) == Stack.Mode.Stars
+              && StackSheet.DefaultMode(sky[0].Paths.Take(5).ToList(), sky) == Stack.Mode.Noise
+              && StackSheet.DefaultMode(sky[0].Paths, null) == Stack.Mode.Noise,
+              "a selection equal to a cached astro group, in any order, opens the sheet in Stars; part of one or no scan, Noise");
 
         var gap = StackGroups.Find(Frames(14, 20, 3200, 25, (i, s) => s with { Captured = T0.AddSeconds(i * 25 + (i > 5 ? 35 : 0)) }));
         Check(Sizes(gap) == "5+9", $"a 60 s gap after frame 5 splits the run ({Sizes(gap)})");

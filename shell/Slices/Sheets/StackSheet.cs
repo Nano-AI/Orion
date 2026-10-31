@@ -50,15 +50,13 @@ public sealed class StackSheet : Border {
         HorizontalAlignment = HorizontalAlignment.Left;
         VerticalAlignment = VerticalAlignment.Top;
         SheetKit.Restyle(this);
-        // The selection when it is real, else the stack the open photo belongs to (what the suggestion opens).
+        // The selection when it is real (what the suggestion's Stack… makes), else the stack the open photo belongs to.
         var library = LibraryModel.Shared;
-        StackGroup? group = null;
-        List<string> paths;
-        if (library.HasExplicitSelection) paths = library.Targets.Select(p => p.Path).ToList();
-        else paths = (group = OpenGroup(StackGroups.Of(EngineModel.Shared.Photos)))?.Paths.ToList() ?? [];
+        var paths = library.HasExplicitSelection ? library.Targets.Select(p => p.Path).ToList()
+                  : OpenGroup(StackGroups.Of(EngineModel.Shared.Photos))?.Paths.ToList() ?? [];
         _candidates = paths.Select(HdrMergePanel.Read).ToList();
         _reference = _candidates.Count / 2;   // the middle frame, as StackGroups' dark check
-        _mode = group?.Astro == true ? Stack.Mode.Stars : Stack.Mode.Noise;
+        _mode = DefaultMode(paths, StackGroups.Cached(EngineModel.Shared.Photos));
 
         var body = new Rows {
             Spacing = Space.Pad,
@@ -181,6 +179,11 @@ public sealed class StackSheet : Border {
     /// Why these frames cannot stack, or null: HDR merge's camera rule, in a stack's words for too few.
     internal static string? Ineligibility(List<HdrMergePanel.Candidate> cs) =>
         cs.Count < 2 ? "Select at least two frames to stack." : HdrMergePanel.Ineligibility(cs);
+
+    /// Stars when `paths` are exactly an astro group found in the folder (in any order), else Noise.
+    internal static Stack.Mode DefaultMode(IReadOnlyCollection<string> paths, IReadOnlyList<StackGroup>? groups) =>
+        groups?.FirstOrDefault(g => g.Paths.Count == paths.Count && g.Paths.ToHashSet().SetEquals(paths))?.Astro == true
+            ? Stack.Mode.Stars : Stack.Mode.Noise;
 
     /// What the engine's Auto picks for `frames` (engine/src/stack/Rejection.cpp autoRejection).
     internal static string AutoRejection(int frames) => Rejections[frames < 3 ? 0 : frames <= 6 ? 1 : frames <= 20 ? 3 : 4];

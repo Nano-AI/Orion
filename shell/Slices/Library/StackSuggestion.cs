@@ -58,6 +58,7 @@ sealed class StackSuggestion : Border {
         var photos = EngineModel.Shared.Photos;
         if (photos.Count < StackGroups.MinFrames) { _groups = []; Show(); return; }
         Scanned = Task.Run(() => StackGroups.Of(photos, Dark)).ContinueWith(t => Dispatcher.UIThread.Post(() => {
+            if (t.IsFaulted) Console.Error.WriteLine($"orion stack: folder scan failed: {t.Exception?.GetBaseException().Message}");
             // A scan of a list since replaced is dropped: the newer list's scan is on its way.
             if (t.IsCompletedSuccessfully && ReferenceEquals(photos, EngineModel.Shared.Photos)) { _groups = t.Result; Show(); }
         }));
@@ -73,7 +74,7 @@ sealed class StackSuggestion : Border {
     void Stack() {
         if (_shown == null) return;
         LibraryModel.Shared.Select(_shown.Paths);
-        Commands.Run("stack");
+        if (Commands.Run("stack") is var said && !said.StartsWith("ran ")) EngineModel.Shared.Say(said);
     }
 
     /// Asked of a candidate astro group's middle frame. The strip's own thumbnail, read on the UI
