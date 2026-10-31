@@ -20,6 +20,7 @@ Every constant that is ours is in [`UNSOURCED.md`](UNSOURCED.md) §32, not here.
 | **[G86]** | Groth — *A pattern-matching algorithm for two-dimensional coordinate lists*, Astronomical Journal 91, 1986 | ADS |
 | **[V95]** | Valdes, Campusano, Velasquez & Stetson — *FOCAS Automatic Catalog Matching Algorithms*, PASP 107, 1995 | ADS |
 | **[BCS20]** | Beroiz, Cabral & Sanchez — *Astroalign: A Python module for astronomical image registration*, Astronomy & Computing 32, 2020 | [arXiv 1909.02946](https://arxiv.org/abs/1909.02946) |
+| **[HZ04]** | Hartley & Zisserman — *Multiple View Geometry in Computer Vision*, 2nd ed., Cambridge University Press, 2004; §8.4.2, camera rotation: a camera turning about its centre maps one image to the next by the conjugate rotation H = K·R·K⁻¹ | book |
 | **[FB81]** | Fischler & Bolles — *Random Sample Consensus*, CACM 24(6), 1981 | [PDF](https://www.cs.columbia.edu/~belhumeur/courses/compPhoto/ransac.pdf) |
 | **[BA96]** | Bertin & Arnouts — *SExtractor: Software for source extraction*, A&AS 117, 393, 1996 | ADS |
 | **[S87]** | Stetson — *DAOPHOT: A computer program for crowded-field stellar photometry*, PASP 99, 191, 1987 | ADS |
@@ -43,7 +44,8 @@ Every constant that is ours is in [`UNSOURCED.md`](UNSOURCED.md) §32, not here.
 | The scale between two linear frames is one scalar ratio, estimable from pixel pairs | [GN03], specialized to a linear response as in hdr-merge.md |
 | Stars have no texture, so ORB/SIFT-style matching fails; match triangles of star positions instead | [G86], [V95], [BCS20] |
 | Scale-, rotation- and translation-free triangle invariants: side ratios (L2/L1, L1/L0) | [G86], [V95], [BCS20] |
-| Fit a similarity from the matched stars, robust to bad matches | [FB81] |
+| A tripod camera sees the sky turn as a pure rotation about its centre, which images as a homography H = K·R·K⁻¹, not a similarity | [HZ04] |
+| Fit that homography from the matched stars, robust to bad matches | [FB81] |
 | Star detection: background estimate, threshold above it, connected pixels, centroid | [BA96] |
 | Smooth before thresholding so single noisy pixels do not become stars | [S87] |
 | Group contiguous frames whose capture-time gaps are under a threshold | [LR] |
@@ -65,14 +67,14 @@ CPU, not GPU: per-pixel rejection sorts N values per channel, a divergent loop w
 
 | N | Method | Rule |
 |---|---|---|
-| < 3 | none | weighted mean |
-| 3–6 | percentile [SIRIL] | m = median; reject v with m − v > 0.2·\|m\| or v − m > 0.1·\|m\|, one pass |
+| ≤ 3 | none | weighted mean |
+| manual only | percentile [SIRIL] | m = median; reject v with m − v > 0.2·\|m\| or v − m > 0.1·\|m\|, one pass |
 | manual only | sigma [SIRIL] | iterate: m = median, σ = std of survivors; reject beyond m ± 3σ |
-| 7–20 | winsorized [HR09][PI] | σ from clamped values: clamp to m ± 1.5σ, σ' = 1.134·std(clamped), repeat to convergence, once, on the full sample; then iterate: re-centre m on the survivors, reject beyond m ± 3σ'. σ' stays fixed: re-estimated from survivors already cut at 3σ' it shrinks each round, since 1.134 assumes an uncut Gaussian |
+| 4–20 | winsorized [HR09][PI] | σ from clamped values: clamp to m ± 1.5σ, σ' = 1.134·std(clamped), repeat to convergence, once, on the full sample; then iterate: re-centre m on the survivors, reject beyond m ± 3σ'. σ' stays fixed: re-estimated from survivors already cut at 3σ' it shrinks each round, since 1.134 assumes an uncut Gaussian |
 | > 20 | linear fit [PI] | sort survivors; least-squares line of value on rank; σ = mean \|residual\|; reject \|residual\| > 3σ; iterate |
 
 Rejection never leaves fewer than 3 values. A manual override picks any row.
-Auto departs from the forum rule of thumb (sigma below 10 frames): 3σ clipping of n values cannot reject a lone outlier of any size when n ≤ 7 (σ = d·√(n−1)/n, so 3σ ≥ d), and only just at n = 8; winsorizing shrinks σ to the noise floor first, so 7–20 use it.
+Auto departs from the forum rule of thumb (sigma or percentile below 10 frames). Sigma: the code's 3σ, σ the sample std centred on the median, cannot reject a lone outlier of any size when n ≤ 7 (σ = d·√(n−1)/n, so 3σ ≥ d) and works from n = 8. Percentile: its window (20 % / 10 % of the median) is narrower than a dark sky's noise, so it keeps a satellite trail — measured on a sky of 0.02 with noise 0.02 and a trail 0.5 above it, the trail survives on 976, 928 and 891 of 1000 pixels at 4, 5 and 6 frames, and its asymmetric clip costs noise (a reviewer's simulation: gain 1.76 against √5 on bright scenes). Winsorizing shrinks σ to the noise floor first and rejected the trail on all 1000 at 4–6 frames (`tests_stack_rejection`), so 4–20 use it; percentile and sigma stay as manual choices.
 The **1.134** is `1 / sqrt(E[min(|z|, 1.5)²])` for z ~ N(0,1) = 1/0.8823 = 1.1334, recomputed for this file (2026-10-30) so the number is checkable and not a remembered constant.
 ⚠ PixInsight's winsorization cutoff was quoted to us as 5σ; that is a different parameter from Huber's c, could not be checked against the documentation text, and is **not** what Orion uses.
 
@@ -81,8 +83,8 @@ The **1.134** is `1 / sqrt(E[min(|z|, 1.5)²])` for z ~ N(0,1) = 1/0.8823 = 1.13
 Per frame i and channel c, against the reference frame, on the registered data:
 
 ```
-L_i,c = median of the frame                       (additive location)
-k_i   = median over pixels where v_ref ≥ L_ref + 10σ_ref of (v_i − L_i)/(v_ref − L_ref)    (1 below 200 samples)
+L_i,c = median of a ~50k-texel grid of the frame; with a sky matte, of its sky texels when ≥ 200 are sky   (additive location)
+k_i   = median over star cores where v_ref ≥ L_ref + 10σ_ref of (v_i − L_i)/(v_ref − L_ref)    (1 below 50 cores)
 v'    = (v − L_i)/k_i + L_ref
 ```
 
@@ -107,11 +109,12 @@ A component whose brightest unsmoothed pixel carries more than half its flux is 
 |---|---|---|
 | Triangles | for each of the 60 stars, its 4 nearest neighbours → all C(5,3) = 10 triangles of the star plus its 4 neighbours, deduplicated | [BCS20] |
 | Invariants | sides sorted L2 ≥ L1 ≥ L0; (L2/L1, L1/L0) | [G86][V95][BCS20] |
-| Match | nearest invariant pair in a k-d tree within radius 0.1; vertices ordered by the side they are opposite, giving star-to-star votes | [BCS20] |
-| Fit | similarity by RANSAC: `cv::estimateAffinePartial2D`, reprojection threshold 2 px, ≥ 6 inliers or the frame is refused (identity, `ok = false`) | [FB81] |
+| Match | nearest invariant pair by brute force (~400 × 400 triangles) within radius 0.1; vertices ordered by the side they are opposite, giving star-to-star votes | [BCS20] |
+| Fit | homography by RANSAC: `cv::findHomography`, reprojection threshold 2 px, ≥ 8 distinct-star inliers (8 degrees of freedom need margin over the 4-point minimum) or the frame is refused (identity, `ok = false`) | [HZ04][FB81] |
 
 OpenCV (Apache-2.0) supplies the estimator; Orion's code is the detector and the triangle voting.
-The Earth turns 15°/hour: 20 frames × 20 s turns the sky ≈ 1.7°, so a rotation-capable similarity is needed, not translation alone.
+The Earth turns 15°/hour: 20 frames × 20 s turns the sky ≈ 1.7°. A tripod camera sees that as a pure 3D rotation, H = K·R·K⁻¹ [HZ04], which a similarity only approximates: at 14 mm on full frame over 200 s (latitude 45°, looking south at 20° altitude) the best similarity misses by ≈ 15 px median, 43 px max, and with the 2 px gate the old similarity fit refused the frame outright; the homography lands within 0.016 px (Measured).
+⚠ Lens distortion is the remaining ceiling: no homography models it (UNSOURCED §32).
 
 ## 6. Landscape split
 
@@ -139,22 +142,23 @@ Astro tag: shutter ≥ 5 s and ISO ≥ 800 (and, when checked, a dark thumbnail)
 
 ## Measured (2026-10-30)
 
-Synthetic data unless said; `orion-tests` 1537 checks, 0 failures. These are checks of the implementation against the published methods above, not a claim about real frames: the thresholds in UNSOURCED §32 are untuned on real star, flat and dark frames.
+Synthetic data unless said; `orion-tests` 1542 checks, 0 failures. These are checks of the implementation against the published methods above, not a claim about real frames: the thresholds in UNSOURCED §32 are untuned on real star, flat and dark frames.
 
 | What | Result |
 |---|---|
-| Star registration, max corner error | 0.0124 px (59 inliers); 0.0136 px with 40 fixed hot pixels |
-| Through the facade: stacked DNG's median star error | 0.031 px, 59 of 60 stars matched |
+| Star registration (homography), max corner error | 0.0279 px (59 inliers); 0.0244 px with 40 fixed hot pixels (the similarity it replaced: 0.0124 / 0.0136) |
+| 14 mm sky turn, 6000×4000, 200 s (H = K·R·K⁻¹) | homography: median 0.0040 px, max 0.0157 px over 394 stars, 59 inliers; the old similarity refused the frame (0 inliers) |
+| Through the facade: stacked DNG's median star error | 0.029 px, 59 of 60 stars matched |
 | Noise vs √N, integrate, 16 frames, integer shifts | σ ratio 3.860 vs 4 (0.965·√N) |
 | Noise vs √N, facade noise mode, 8 frames | 2.930 vs √8 = 2.828; RMS against the true scene 0.00351 (identity registration 0.01206, fails) |
-| Landscape | ground edge 1.000, star peak 0.995 of a single frame |
+| Landscape (facade) | ground edge 1.000, star peak 0.994 of a single frame |
 | Satellite streak (rejection) | 0 of 480 pixels outside 4σ |
-| Fixed hot pixel (registration) | 0 of 72 landings outside |
-| Calibration | tripod hot pixel 0.6807 → 0.0696 with darks; vignette corner/centre 0.844 → 0.997 with flats |
-| 24 MP (6000x4000), star mode, CPU on 10 cores, low priority | 10 frames 15.6 s; 20 frames 29.8 s; peak RSS 3.9 GB (half-float frames). No GPU node: the CPU is fast enough |
+| Fixed hot pixel (rejection) | 0 of 72 landings outside 4σ |
+| Calibration | tripod hot pixel 0.6807 → 0.0679 with darks; vignette corner/centre 0.846 → 0.995 with flats |
+| 24 MP (6000x4000), star mode, CPU on 10 cores, low priority | 10 frames 15.6 s; 20 frames 29.8 s; peak RSS 3.9 GB (half-float frames) |
 | Real raw (not synthetic) | `Orion --stack --mode noise` on three copies of a 42 MP Sony ARW: 2.44 s, 145.7 MB DNG; `check-modes` runs it |
 
-Open: tune the sharpness 0.5, flat 0.1 and dark 0.15 thresholds on real frames; frames are held in memory, so streaming is the next step past ~50 frames at 24 MP.
+Open: tune the sharpness 0.5, flat 0.1 and dark 0.15 thresholds on real frames; frames are held in memory as half floats, and a stack whose frames would exceed 6 GiB is refused before any decode (44 frames at 24 MP, 25 at 42 MP); streaming the integration is the next step.
 
 ## ⚠ Patents
 
@@ -170,4 +174,5 @@ A citation is not clearance, and freedom to operate has not been assessed (CLAUD
 
 Checked against the published page: [SIRIL]'s rejection list, normalization options, weighting options and the "up to 6 images" percentile note; [BCS20]'s title, authors, arXiv id and that it matches 3-point asterisms (triangles).
 Recomputed: the 1.134 factor.
+From memory, not checked against the book: [HZ04]'s section number (§8.4.2); the result itself, H = K·R·K⁻¹ for a camera rotating about its centre, is standard and the 14 mm test checks it numerically.
 Taken from the epic brief, not re-checked against the primary: the journal volume and page numbers of [G86], [V95], [BCS20], [R83], [BA96], [S87]; Astroalign's 4-neighbour and 0.1-radius defaults; PixInsight's parameters.

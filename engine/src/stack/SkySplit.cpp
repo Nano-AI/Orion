@@ -44,6 +44,9 @@ std::vector<float> skyMatteToFrame(const float* upright, int mw, int mh,
     std::vector<float> out(std::size_t(w) * h, 0.0f);
     if (!upright || mw <= 0 || mh <= 0 || w <= 0 || h <= 0) return out;
 
+    // The matte is stretched edge to edge over the sensor frame. ⚠ It was painted on the embedded
+    // preview, whose aspect and crop may differ from the raw's active area; a few percent of seam
+    // shift at the borders is the ceiling, which the 1% feather partly hides.
     // Sensor (u, v) in 0..1 -> upright (x', y') in 0..1, by k clockwise
     // quarters. One turn sends (x, y) to (h-1-y, x): in normalized
     // coordinates (u, v) -> (1-v, u).
