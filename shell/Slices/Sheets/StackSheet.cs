@@ -71,8 +71,9 @@ public sealed class StackSheet : Border {
         if (Ineligibility(_candidates) is { } why) body.Children.Add(SheetKit.Note(why, Palette.Warn));
         else body.Children.AddRange(Choices());
         Idle();
-        // As ExportPanel: the choices scroll on a small display; Cancel and Stack stay put.
-        Child = new Rows { Spacing = Space.Pad, Children = { new ScrollViewer { Content = body, MaxHeight = 540 }, _actions } };
+        // As ExportPanel: the choices scroll on a small display; Cancel and Stack stay put. 760, not Export's 540:
+        // Landscape with a portrait frame's painter and its brush is about 730 tall (measured in a screenshot).
+        Child = new Rows { Spacing = Space.Pad, Children = { new ScrollViewer { Content = body, MaxHeight = 760 }, _actions } };
     }
 
     /// Landscape needs a painted sky, so a raw with no preview to paint it on cannot stack that way.
