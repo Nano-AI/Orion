@@ -39,7 +39,10 @@ public partial class MainWindow : Window {
             new ColumnDefinition(Layout.ToolCol, GridUnitType.Pixel) { MinWidth = Layout.ToolCol, MaxWidth = ToolColMax },
         ];
         DressSplitter();
-        foreach (var entry in Panels.All) {
+        // Not a sheet: one is built when its command opens it (CommandTable.Sheet).
+        // Built here, it was thrown away, after the HDR sheet had read every
+        // photo's capture data on this thread: 336 raws, half a minute (#399).
+        foreach (var entry in Panels.All.Where(p => p.Region != Region.Sheet)) {
             var panel = Panels.Create(entry.Type);
             if (entry.Tab is { } t) _tabs[t].Add(panel);
             else Host(entry.Region)?.Children.Add(panel);

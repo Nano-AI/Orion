@@ -126,7 +126,7 @@ public sealed class GalleryPanel : DockPanel {
         bool isFocused = photo == GalleryMode.Focus;
         var picture = new Border {
             Height = _grid.Cell / GalleryGrid.CellAspect, Opacity = photo.Rejected ? LibraryUi.RejectedOpacity : 1,
-            Child = photo.Thumbnail is { } image ? new Image { Source = image, Stretch = Stretch.Uniform } : null,
+            Child = new ThumbnailImage(photo, ThumbnailSize.Large),
         };
         _pictures.Add(picture);
         var ring = new Border {
@@ -168,7 +168,7 @@ public sealed class GalleryPanel : DockPanel {
     /// Library.dc.html's aside: the focused photo larger, its name and size,
     /// what the camera recorded (read from the file, not decoded), and the way into Develop.
     sealed class InfoColumn : Border {
-        readonly Image _preview = new() { Stretch = Stretch.Uniform, MaxHeight = 220 };
+        readonly ThumbnailImage _preview = new(size: ThumbnailSize.Large) { MaxHeight = 220 };
         readonly TextBlock _name = new() { FontWeight = FontWeight.Medium, TextTrimming = TextTrimming.CharacterEllipsis };
         readonly TextBlock _size = new() { Foreground = Palette.Dim };
         readonly ContentControl _capture = new();
@@ -195,7 +195,7 @@ public sealed class GalleryPanel : DockPanel {
             _shown = photo;
             IsVisible = photo != null;
             if (photo == null) return;
-            _preview.Source = photo.Thumbnail;
+            _preview.Photo = photo;
             _name.Text = photo.Name;
             if (!_read.TryGetValue(photo.Path, out var info)) _read[photo.Path] = info = CaptureInfo.ReadFile(photo.Path);
             _size.Inlines = info is { Width: > 0, Height: > 0 }

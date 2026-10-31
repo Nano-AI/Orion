@@ -136,7 +136,7 @@ public sealed class FilmstripPanel : Grid {
 
     /// One frame of film: the picture in its gate over the holes, the edge print under them.
     static (Border Cell, Panel Gate) Cell(LibraryModel.Photo photo) {
-        var picture = new Image { Source = photo.Thumbnail, Stretch = Stretch.Uniform, Opacity = photo.Rejected ? LibraryUi.RejectedOpacity : 1 };
+        var picture = new ThumbnailImage(photo) { Opacity = photo.Rejected ? LibraryUi.RejectedOpacity : 1 };
         var number = Faces.Figure($"{photo.Index + 1}", Faces.Mark, Palette.Dim);
         // A rejected frame's mark is the cross over it, so the print carries stars only.
         var marks = photo.Rejected ? new Panel() : LibraryUi.Marks(photo, unearned: false);

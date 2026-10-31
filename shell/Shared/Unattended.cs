@@ -46,6 +46,9 @@ sealed partial class App {
                 EngineModel.Shared.Render(preview: false);   // a still is for looking at, not for speed
                 window.UpdateLayout();
                 Dispatcher.UIThread.RunJobs();
+                Pump(() => !Library.Thumbnails.Busy);   // read in the background (#399): a still shows them all
+                window.UpdateLayout();
+                Dispatcher.UIThread.RunJobs();
                 Shoot(window, Run.Screenshot);
             }
             window.Close();

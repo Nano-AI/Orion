@@ -84,6 +84,7 @@ public static unsafe partial class Native {
     [LibraryImport(Lib)]
     public static partial void present_release(nint presenter, ulong value);
 
+    /// The embedded JPEG's length, 0 for none, or minus the length it needs when `capacity` is short.
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     public static partial int shim_thumbnail(string path, byte* dst, int capacity, out int turns);
 

@@ -42,14 +42,40 @@ public sealed class LibraryModel {
         public string Tooltip => _tooltip ??= Chrome.CaptureInfo.Tooltip(Name, Chrome.CaptureInfo.ReadFile(Path));
         string? _tooltip;
 
-        Bitmap? _thumbnail;
-        bool _tried;
-        /// The camera's embedded JPEG, turned upright. Null when the raw has none.
-        public Bitmap? Thumbnail {
-            get {
-                if (!_tried) { _tried = true; _thumbnail = Thumbnails.Load(Path); }
-                return _thumbnail;
-            }
+        readonly Bitmap?[] _pictures = new Bitmap?[2];   // by ThumbnailSize
+        readonly bool[] _asked = new bool[2];
+        /// The camera's embedded JPEG at the strip's size, turned upright. Null
+        /// when the raw has none, and until it is read: the first ask queues the
+        /// read and returns at once (Thumbnails); `ThumbnailImage` shows it when it lands.
+        public Bitmap? Thumbnail => Picture(ThumbnailSize.Strip);
+
+        /// The thumbnail at `size`, asked for if it is not held. A large one is
+        /// held only while recently on screen (Thumbnails.LargeKept).
+        public Bitmap? Picture(ThumbnailSize size) {
+            if (!_asked[(int)size]) { _asked[(int)size] = true; Thumbnails.Want(this, size); }
+            return _pictures[(int)size];
+        }
+
+        internal bool Holds(ThumbnailSize size) => _pictures[(int)size] != null;
+
+        internal void Land(ThumbnailSize size, Bitmap? picture) {
+            if (!_asked[(int)size]) { picture?.Dispose(); return; }   // let go while it was read
+            _pictures[(int)size]?.Dispose();
+            _pictures[(int)size] = picture;
+            ThumbnailLanded?.Invoke();
+        }
+
+        /// A thumbnail was read (or found missing), on the UI thread: what the
+        /// views showing this photo listen to, rather than every photo's.
+        public event Action? ThumbnailLanded;
+
+        /// Its read was dropped before it ran, or its picture let go: the next ask reads it again.
+        /// A large one is disposed (its native pixels are what count, not the
+        /// wrapper the GC sees); the strip's is only ever dropped with the photo.
+        internal void Forget(ThumbnailSize size) {
+            _asked[(int)size] = false;
+            if (size == ThumbnailSize.Large) _pictures[(int)size]?.Dispose();
+            _pictures[(int)size] = null;
         }
     }
 
@@ -107,6 +133,7 @@ public sealed class LibraryModel {
                 }).ToList();
                 _rereadAll = false;
                 ReadMarks(unread);
+                Thumbnails.Keep(_photos.ToHashSet());
             }
             return _photos;
         }
@@ -277,38 +304,4 @@ public sealed class LibraryModel {
     public static PhotoSelection.Modifiers From(KeyModifiers k) =>
         (k.HasFlag(OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control) ? PhotoSelection.Modifiers.Command : 0)
         | (k.HasFlag(KeyModifiers.Shift) ? PhotoSelection.Modifiers.Shift : 0);
-}
-
-/// Embedded previews through the facade (orion_read_thumbnail via the shim).
-static class Thumbnails {
-    // ponytail: one decode size serves the strip and the gallery's largest
-    // cell (400 pt at 2x); per-view sizes when folders reach thousands.
-    const int DecodeWidth = 800;
-    static readonly byte[] Buffer = new byte[8 << 20];
-
-    public static unsafe Bitmap? Load(string path) {
-        int size, turns;
-        fixed (byte* p = Buffer) size = Native.shim_thumbnail(path, p, Buffer.Length, out turns);
-        if (size <= 0) return null;
-        using var stream = new MemoryStream(Buffer, 0, size);
-        return Upright(Bitmap.DecodeToWidth(stream, DecodeWidth), turns);
-    }
-
-    /// The JPEG carries no orientation; `turns` clockwise quarter turns stand
-    /// it up (orion.h). Done once on the pixels, so every view sees the true
-    /// aspect instead of a landscape box with a rotated picture in it.
-    static Bitmap Upright(Bitmap bitmap, int turns) {
-        turns = ((turns % 4) + 4) % 4;
-        if (turns == 0) return bitmap;
-        var src = bitmap.PixelSize;
-        var size = turns % 2 == 1 ? new PixelSize(src.Height, src.Width) : src;
-        var upright = new RenderTargetBitmap(size);
-        using (var c = upright.CreateDrawingContext())
-        using (c.PushTransform(Matrix.CreateTranslation(-src.Width / 2.0, -src.Height / 2.0) *
-                               Matrix.CreateRotation(turns * Math.PI / 2) *
-                               Matrix.CreateTranslation(size.Width / 2.0, size.Height / 2.0)))
-            c.DrawImage(bitmap, new Rect(0, 0, src.Width, src.Height));
-        bitmap.Dispose();
-        return upright;
-    }
 }

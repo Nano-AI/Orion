@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <iterator>
 #include <memory>
@@ -440,11 +441,13 @@ int shim_share(Shim* s, int which, int level, void** handle, int* generation, in
     return 1;
 }
 
-// The camera's embedded JPEG, for the filmstrip.
+// The camera's embedded JPEG, for the filmstrip: its length, 0 when there is
+// none, or minus the length it needs when `capacity` is too small for it.
 int shim_thumbnail(const char* path, uint8_t* dst, int capacity, int* turns) {
     uint32_t size = 0;
-    if (orion_read_thumbnail(path, dst, uint32_t(capacity), &size, turns) != ORION_OK) return 0;
-    return int(size);
+    const OrionStatus status = orion_read_thumbnail(path, dst, uint32_t(capacity), &size, turns);
+    if (status == ORION_ERR_BAD_ARG && size > uint32_t(capacity) && size <= uint32_t(INT32_MAX)) return -int(size);
+    return status == ORION_OK ? int(size) : 0;
 }
 
 #ifndef __APPLE__
