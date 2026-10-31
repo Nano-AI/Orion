@@ -29,6 +29,7 @@ static partial class SelfTest {
         window.Show();
         window.UpdateLayout();
         Dispatcher.UIThread.RunJobs();
+        Check(window.ToolsHost.IsEffectivelyEnabled && window.ToolsHost.Opacity == 1, "with a photo open the tools are unlocked (MainWindow.LockTools)");
         float start = engine.Get("exposure_ev");
         try {
             SpringChecks(window);

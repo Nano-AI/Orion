@@ -51,6 +51,18 @@ public partial class MainWindow : Window {
         // local monitor does: the grid's ScrollViewer would take the arrows.
         AddHandler(KeyDownEvent, (_, e) => { if (GalleryMode.Handle(e)) e.Handled = true; }, RoutingStrategies.Tunnel);
         ShowFace();
+        // No photo to edit (the welcome, or one that would not open): the tools are
+        // locked and dimmed. A photo still decoding keeps them, so stepping never flickers.
+        LockTools();   // the starting state, before the fade is attached
+        ToolsHost.Transitions = [new DoubleTransition { Property = OpacityProperty, Duration = Motion.Fade, Easing = Motion.EaseOut }];
+        EngineModel.Shared.Opened += LockTools;
+        EngineModel.Shared.PropertyChanged += (_, _) => LockTools();
+    }
+
+    public void LockTools() {
+        bool open = CanvasSlice.CanvasState.Now is not (CanvasSlice.CanvasState.Scene.Welcome or CanvasSlice.CanvasState.Scene.Failed);
+        ToolsHost.IsEnabled = open;
+        ToolsHost.Opacity = open ? 1 : 0.4;
     }
 
     /// The splitter is 9 px of grab over a 1 px hairline. Under the pointer a
