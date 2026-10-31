@@ -77,7 +77,7 @@ public sealed class StackSheet : Border {
         // Landscape with a portrait frame's painter and its brush is about 730 tall (measured in a screenshot).
         _warning.Children.AddRange([_warningText, new Rows {
             Orientation = Orientation.Horizontal, Spacing = Space.Md, HorizontalAlignment = HorizontalAlignment.Right,
-            Children = { SheetKit.Button("Cancel", () => _warning.IsVisible = false), SheetKit.Button("Proceed anyway", () => _ = Proceed()) },
+            Children = { SheetKit.Button("Cancel", () => Warn(false)), SheetKit.Button("Proceed anyway", () => _ = Proceed()) },
         }]);
         Child = new Rows { Spacing = Space.Pad, Children = { new ScrollViewer { Content = body, MaxHeight = 760 }, _status, _warning, _actions } };
         Status(null);
@@ -173,7 +173,7 @@ public sealed class StackSheet : Border {
         if (_stacking || !Paintable || Ineligibility(_candidates) != null) return;
         if (!Ready) { Status("Paint the sky first."); return; }
         Status(null);
-        _warning.IsVisible = false;
+        Warn(false);
         _stacking = true;   // a second press while the check runs is ignored
         (ulong Need, ulong Free)? memory = null;
         try {
@@ -185,14 +185,17 @@ public sealed class StackSheet : Border {
         }
         if (memory is { Need: var need, Free: var free } && free > 0 && need > free) {
             _warningText.Text = MemoryWarning(_candidates.Count, need, free);
-            _warning.IsVisible = true;
+            Warn(true);
             return;
         }
         await Start(force: false);
     }
 
+    /// The warning's Cancel and Proceed anyway stand in for the sheet's own row while it shows: one Cancel, not two.
+    void Warn(bool on) { _warning.IsVisible = on; _actions.IsVisible = !on; }
+
     internal Task Proceed() {
-        _warning.IsVisible = false;
+        Warn(false);
         return Start(force: true);
     }
 
