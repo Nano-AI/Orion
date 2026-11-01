@@ -45,6 +45,8 @@ jobs:
   linux:
     runs-on: ubuntu-24.04
     container: ubuntu:22.04@sha256:076e7bf82319619f28dd0aa9c02ab34b055ad37100395b4f49a2ffba04fb5e11
+    defaults:
+      run: { shell: bash }   # a container job's default is sh (dash), which has no pipefail
     env:
       ORION_VCPKG: /opt/vcpkg        # container paths: github.workspace names the host's
       VCPKG_DEFAULT_BINARY_CACHE: /opt/vcpkg-cache
@@ -244,6 +246,8 @@ jobs:
           - ubuntu:22.04@sha256:076e7bf82319619f28dd0aa9c02ab34b055ad37100395b4f49a2ffba04fb5e11
           - ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
     container: ${{ matrix.image }}
+    defaults:
+      run: { shell: bash }
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093   # v4
         with: { name: orion-linux, path: pkg }
