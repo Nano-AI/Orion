@@ -147,6 +147,90 @@ static partial class SelfTest {
         }
     }
 
+    /// Three links to the open photo in a temporary folder, selected, so a sheet has a group to stack; then `body`.
+    static void WithFrames(EngineModel engine, string tag, Action<List<string>> body) {
+        var list = engine.Photos.ToList();
+        int current = engine.Current;
+        string dir = Directory.CreateTempSubdirectory(tag).FullName;
+        try {
+            string ext = Path.GetExtension(list[current]);
+            var frames = new[] { "a", "b", "c" }.Select(n => Path.Combine(dir, n + ext)).ToList();
+            foreach (var f in frames) File.CreateSymbolicLink(f, list[current]);
+            engine.Load(frames);
+            LibraryModel.Shared.Select(frames);
+            body(frames);
+        } finally {
+            engine.Load(list);
+            OpenAndWait(engine, current);
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    /// The preview beside the controls is the reference frame's: the middle one at first, then whatever the
+    /// strip chooses, by a key on the strip as by a press; in Landscape the painter is that preview. A raw
+    /// with no embedded preview (CI's generated DNG) shows the empty state in its place, and in Landscape
+    /// Stack stays off, since there is nothing to paint the sky on.
+    static void StackSheetPreview(EngineModel engine) => WithFrames(engine, "orion-stack-preview-", frames => {
+        bool has = Thumbnails.Preview(frames[0]) != null;
+        var sheet = new StackSheet();
+        var window = new Avalonia.Controls.Window { Width = StackSheet.Opening.Width, Height = StackSheet.Opening.Height, Content = sheet };
+        window.Show();
+        bool Pictured() => sheet.PreviewShown is Avalonia.Controls.Border { Child: Avalonia.Controls.Image { Source: not null } };
+        try {
+            Pump(() => sheet.PreviewPath == frames[1], 10);
+            Check(sheet.PreviewPath == frames[1] && sheet.PreviewShown != null && Pictured() == has && sheet.Caption.StartsWith("b."),
+                  $"the sheet previews the middle frame by default, or says it has no preview ({sheet.PreviewPath}, {sheet.Caption}, preview {has})");
+            var left = new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Left };
+            sheet.Strip.RaiseEvent(left);
+            Pump(() => sheet.PreviewPath == frames[0], 10);
+            Check(left.Handled && sheet.PreviewPath == frames[0] && sheet.Caption.StartsWith("a."),
+                  $"Left on the strip chooses the frame before, and the preview follows ({sheet.PreviewPath}, {sheet.Caption})");
+            sheet.Mode = Stack.Mode.Landscape;
+            Pump(() => sheet.PreviewsRead, 10);
+            Check(has ? sheet.PreviewShown is StackSplit { Path: var painted } && painted == frames[0] && sheet.StackEnabled
+                      : sheet.PreviewShown is not (StackSplit or null) && !sheet.StackEnabled,
+                  $"in Landscape the preview is the sky painter on the reference frame, or with no preview Stack is off (preview {has})");
+        } finally {
+            window.Close();
+        }
+    });
+
+    /// The sheet opens resizable with a minimum that fits its controls: at that minimum nothing scrolls and
+    /// Cancel and Stack are inside the window, in every mode; wider, the preview takes the room and the
+    /// controls keep their column. The other sheets keep sizing to their content.
+    static void StackSheetResize(EngineModel engine) => WithFrames(engine, "orion-stack-resize-", frames => {
+        var sheet = new StackSheet();
+        var window = CommandTable.SheetWindow(sheet, "Stack", StackSheet.Opening);
+        var export = CommandTable.SheetWindow(new Avalonia.Controls.Border(), "Export", null);
+        Check(window is { CanResize: true, SizeToContent: Avalonia.Controls.SizeToContent.Manual } && window.MinWidth == sheet.MinWidth
+              && window.MinHeight == sheet.MinHeight && sheet.MinWidth > 0 && window.Width == StackSheet.Opening.Width
+              && export.SizeToContent == Avalonia.Controls.SizeToContent.WidthAndHeight,
+              "the Stack sheet's window opens at its size and resizes down to its minimum; Export still sizes to its content");
+        (window.Width, window.Height) = (sheet.MinWidth, sheet.MinHeight);
+        window.Show();
+        try {
+            foreach (var mode in new[] { Stack.Mode.Noise, Stack.Mode.Landscape }) {
+                sheet.Mode = mode;
+                Pump(() => sheet.PreviewsRead, 10);
+                window.UpdateLayout();
+                var actions = Avalonia.VisualExtensions.TranslatePoint(sheet.Actions, new Avalonia.Point(sheet.Actions.Bounds.Width, sheet.Actions.Bounds.Height), window);
+                bool inside = actions is { } p && p.X <= window.Bounds.Width + 0.5 && p.Y <= window.Bounds.Height + 0.5 && sheet.Actions.IsEffectivelyVisible;
+                var sv = sheet.Controls;
+                Check(inside && sv.Extent.Height <= sv.Viewport.Height + 0.5,
+                      $"at its minimum {window.Bounds.Width}×{window.Bounds.Height}, {mode}: Cancel and Stack show and the controls do not scroll " +
+                      $"(actions end at {actions}, controls {sv.Extent.Height:0} in {sv.Viewport.Height:0})");
+            }
+            double preview = sheet.PreviewPane.Bounds.Width, column = sheet.Controls.Bounds.Width;
+            (window.Width, window.Height) = (sheet.MinWidth + 600, sheet.MinHeight + 300);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            Check(sheet.PreviewPane.Bounds.Width >= preview + 590 && Math.Abs(sheet.Controls.Bounds.Width - column) < 0.5,
+                  $"wider ({window.Bounds.Width:0}), the preview grows ({preview:0} → {sheet.PreviewPane.Bounds.Width:0}) and the controls keep their column ({column:0})");
+        } finally {
+            window.Close();
+        }
+    });
+
     /// The Stack sheet (Task 9): who may stack, the command behind it, and the sky painter.
     static void StackSheetChecks() {
         static HdrMergePanel.Candidate C(string camera) => new("x.ARW", camera, 3200, 20, 2.8f);
@@ -189,7 +273,7 @@ static partial class SelfTest {
 
         // The real route: the sample's embedded preview, read back small and seeded.
         if (EngineModel.Shared.Photos.FirstOrDefault() is { } photo) {
-            var split = StackSplit.For(photo);
+            var split = Thumbnails.Preview(photo) is { } picture ? StackSplit.For(photo, picture) : null;
             Check(split is { MatteWidth: > 2, MatteHeight: > 2 } s && Math.Max(s.MatteWidth, s.MatteHeight) <= StackSplit.LongEdge
                   && s.Matte.Length == s.MatteWidth * s.MatteHeight && (s.NoSky != null) == s.Matte.All(v => v == 0),
                   $"the sample's preview seeds a matte of at most {StackSplit.LongEdge} px ({split?.MatteWidth}×{split?.MatteHeight}, {split?.NoSky ?? "sky found"})");

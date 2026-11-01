@@ -51,6 +51,8 @@ public static class Icons {
         ["sun.horizon"] = "M6,14 A6,6 0 0 1 18,14 M2.5,14 H21.5 M12,17.5 V21.5 M9.75,19.25 L12,21.5 L14.25,19.25",
         ["moon"] = "M19.5,14.5 A8,8 0 1 1 9.5,4.5 A6.5,6.5 0 0 0 19.5,14.5 Z",
         ["triangle"] = "M12,4 L21,19.5 H3 Z",
+        // A sheet's alert (SheetAlert): the triangle, rounded at its corners, and the mark inside it.
+        ["exclamationmark.triangle"] = "M10.3,4.9 Q12,2 13.7,4.9 L20.6,17 Q22.3,20 18.9,20 H5.1 Q1.7,20 3.4,17 Z M12,9 V13.5 M12,16.6 V16.7",
         ["waveform"] = "M3,12 H4.5 M7,8.5 V15.5 M10,5 V19 M13,9 V15 M16,6.5 V17.5 M19,10.5 V13.5 M21,12 H21.5",
         ["grain"] = "M6,6 h0.01 M12,5 h0.01 M18,7 h0.01 M5,12 h0.01 M10,11 h0.01 M16,13 h0.01 M19,12 h0.01 M7,18 h0.01 M13,17 h0.01 M18,19 h0.01",
         ["vignette"] = "M3,5 H21 V19 H3 Z M12,8.5 A3.5,3.5 0 1 0 12,15.5 A3.5,3.5 0 1 0 12,8.5",

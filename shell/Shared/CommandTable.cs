@@ -64,7 +64,7 @@ static class CommandTable {
         Built("hdr-merge", "Merge to HDR…", null, "HdrMergePanel.swift", () => Loaded && LibraryModel.Shared.HasExplicitSelection,
               () => Sheet("sheet-hdr-merge", "Merge to HDR")),
         // #391: the selection, or the stack the open photo belongs to (StackGroups).
-        Built("stack", "Stack photos…", null, "StackSheet.cs", () => Loaded && StackSheet.HasCandidates, () => Sheet("sheet-stack", "Stack")),
+        Built("stack", "Stack photos…", null, "StackSheet.cs", () => Loaded && StackSheet.HasCandidates, () => Sheet("sheet-stack", "Stack", StackSheet.Opening)),
         Built("stop-batch", "Stop", null, "OrionApp+Files.swift", () => ChromeStubs.BatchProgress != null, ExportRun.Stop),
         // The shell writes no interaction log (InteractionLog.swift), so there is no file to reveal.
         Stub("reveal-session-log", OperatingSystem.IsMacOS() ? "Reveal session log in Finder" : "Show session log in its folder", null, "InteractionLog.swift", () => true),
@@ -152,12 +152,28 @@ static class CommandTable {
     }
 
     /// `showingExport = true`: a registered sheet panel as a dialog over the window.
-    internal static void Sheet(string panel, string title) {
+    /// `opening`: a sheet that resizes (the Stack sheet, #411) opens at that size, no larger than most of
+    /// the owner's screen, and the person can resize it down to the content's MinWidth × MinHeight. Without
+    /// it a sheet sizes to its content, as every sheet did before.
+    internal static void Sheet(string panel, string title, Avalonia.Size? opening = null) {
         if (Panels.Find(panel) is not { } sheet || App.Window is not { } owner) return;
         var content = Panels.Create(sheet.Type);
-        var window = new Window { Content = content, Background = Palette.Panel, SizeToContent = SizeToContent.WidthAndHeight, Title = title };
+        var window = SheetWindow(content, title, opening);
+        if (opening != null && owner.Screens.ScreenFromWindow(owner) is { } screen) {
+            var room = screen.WorkingArea.Size.ToSize(screen.Scaling) * 0.9;
+            (window.Width, window.Height) = (Math.Max(window.MinWidth, Math.Min(window.Width, room.Width)),
+                                             Math.Max(window.MinHeight, Math.Min(window.Height, room.Height)));
+        }
         // A sheet's Cancel and Done call its Dismiss, which only the opener can fill.
         content.GetType().GetProperty("Dismiss")?.SetValue(content, (Action)window.Close);
         window.ShowDialog(owner);
+    }
+
+    internal static Window SheetWindow(Control content, string title, Avalonia.Size? opening) {
+        var window = new Window { Content = content, Background = Palette.Panel, SizeToContent = SizeToContent.WidthAndHeight, Title = title };
+        if (opening is { } size)
+            (window.SizeToContent, window.Width, window.Height, window.MinWidth, window.MinHeight, window.WindowStartupLocation) =
+                (SizeToContent.Manual, size.Width, size.Height, content.MinWidth, content.MinHeight, WindowStartupLocation.CenterOwner);
+        return window;
     }
 }

@@ -1,17 +1,24 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using OrionShell.Library;
 using Rows = Avalonia.Controls.StackPanel;
 
 namespace OrionShell.Sheets;
 
-/// Stacking by hand (#391), modelled on HdrMergePanel's sheet: which frames, how they combine,
-/// which one sets the framing, and in Landscape where the sky is. (Not "StackPanel": that name
-/// would shadow Avalonia's in every sheet of this namespace.)
+/// Stacking by hand (#391), modelled on HdrMergePanel's sheet: which frames, how they combine, which one
+/// sets the framing, and in Landscape where the sky is. Laid out as Orion's window (#411): the reference
+/// frame large with every frame in a strip under it (StackFrames), the choices in a tool column on the
+/// right, Cancel and Stack pinned at its foot. It resizes; the picture takes the room. (Not "StackPanel":
+/// that name would shadow Avalonia's in every sheet of this namespace.)
 [Panel("sheet-stack", Region.Sheet)]
 public sealed class StackSheet : Border {
+    /// The size the sheet's window opens at (CommandTable.Sheet keeps it inside the screen).
+    public static readonly Size Opening = new(1080, 700);
+
     // The facade's rejection ints 0…4, in order; the menu puts Auto (-1) first.
     static readonly string[] Rejections = ["None", "Percentile", "Sigma", "Winsorized", "Linear fit"];
     static readonly string[] ModeNotes = [
@@ -21,20 +28,22 @@ public sealed class StackSheet : Border {
     ];
 
     readonly List<HdrMergePanel.Candidate> _candidates;
-    readonly Rows _rows = new() { Spacing = Space.Sm };
-    readonly Rows _split = new();
+    readonly StackFrames _frames;
+    readonly ScrollViewer _controls;
     readonly Rows _actions = new() { Orientation = Orientation.Horizontal, Spacing = Space.Md, HorizontalAlignment = HorizontalAlignment.Right };
     readonly TextBlock _modeNote = SheetKit.Note("", Palette.Dim);
-    readonly TextBlock _status = SheetKit.Note("", Palette.Warn);   // why Stack did nothing, or failed
-    readonly TextBlock _warningText = SheetKit.Note("", Palette.Warn);
-    readonly Rows _warning = new() { Spacing = Space.Sm, IsVisible = false };   // over the memory available: the two answers
+    readonly SheetAlert _notice = new();    // why Stack did nothing, or failed
+    readonly SheetAlert _warning;           // over the memory available: the two answers, in place of Cancel and Stack
+    readonly SheetAlert _noSky = new();     // the detector found no horizon to seed the sky from
+    readonly Decorator _skyTools = new();
+    readonly Control _sky;                  // Landscape's row: the brush for the painter, which is the preview
     readonly StackCalibration _calibration = new();
+    Segmented? _modes;
     Stack.Mode _mode;
-    int _reference, _rejection = -1;
+    int _reference, _rejection = -1, _previews;
     bool _weight, _stacking, _closed;
     StackSplit? _painter;
     Button? _stack;
-    string? _splitFor;   // the reference the Sky row was built for
 
     /// Closes the sheet. Set by whatever opened it.
     public Action? Dismiss { get; set; }
@@ -48,11 +57,10 @@ public sealed class StackSheet : Border {
             ? groups.FirstOrDefault(g => g.Paths.Contains(EngineModel.Shared.Photos[i])) : null;
 
     public StackSheet() {
-        Width = 440;
-        Padding = new Thickness(Space.Lg);
         Background = Palette.Panel;
-        HorizontalAlignment = HorizontalAlignment.Left;
-        VerticalAlignment = VerticalAlignment.Top;
+        // The controls' column at its tallest (Landscape, with the no-horizon alert) beside a picture that
+        // still reads; SelfTest.StackSheetResize holds the column to fitting here without a scroll.
+        (MinWidth, MinHeight) = (Layout.ToolCol + 360, 640);
         SheetKit.Restyle(this);
         // The selection when it is real (what the suggestion's Stack… makes), else the stack the open photo belongs to.
         var library = LibraryModel.Shared;
@@ -61,102 +69,122 @@ public sealed class StackSheet : Border {
         _candidates = paths.Select(HdrMergePanel.Read).ToList();
         _reference = _candidates.Count / 2;   // the middle frame, as StackGroups' dark check
         _mode = DefaultMode(paths, StackGroups.Cached(EngineModel.Shared.Photos));
+        _frames = new StackFrames(_candidates, _reference);
+        _frames.Chose += Choose;
+        _sky = SheetKit.Row("Sky", _skyTools, _noSky);
 
         var body = new Rows {
-            Spacing = Space.Pad,
+            Spacing = Space.Lg,
             Children = {
-                SheetKit.Title("Stack photos"),
-                SheetKit.Note("The chosen frame sets the framing; the others are aligned to it and the result is " +
-                              "written beside the originals as a new DNG.", Palette.Dim),
+                new Rows { Spacing = Space.Sm, Children = {
+                    SheetKit.Title("Stack photos"),
+                    SheetKit.Note("The chosen frame sets the framing; the others are aligned to it and the result is " +
+                                  "written beside the originals as a new DNG.", Palette.Dim),
+                } },
             },
         };
-        if (Ineligibility(_candidates) is { } why) body.Children.Add(SheetKit.Note(why, Palette.Warn));
-        else body.Children.AddRange(Choices());
+        if (Ineligibility(_candidates) is { } why) {
+            var alert = new SheetAlert();
+            alert.Show("These frames cannot stack", why);
+            body.Children.Add(alert);
+        } else body.Children.AddRange(Choices());
         Idle();
-        // As ExportPanel: the choices scroll on a small display; Cancel and Stack stay put. 760, not Export's 540:
-        // Landscape with a portrait frame's painter and its brush is about 730 tall (measured in a screenshot).
-        _warning.Children.AddRange([_warningText, new Rows {
-            Orientation = Orientation.Horizontal, Spacing = Space.Md, HorizontalAlignment = HorizontalAlignment.Right,
-            Children = { SheetKit.Button("Cancel", () => Warn(false)), SheetKit.Button("Proceed anyway", () => _ = Proceed()) },
-        }]);
-        Child = new Rows { Spacing = Space.Pad, Children = { new ScrollViewer { Content = body, MaxHeight = 760 }, _status, _warning, _actions } };
-        _calibration.Changed += () => Warn(false);   // the warning's numbers described the old lists
-        Status(null);
+        _warning = new SheetAlert(SheetKit.Button("Cancel", () => Warn(null)), SheetKit.Button("Proceed anyway", () => _ = Proceed()));
+        // The choices scroll only when the window is under its minimum (it cannot be); the foot never does.
+        _controls = new ScrollViewer { Content = body, Padding = new Thickness(Space.Lg, Space.Lg, Space.Lg, Space.Pad) };
+        var foot = new Rows { Spacing = Space.Md, Margin = new Thickness(Space.Lg, 0, Space.Lg, Space.Lg), Children = { _notice, _warning, _actions } };
+        Grid.SetRow(foot, 1);
+        var column = new Border {
+            Width = Layout.ToolCol, BorderBrush = Palette.Line, BorderThickness = new Thickness(1, 0, 0, 0),
+            Child = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), Children = { _controls, foot } },
+        };
+        Grid.SetColumn(column, 1);
+        Child = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { _frames, column } };
+        _calibration.Changed += () => Warn(null);   // the warning's numbers described the old lists
+        ShowMode(animate: false);
     }
 
+    string? ReferencePath => _candidates.Count > 0 ? _candidates[_reference].Path : null;
+
     /// Landscape needs a painted sky, so a raw with no preview to paint it on cannot stack that way.
-    bool Paintable => _mode != Stack.Mode.Landscape || _painter != null;
+    bool Paintable => _mode != Stack.Mode.Landscape || (_painter != null && _painter.Path == ReferencePath);
 
     /// And some sky painted: an empty matte finds no stars, and the engine would say only that nothing registered.
     /// (Checked on Stack, not live: the painter has no change event.)
     bool Ready => Paintable && (_mode != Stack.Mode.Landscape || _painter!.Matte.Any(v => v >= 0.5f));
 
-    void Status(string? text) {
-        _status.Text = text ?? "";
-        _status.IsVisible = text != null;
+    void Notice(string? headline, string? detail = null) {
+        if (headline == null) _notice.Hide();
+        else _notice.Show(headline, detail);
     }
 
     IEnumerable<Control> Choices() {
-        var mode = new Segmented(["Noise", "Stars", "Landscape"], (int)_mode);
-        mode.Changed += i => { _mode = (Stack.Mode)i; ShowMode(); };
+        _modes = new Segmented(["Noise", "Stars", "Landscape"], (int)_mode);
+        _modes.Changed += i => { _mode = (Stack.Mode)i; ShowMode(animate: true); };
         string auto = AutoRejection(_candidates.Count);
         var rejection = SheetKit.Menu(Rejections.Prepend($"Auto ({auto})"), 0, i => _rejection = i - 1);
         rejection.HorizontalAlignment = HorizontalAlignment.Left;
         var weight = new CheckBox {
-            VerticalContentAlignment = VerticalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Top,
             Content = new Rows {
-                Orientation = Orientation.Horizontal, Spacing = Space.Gap,
+                Spacing = Space.Xs,
                 Children = {
                     new TextBlock { Text = "Weight by noise", FontSize = Faces.Label },
-                    new TextBlock { Text = "cleaner frames count for more", FontSize = Faces.Mark, Foreground = Palette.Dim },
+                    new TextBlock { Text = "Cleaner frames count for more.", FontSize = Faces.Mark, Foreground = Palette.Dim },
                 },
             },
         };
         weight.IsCheckedChanged += (_, _) => _weight = weight.IsChecked == true;
-        PaintRows();
-        ShowMode();
-        return [
-            SheetKit.Row("Mode", mode, _modeNote),
-            SheetKit.Row("Rejection", rejection),
-            weight,
-            SheetKit.Row("Calibration", _calibration),
-            SheetKit.Row("Reference frame", new ScrollViewer { MaxHeight = 140, Content = _rows }),
-            _split,
-        ];
+        return [SheetKit.Row("Mode", _modes, _modeNote), _sky, SheetKit.Row("Rejection", rejection, weight), SheetKit.Row("Calibration", _calibration)];
     }
 
-    void PaintRows() {
-        _rows.Children.Clear();
-        for (int i = 0; i < _candidates.Count; i++) {
-            int index = i;
-            var row = new DockPanel { Background = Brushes.Transparent, Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand) };
-            var mark = Icons.Create(i == _reference ? "largecircle.fill.circle" : "circle", IconSize.Sm, Palette.Text);
-            mark.Margin = new Thickness(0, 0, Space.Md, 0);
-            DockPanel.SetDock(mark, Dock.Left);
-            row.Children.AddRange([mark, new TextBlock {
-                Text = System.IO.Path.GetFileName(_candidates[i].Path), FontSize = Faces.Label, VerticalAlignment = VerticalAlignment.Center,
-                FontFamily = Faces.Numeral, FontWeight = FontWeight.Medium, FontFeatures = Faces.Tabular,
-            }]);
-            row.PointerPressed += (_, _) => { if (!_stacking) { _reference = index; PaintRows(); ShowMode(); } };
-            _rows.Children.Add(row);
-        }
+    /// A frame chosen in the strip: the preview follows, crossfaded unless the key chose it.
+    void Choose(int index, bool byKey) {
+        if (_stacking || index == _reference) return;
+        _reference = index;
+        _frames.Mark(index);
+        ShowMode(animate: !byKey);
     }
 
-    /// The mode's note, and in Landscape the Sky row for the reference frame, seeded when the reference changes.
-    void ShowMode() {
-        Status(null);   // "Paint the sky first." answered by a change of mode or frame
-        Warn(false);    // and a memory warning about the old frame or mode no longer applies
+    /// The mode's note, Landscape's Sky row, and the preview for the reference in this mode.
+    void ShowMode(bool animate) {
+        Notice(null);   // "Paint the sky first" answered by a change of mode or frame
+        Warn(null);     // and a memory warning about the old frame or mode no longer applies
         _modeNote.Text = ModeNotes[(int)_mode];
-        _split.IsVisible = _mode == Stack.Mode.Landscape;
-        string path = _candidates[_reference].Path;
-        if (_split.IsVisible && _splitFor != path) {
-            _splitFor = path;
-            _painter = StackSplit.For(path);
-            // ...or by painting (the painter handles its own presses, hence handledEventsToo).
-            _painter?.AddHandler(Avalonia.Input.InputElement.PointerPressedEvent, (_, _) => Status(null), handledEventsToo: true);
-            _split.Children.Clear();
-            _split.Children.Add(SheetKit.Row("Sky", _painter?.Editor() ?? SheetKit.Note("This raw carries no preview to paint the sky on.", Palette.Warn)));
+        _sky.IsVisible = _mode == Stack.Mode.Landscape;
+        if (_stack != null) _stack.IsEnabled = Paintable;
+        _ = Preview(animate);
+    }
+
+    /// The reference frame's picture once read (at once when it has been), or in Landscape the painter seeded on
+    /// it; a later choice overtakes a read still running. Discarded by its callers, so nothing may escape it.
+    async Task Preview(bool animate) {
+        if (ReferencePath is not { } path) {
+            _frames.Show(StackFrames.Empty("No frames to stack", "Select two or more frames of one scene, then choose Stack photos… again."), false);
+            return;
         }
+        int ticket = ++_previews;
+        Bitmap? picture = null;
+        try { picture = await _frames.Picture(path); }
+        catch (Exception e) { Console.Error.WriteLine($"orion stack: preview of {path}: {e.Message}"); }
+        if (ticket != _previews || _closed) return;
+        bool landscape = _mode == Stack.Mode.Landscape;
+        if (picture != null && landscape && _painter?.Path != path) {
+            _painter = StackSplit.For(path, picture);
+            // Painting answers "Paint the sky first" (the painter handles its own presses, hence handledEventsToo).
+            _painter.AddHandler(InputElement.PointerPressedEvent, (_, _) => Notice(null), handledEventsToo: true);
+            _skyTools.Child = _painter.Tools();
+        }
+        bool painting = picture != null && landscape;
+        _skyTools.IsVisible = painting;
+        if (painting && _painter!.NoSky != null) _noSky.Show("No horizon found", "Paint the sky on the picture with Add sky.");
+        else _noSky.Hide();
+        Control view = picture == null
+            ? landscape ? StackFrames.Empty("No preview to paint the sky on", "Landscape paints the sky on the raw's embedded preview, and this one has none. Choose another frame, or another mode.")
+                        : StackFrames.Empty("No preview in this raw", "It stacks all the same; the camera saved no picture to show here.")
+            : landscape ? _painter! : StackFrames.Framed(picture);
+        PreviewPath = path;
+        _frames.Show(view, animate);
         if (_stack != null) _stack.IsEnabled = Paintable;
     }
 
@@ -173,9 +201,12 @@ public sealed class StackSheet : Border {
     /// can clear it), then the stack, or the warning whose Proceed anyway forces it.
     internal async Task Press() {
         if (_stacking || !Paintable || Ineligibility(_candidates) != null) return;
-        if (!Ready) { Status("Paint the sky first."); return; }
-        Status(null);
-        Warn(false);
+        if (!Ready) {
+            Notice("Paint the sky first", "Brush over the sky in the picture. Landscape aligns what you paint on the stars and keeps the rest still.");
+            return;
+        }
+        Notice(null);
+        Warn(null);
         _stacking = true;   // a second press while the check runs is ignored
         (ulong Need, ulong Free)? memory = null;
         try {
@@ -187,26 +218,47 @@ public sealed class StackSheet : Border {
         }
         if (_closed) return;   // closed while the check ran: no stack nobody can see
         if (memory is { Need: var need, Free: var free } && free > 0 && need > free) {
-            _warningText.Text = MemoryWarning(_candidates.Count, need, free);
-            Warn(true);
+            Warn(MemoryWarning(_candidates.Count, need, free));
             return;
         }
         await Start(force: false);
     }
 
     /// The warning's Cancel and Proceed anyway stand in for the sheet's own row while it shows: one Cancel, not two.
-    void Warn(bool on) { _warning.IsVisible = on; _actions.IsVisible = !on; }
+    /// Null takes it away.
+    void Warn(string? detail) {
+        if (detail == null) _warning.Hide();
+        else _warning.Show("Not enough free memory", detail);
+        _actions.IsVisible = detail == null;
+    }
 
     internal Task Proceed() {
-        Warn(false);
+        Warn(null);
         return Start(force: true);
     }
 
-    // Test seams: what the selftest reads of the warning.
+    // Test seams: what the selftest and the screenshot scenes read of the sheet, and the mode they set.
     internal bool WarningShown => _warning.IsVisible;
-    internal string WarningText => _warningText.Text ?? "";
+    internal string WarningText => _warning.Detail;
+    internal string? PreviewPath { get; private set; }
+    internal Control? PreviewShown => _frames.Shown;
+    internal string Caption => _frames.Caption;
+    internal bool PreviewsRead => _frames.Read;
+    internal bool StackEnabled => _stack?.IsEnabled == true && _actions.IsVisible;
+    internal Control Strip => _frames.Strip;
+    internal Control PreviewPane => _frames.Pane;
+    internal ScrollViewer Controls => _controls;
+    internal Control Actions => _actions;
+    internal Stack.Mode Mode {
+        get => _mode;
+        set {
+            _mode = value;
+            if (_modes != null) _modes.Selected = (int)value;
+            ShowMode(animate: false);
+        }
+    }
 
-    protected override void OnDetachedFromVisualTree(Avalonia.VisualTreeAttachmentEventArgs e) {
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e) {
         base.OnDetachedFromVisualTree(e);
         _closed = true;
     }
@@ -233,7 +285,7 @@ public sealed class StackSheet : Border {
             float[]? matte = (float[]?)painter?.Matte.Clone();
             Console.Error.WriteLine($"orion stack: start ref={reference} mode={mode} darks={darks.Count} flats={flats.Count} -> {output}");
             Autosave.Shared.Flush();
-            var bar = new ProgressBar { Minimum = 0, Maximum = 1, Width = 300, MinHeight = 0, Height = 4, VerticalAlignment = VerticalAlignment.Center };
+            var bar = new ProgressBar { Minimum = 0, Maximum = 1, Width = 180, MinHeight = 0, Height = 4, VerticalAlignment = VerticalAlignment.Center };
             _actions.Children.Clear();
             _actions.Children.AddRange([bar, SheetKit.Button("Stop", Stack.Cancel)]);
             using var poll = Avalonia.Threading.DispatcherTimer.Run(() => { bar.Value = Stack.Progress ?? bar.Value; return true; },
@@ -245,8 +297,7 @@ public sealed class StackSheet : Border {
                 // the same warning, with its Proceed anyway, rather than a closed sheet and nothing to press.
                 Idle();
                 _calibration.IsEnabled = true;
-                _warningText.Text = failed;
-                Warn(true);
+                Warn(failed);
                 return;
             }
             Dismiss?.Invoke();
@@ -264,7 +315,7 @@ public sealed class StackSheet : Border {
         } catch (Exception e) {
             // Run discards this Task: an exception escaping here would go unobserved.
             Console.Error.WriteLine($"orion stack: {e}");
-            Status(e.Message);
+            Notice("The stack failed", e.Message);
             EngineModel.Shared.Say(e.Message);   // in case the sheet has already closed
             Idle();
             _calibration.IsEnabled = true;

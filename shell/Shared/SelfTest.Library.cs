@@ -26,6 +26,8 @@ static partial class SelfTest {
         if (engine.Handle == 0) return;   // Run already failed for want of a photo
         StackDismissal(engine);
         StackMemoryWarning(engine);
+        StackSheetPreview(engine);
+        StackSheetResize(engine);
         string dir = Directory.CreateTempSubdirectory("orion-library-").FullName;
         try {
             string photo = Path.Combine(dir, "photo" + Path.GetExtension(engine.Photos[engine.Current]));
