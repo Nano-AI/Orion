@@ -6,18 +6,21 @@ name: Build (macOS, Windows, Linux)
 # web/js/download.js offers a build, and an installed Orion updates to one, only
 # once a release carries it, and making one is the developer's call.
 
+# Documentation builds nothing (#409): Markdown, planning/, research/, feedback/,
+# docs/ and web/ (which pages.yml deploys). paths-ignore skips a push or pull
+# request that is all documentation; the `changes` job below skips the builds
+# when only this push is, e.g. a doc fix pushed onto a pull request whose code
+# has already built. Keep the two lists the same.
 on:
   push:
     branches: [main, 'ci/**']
+    paths-ignore: ['**/*.md', 'planning/**', 'research/**', 'feedback/**', 'docs/**', 'web/**']
   pull_request:
+    paths-ignore: ['**/*.md', 'planning/**', 'research/**', 'feedback/**', 'docs/**', 'web/**']
   workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: true
 
 env:
   SHELL_DIR: shell   # the one place this workflow names the shell's path
@@ -37,12 +40,37 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
 
 jobs:
+  # What this push changed. Not the whole pull request: GitHub's path filters see
+  # that, so a doc fix onto a code PR would rebuild all three systems for nothing.
+  # No base to compare (a new PR, a force-push, a manual run): build.
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
+        with: { fetch-depth: 0 }
+      - id: diff
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after || github.sha }}
+        run: |
+          code=true
+          if [ -n "$BEFORE" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            git diff --name-only "$BEFORE" "$AFTER" | grep -vE '\.md$|^(planning|research|feedback|docs|web)/' | grep -q . || code=false
+          fi
+          echo "code=$code" | tee -a "$GITHUB_OUTPUT"
+
   # Built, tested and packaged in Ubuntu 22.04, so the AppImage starts on glibc 2.35
   # and later (decision #404): Ubuntu 22.04, Debian 12 and newer. Clang from
   # apt.llvm.org, every library from vcpkg's source, Dawn built here too, and the
   # C++ runtime linked in and kept private (-static-libstdc++ -static-libgcc,
   # --exclude-libs: .NET loads the system's libstdc++ into the same process).
   linux:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    # Per job, not per workflow: a doc-only push must not cancel a build it then skips.
+    concurrency: { group: "build-${{ github.ref }}-linux", cancel-in-progress: true }
     runs-on: ubuntu-24.04
     container: ubuntu:22.04@sha256:076e7bf82319619f28dd0aa9c02ab34b055ad37100395b4f49a2ffba04fb5e11
     # A container job's steps default to sh (dash), which has no arrays or pipefail;
@@ -285,6 +313,9 @@ jobs:
           if grep -Ei 'unhandled exception|valid ICU|app-local ICU|DllNotFound|GLIBC' run.log; then exit 1; fi
 
   windows:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    concurrency: { group: "build-${{ github.ref }}-windows", cancel-in-progress: true }
     runs-on: windows-2022
     defaults:
       run: { shell: bash }
@@ -412,6 +443,9 @@ jobs:
           path: dist/releases/*
 
   macos:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    concurrency: { group: "build-${{ github.ref }}-macos", cancel-in-progress: true }
     runs-on: macos-15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
