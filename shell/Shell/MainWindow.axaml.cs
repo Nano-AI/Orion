@@ -24,9 +24,21 @@ public partial class MainWindow : Window {
     /// allows, since past it a slider is longer than any hand needs and the photo pays.
     public const double CanvasMin = 360;
 
+    /// The title bar's and the task switcher's icon (decision #407). None on macOS,
+    /// where a window icon would replace the bundle's Orion.icns in the Dock. On
+    /// Windows the brand's ICO, every size hand-made; on Linux its 256 px tile,
+    /// which X11 scales down (Wayland reads the .desktop file's Icon=orion instead).
+    static WindowIcon? WindowIconFor() {
+        if (OperatingSystem.IsMacOS()) return null;
+        string name = OperatingSystem.IsWindows() ? "brand/window-icon.ico" : "brand/window-icon.png";
+        using var stream = typeof(MainWindow).Assembly.GetManifestResourceStream(name);
+        return stream == null ? null : new WindowIcon(stream);
+    }
+
     public MainWindow(string tab) {
         InitializeComponent();
         if (OperatingSystem.IsMacOS()) ToolbarHost.Margin = new Thickness(80, 0, Space.Pad, 0); // traffic lights
+        Icon = WindowIconFor();
         AboveTabsHost.Margin = new Thickness(Space.Pad, 0);
         TabWell.Margin = new Thickness(Space.Pad, Space.Md);
         TabWell.Padding = new Thickness(Space.Xs);

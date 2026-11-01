@@ -17,6 +17,7 @@ namespace OrionShell.Chrome;
 [Panel("toolbar", Region.Toolbar)]
 public sealed class ToolbarPanel : Grid {
     const double ButtonHeight = 28;
+    const double MarkSize = 20;
 
     readonly TextBlock _crumb = new() { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
     readonly Segmented _mode = new(["Library", "Develop"], 1, ["square.grid.2x2", "slider.horizontal.3"], words: true);
@@ -29,8 +30,16 @@ public sealed class ToolbarPanel : Grid {
         Margin = new Thickness(Space.Pad, 0);
         Height = Layout.Toolbar;
 
-        var wordmark = new TextBlock { Text = "Orion", FontSize = Faces.Body, FontWeight = FontWeight.SemiBold, LetterSpacing = -0.14,
-                                       VerticalAlignment = VerticalAlignment.Center };
+        // The brand's toolbar mark at 20 points, the size its file is drawn for (the
+        // 16 point one is hinted for 16 and would blur here), in its own ink (#407).
+        var wordmark = new StackPanel {
+            Orientation = Orientation.Horizontal, Spacing = Space.Sm, VerticalAlignment = VerticalAlignment.Center,
+            Children = {
+                new Artwork("toolbar-mark.svg", MarkSize, Palette.MarkInk) { VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = "Orion", FontSize = Faces.Body, FontWeight = FontWeight.SemiBold, LetterSpacing = -0.14,
+                                VerticalAlignment = VerticalAlignment.Center },
+            },
+        };
         var left = new DockPanel { VerticalAlignment = VerticalAlignment.Center };
         foreach (var c in new Control[] { wordmark, OpenMenu() }) {
             c.Margin = new Thickness(0, 0, Space.Pad, 0);

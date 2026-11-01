@@ -88,7 +88,13 @@ Categories=Graphics;Photography;
 StartupWMClass=Orion
 MimeType=image/x-sony-arw;image/x-sony-srf;image/x-sony-sr2;image/x-adobe-dng;image/x-nikon-nef;image/x-nikon-nrw;image/x-canon-cr2;image/x-canon-cr3;image/x-canon-crw;image/x-fuji-raf;image/x-olympus-orf;image/x-panasonic-rw2;image/x-panasonic-rw;image/x-pentax-pef;image/x-minolta-mrw;
 EOF
-cp "$root/brand/orion_logo_system_luminous.svg" "$app/orion.svg"
+# The brand's icons (decision #407): the hicolor theme the .desktop file's Icon=orion
+# names, every size as drawn (16 and 32 hand-hinted), and at the AppDir's root the
+# tile, not the freeform symbol, as the AppImage's icon and its .DirIcon thumbnail.
+mkdir -p "$app/usr/share/icons"
+cp -R "$root/brand/linux/hicolor" "$app/usr/share/icons/hicolor"
+cp "$root/brand/linux/hicolor/scalable/apps/orion.svg" "$app/orion.svg"
+cp "$root/brand/linux/hicolor/256x256/apps/orion.png" "$app/.DirIcon"
 
 # Every licence text collected and every file mapped to one, no GPL, nobody named.
 python3 "$root/tools/package-gates.py" linux "$app" "$app/usr/share/doc/orion/licenses" "$build" "$shell"

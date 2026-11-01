@@ -48,6 +48,9 @@ sealed partial class App {
                 window.UpdateLayout();
                 Dispatcher.UIThread.RunJobs();
                 Pump(() => !Library.Thumbnails.Busy);   // read in the background (#399): a still shows them all
+                // A still shows where every motion ends: off the clock, what is running finishes at once.
+                // The welcome rose in over half a second, and the still caught its first row half faded and the rest unseen.
+                CanvasSlice.Motion.Detach(window);
                 window.UpdateLayout();
                 Dispatcher.UIThread.RunJobs();
                 Shoot(window, Run.Screenshot);

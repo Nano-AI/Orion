@@ -1,6 +1,6 @@
 // GENERATED from design/tokens.json by design/build-tokens.py.
 // Do not edit by hand — your changes will be overwritten.
-// Palette: hubble.
+// Palette: dusk.
 
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
@@ -32,8 +32,10 @@ public static class Palette {
     public static readonly IBrush Label = new ImmutableSolidColorBrush(Color.FromRgb(160, 160, 166));
     /// Inactive icons, detents, separators. Not for words a person must read: 2.5:1 on panel, under AA (dim is 5.0:1)
     public static readonly IBrush Faint = new ImmutableSolidColorBrush(Color.FromRgb(90, 90, 96));
+    /// The Orion mark in the toolbar (brand/app/toolbar-mark.svg draws in currentColor), the brand's ink for it on the near-black toolbar (#407). The mark only: never words, never the accent
+    public static readonly IBrush MarkInk = new ImmutableSolidColorBrush(Color.FromRgb(201, 202, 204));
     /// Interaction ONLY: an edited value, a slider's fill, the focus ring, the primary button, and the current selection (you are here). Never decorative, never status.
-    public static readonly IBrush Accent = new ImmutableSolidColorBrush(Color.FromRgb(77, 182, 196));
+    public static readonly IBrush Accent = new ImmutableSolidColorBrush(Color.FromRgb(143, 155, 196));
     /// Reject flag
     public static readonly IBrush Reject = new ImmutableSolidColorBrush(Color.FromRgb(196, 87, 77));
     /// Star rating marks
@@ -43,7 +45,7 @@ public static class Palette {
     /// A section's edited dot: a state, not an action
     public static readonly IBrush Status = new ImmutableSolidColorBrush(Color.FromRgb(238, 187, 88));
     /// Words and glyphs on an accent fill (the primary button)
-    public static readonly IBrush OnAccent = new ImmutableSolidColorBrush(Color.FromRgb(20, 20, 22));
+    public static readonly IBrush OnAccent = new ImmutableSolidColorBrush(Color.FromRgb(17, 27, 38));
     /// Histogram red channel
     public static readonly IBrush ChanR = new ImmutableSolidColorBrush(Color.FromRgb(196, 67, 58));
     /// Histogram green channel

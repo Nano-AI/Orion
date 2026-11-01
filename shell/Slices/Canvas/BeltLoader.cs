@@ -1,36 +1,44 @@
-using Avalonia;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
-using Avalonia.Media;
-using Avalonia.Media.Immutable;
 
 namespace OrionShell.CanvasSlice;
 
-/// What the canvas shows while a photo decodes: Orion's Belt, the app's mark,
-/// with a light passing along its three stars. It waits a moment before it
-/// appears, so a photo that opens fast never flashes it.
-sealed class BeltLoader : Control {
-    // Alnitak, Alnilam, Mintaka: rising left to right, as the mark draws them.
-    static readonly (double X, double Y, double R)[] Stars = [(6, 18, 4.5), (24, 12, 3.2), (42, 5, 4)];
-    static readonly Color Lit = ((ISolidColorBrush)Palette.Accent).Color;
+/// What the canvas shows while a photo decodes: the brand's loading symbol
+/// (brand/app/symbol-animatable.svg, decision #407), its belt stars lighting in
+/// turn as the brand's `.orion-loading` keyframes do. It waits a moment before
+/// it appears, so a photo that opens fast never flashes it. The stars keep the
+/// mark's own colours: the accent is never in the mark.
+sealed class BeltLoader : Panel {
+    public const double Size = 48;
+    /// One star's cycle: dim (0.3) to 15%, up to full by 30%, held to 75%, back down by the end;
+    /// each star 0.2 s behind the one before, under CSS's ease-in-out.
+    const double Period = 1.6, Delay = 0.2, Dim = 0.3;
+    static readonly string[] Stars = ["star-left", "star-mid", "star-right"];
+    static readonly SplineEasing EaseInOut = new(0.42, 0, 0.58, 1);
+    readonly Artwork _symbol = new("symbol-animatable.svg", Size);
     double _t;
 
-    public BeltLoader() { Width = 48; Height = 24; IsHitTestVisible = false; Opacity = 0; }
+    public BeltLoader() { Width = Height = Size; IsHitTestVisible = false; Opacity = 0; Children.Add(_symbol); }
 
-    public void Reset() { _t = 0; Opacity = 0; }
+    public void Reset() { _t = 0; Opacity = 0; Light(); }
 
     public void Advance(double dt) {
         _t += dt;
         Opacity = Math.Clamp((_t - 0.15) / 0.25, 0, 1);   // nothing for 150 ms, then in over 250
-        InvalidateVisual();
+        Light();
     }
 
-    public override void Render(DrawingContext c) {
-        double phase = _t * 2.2 % 4.4 - 0.7;   // the light runs past the last star, rests, starts again
-        for (int i = 0; i < Stars.Length; i++) {
-            var (x, y, r) = Stars[i];
-            double g = Math.Exp(-(phase - i) * (phase - i) / 0.35);
-            c.DrawEllipse(new ImmutableSolidColorBrush(Lit, 0.22 * g), null, new Point(x, y), r * 2.6, r * 2.6);
-            c.DrawEllipse(new ImmutableSolidColorBrush(Lit, 0.3 + 0.7 * g), null, new Point(x, y), r, r);
-        }
+    /// Under Reduce Motion the brand holds the middle star lit and the outer two dim.
+    void Light() {
+        for (int i = 0; i < Stars.Length; i++)
+            _symbol.SetOpacity(Stars[i], CanvasSlice.Motion.Reduced ? (i == 1 ? 1 : Dim) : Star(_t - i * Delay));
+    }
+
+    /// One star's opacity `t` seconds into its own cycle.
+    public static double Star(double t) {
+        if (t < 0) return Dim;   // before its delay, the resting dim
+        double p = t % Period / Period;
+        double rise(double a, double b, double from, double to) => from + (to - from) * EaseInOut.Ease((p - a) / (b - a));
+        return p < 0.15 ? Dim : p < 0.30 ? rise(0.15, 0.30, Dim, 1) : p < 0.75 ? 1 : rise(0.75, 1, 1, Dim);
     }
 }

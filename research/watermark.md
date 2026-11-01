@@ -35,7 +35,7 @@ Only alpha is kept, which is what makes a one-color mark a mask.
 
 ⚠ **An SVG with an opaque background becomes a gray box.**
 The shape is its alpha, and a full-canvas background rectangle is alpha everywhere.
-`brand/orion_logo_system_luminous.svg` is such a file; the editor says so under its file button.
+The app icon `web/favicon.svg` (a tile on Dusk ground) is such a file; the editor says so under its file button.
 
 ## Not sourced, and not needing to be
 
