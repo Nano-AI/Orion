@@ -8,7 +8,7 @@
 <br />
 <div align="center">
   <a href="https://bankoti.dev/Orion/">
-    <img src="web/img/orion-mark.svg" alt="Orion's Belt, the Orion logo" width="96">
+    <img src="web/favicon.svg" alt="The Orion app icon: a fir under Orion's Belt" width="96">
   </a>
 
 <h3 align="center">Orion</h3>
