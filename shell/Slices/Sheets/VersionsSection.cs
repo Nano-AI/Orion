@@ -55,7 +55,7 @@ sealed class VersionsSection {
         rows.Add(SheetKit.FieldWithButton(name, save));
 
         rows.Add(SheetKit.Note("A version is this photo's whole edit under a name — the crop, the dust and the masks " +
-                               "included. Restoring one keeps what you had first, as “Before restoring…”, and ⌘Z takes it back in one step."));
+                               $"included. Restoring one keeps what you had first, as “Before restoring…”, and {Commands.KeyLabel("undo")} takes it back in one step."));
     }
 
     /// One saved version: restore, rename in place, delete.

@@ -138,6 +138,9 @@ struct DawnStaging final : Readback::Slot {
         if (st == wgpu::WaitStatus::TimedOut) return false;
         pending = false;
         if (st != wgpu::WaitStatus::Success || !ok) throw std::runtime_error("Dawn readback: map failed");
+        // A lost device still maps (WebGPU hides the loss), with nothing the GPU
+        // wrote in it: never hand that out as a picture (#393).
+        if (const std::string lost = ctx->lost(); !lost.empty()) throw std::runtime_error("Dawn readback: " + lost);
         mapped = true;
         return true;
     }

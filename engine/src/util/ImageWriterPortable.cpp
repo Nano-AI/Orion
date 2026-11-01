@@ -160,8 +160,10 @@ std::vector<std::uint8_t> encodeJpeg(const std::uint16_t* rgba, std::uint32_t wi
 
 void writePng(const std::string& path, const std::uint16_t* rgba,
               std::uint32_t width, std::uint32_t height, std::size_t bytesPerRow) {
-    writeImage(path, rgba, width, height, bytesPerRow,
-               {ImageFormat::Png, 1.0f, 0, ColorSpace::Srgb});
+    ExportOptions o;
+    o.format = ImageFormat::Png;
+    o.quality = 1.0f;
+    writeImage(path, rgba, width, height, bytesPerRow, o);
 }
 
 }  // namespace orion::util

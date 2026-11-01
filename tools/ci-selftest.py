@@ -35,10 +35,6 @@ SKIP = {
         # 0.6 s of wall clock, and WARP (a CPU rasterizer) renders each Set for longer.
         "undo restores a value, and a drag's ticks were one step":
             "WARP renders each Set for longer than the 0.6 s that folds a drag's ticks into one step",
-        # ⚠ Undiagnosed (#376's open items): the zoom reached 100% with no frame and
-        # Live false, which Motion.Ask does only with no animation clock or Reduce
-        # Motion on, and the selftest forces motion on. Wants a real Windows machine.
-        "a double-click springs to 100%": "UNDIAGNOSED: the spring ran to its end with 0 frames (#376)",
         "ReleaseRenderMemory gives back": "the footprint off macOS is the working set, and WARP's video memory is the process's own",
     },
     "linux": {},

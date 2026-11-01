@@ -15,6 +15,7 @@
 #include <libraw/libraw.h>
 
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 
 namespace {
@@ -360,8 +361,14 @@ void testDngLensOpcodesThroughLibRaw() {
 void testLensSourceOnRealSony() {
     section("A real Sony raw still gets the lensfun answer");
 
-    // Skipped where the sample is not linked in (`tools/worktree-setup.sh`).
-    const std::string path = std::string(ORION_DATA_DIR) + "/../samples/_PIC8220.ARW";
+    // From ORION_SAMPLES, as every gate that renders a photograph takes it, or
+    // samples/ beside the tree (`tools/worktree-setup.sh`). Skipped, said,
+    // where it is in neither.
+    const char* samples = std::getenv("ORION_SAMPLES");
+    const std::string path = (samples != nullptr && *samples != '\0'
+                                  ? std::string(samples)
+                                  : std::string(ORION_DATA_DIR) + "/../samples")
+                             + "/_PIC8220.ARW";
     if (!std::filesystem::is_regular_file(path)) {
         std::printf("  (skipped: no %s)\n", path.c_str());
         return;

@@ -29,11 +29,17 @@ struct Seen {
     std::size_t differ = 0, samples = 0;
 };
 
-std::vector<float> floats(const gpu::Texture& t) {
-    const std::size_t n = std::size_t(t.width()) * t.height();
+/// The texture's samples, or only its top-left `w` x `h` when given: the frame
+/// a node wrote into a texture larger than it.
+std::vector<float> floats(const gpu::Texture& t, std::uint32_t w = 0, std::uint32_t h = 0) {
+    if (!w || !h) {
+        w = t.width();
+        h = t.height();
+    }
+    const std::size_t n = std::size_t(w) * h;
     const std::size_t bpp = gpu::bytesPerPixel(t.format());
     std::vector<std::uint8_t> bytes(n * bpp);
-    t.download(bytes.data(), t.width() * bpp);
+    t.download(bytes.data(), w * bpp, w, h);
     std::vector<float> out;
     switch (t.format()) {
         case gpu::PixelFormat::R16Float: case gpu::PixelFormat::RG16Float:
@@ -309,7 +315,12 @@ void testDawnParityGpu() {
                 paintBrush(w);
                 w.apply(edit);
                 w.render();
-                const auto a = floats(d.output()), b = floats(w.output());
+                // The frame the geometry node wrote, as every reader takes it
+                // (`outputWidth`): since #399 its texture can be larger than the
+                // frame (it shrinks only past twice the pixels), and the band
+                // beyond holds whatever a recycled texture held, which no one reads.
+                const auto a = floats(d.output(), d.outputWidth(), d.outputHeight());
+                const auto b = floats(w.output(), w.outputWidth(), w.outputHeight());
                 double worst = 0.0;
                 for (std::size_t i = 0; i < a.size() && a.size() == b.size(); ++i)
                     worst = std::max(worst, double(std::fabs(a[i] - b[i])));
@@ -343,9 +354,22 @@ void testDawnParityGpu() {
     std::printf("  whole graph, Dawn against Metal: %s\n", line);
     report(chain <= chainBar, virtualGpu ? "the whole develop graph on Dawn matches Metal's output within the virtual GPU's bar"
                                          : "the whole develop graph on Dawn matches Metal's output exactly", line);
+}
+
+void testEveryKernelCompilesOnDawnGpu() {
+    section("Every kernel compiles on Dawn (GPU)");
+    // Not inside the parity test: that needs Metal, and Windows and Linux,
+    // where Dawn is the only backend, are where this matters most.
+    std::unique_ptr<gpu::Device> dawn;
+    try {
+        dawn = gpu::Device::create(gpu::Backend::Dawn);
+    } catch (const std::exception& e) {
+        report(false, "Dawn device available", e.what());
+        return;
+    }
 
     // Every kernel the build makes must at least compile on Dawn, including
-    // any no graph above reaches (llfRemapDown has no node today).
+    // any no graph reaches (llfRemapDown has no node today).
     int compiled = 0;
     for (const auto& entry : std::filesystem::directory_iterator(ORION_SHADER_DIR)) {
         if (entry.path().extension() != ".wgsl") continue;

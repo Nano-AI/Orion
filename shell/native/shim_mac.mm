@@ -19,8 +19,8 @@ void shim_settle(Shim* s) {
 extern "C" {
 
 // The last render of `which` (what shim_render returned) and the region of it
-// that holds the picture. The texture is square so a straightened frame fits;
-// only the top-left region holds the picture (Engine+Render.swift:286):
+// that holds the picture. The texture can be larger than the picture (it grows
+// with room to spare for a straighten, #399); only the top-left region holds it:
 // image_size for the full graph, preview_size for the preview, each its own
 // graph's answer. Null when there is nothing to read. present.mm reads it too.
 void* shim_picture(Shim* s, int which, int* w, int* h) {

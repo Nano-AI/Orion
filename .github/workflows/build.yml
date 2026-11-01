@@ -28,27 +28,66 @@ env:
   SLANG_SHA256_WINDOWS: 5ed0a59d650a0af0aca45d5db4e083b3d8fb5cea05748747dd95dfbe9c580658
   SLANG_SHA256_MACOS: 92da7ab6226dd951037cd85397f830ae78fe40fbbb8928882e0b2654e468fdd4
   VPK_VERSION: 1.2.161               # Velopack's packer, the shell's Velopack package's version (#389)
+  CMAKE_VERSION: 3.31.6               # Ubuntu 22.04's is 3.22; the project asks for 3.24
+  CMAKE_SHA256_LINUX: 5a1133ff103c71eb5120e2cc3de922733e7d8a26a98ae716397e8676adb367bf
+  LLVM_VERSION: 18                    # apt.llvm.org's, the Clang the Ubuntu 24.04 build used
+  LLVM_KEY_FINGERPRINT: 6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
+  INNOSETUP_VERSION: 6.7.1
   DOTNET_NOLOGO: 1
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
 
 jobs:
+  # Built, tested and packaged in Ubuntu 22.04, so the AppImage starts on glibc 2.35
+  # and later (decision #404): Ubuntu 22.04, Debian 12 and newer. Clang from
+  # apt.llvm.org, every library from vcpkg's source, Dawn built here too, and the
+  # C++ runtime linked in and kept private (-static-libstdc++ -static-libgcc,
+  # --exclude-libs: .NET loads the system's libstdc++ into the same process).
   linux:
-    runs-on: ubuntu-24.04            # pins the apt versions below to the image series
+    runs-on: ubuntu-24.04
+    container: ubuntu:22.04@sha256:076e7bf82319619f28dd0aa9c02ab34b055ad37100395b4f49a2ffba04fb5e11
+    # A container job's steps default to sh (dash), which has no arrays or pipefail;
+    # this is the bash -e the host runner gave them before the container (#404).
+    defaults:
+      run:
+        shell: bash -e {0}
     env:
-      ORION_VCPKG: ${{ github.workspace }}/../vcpkg
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/../vcpkg-cache
+      ORION_VCPKG: /opt/vcpkg        # container paths: github.workspace names the host's
+      VCPKG_DEFAULT_BINARY_CACHE: /opt/vcpkg-cache
+      CC: clang
+      CXX: clang++
+      STATIC_RUNTIME: -static-libstdc++ -static-libgcc -Wl,--exclude-libs,libstdc++.a:libgcc.a:libgcc_eh.a
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
-        with: { fetch-depth: 0 }     # git describe names the package
-
+      # Before the checkout: without git, actions/checkout downloads a tarball and
+      # git describe has nothing to name the package by.
       - name: Packages
         run: |
-          sudo apt-get update
+          apt-get update
           # Build tools only. The engine's libraries are vcpkg's, as on Windows: Ubuntu's
           # OpenCV is built with GDAL, which brings poppler, and poppler is GPL (#243, #376).
-          sudo apt-get install -y --no-install-recommends ninja-build clang nasm pkg-config \
-            autoconf autoconf-archive automake libtool libvulkan1 vulkan-tools \
+          # libicu70 is for the .NET SDK itself; the package carries its own ICU.
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates curl git gnupg python3 make g++-12 libstdc++-12-dev ninja-build nasm \
+            pkg-config autoconf autoconf-archive automake libtool bison flex zip unzip tar xz-utils \
+            zstd file libvulkan1 vulkan-tools patchelf libicu70 libfontconfig1 \
             squashfs-tools   # mksquashfs, for vpk's AppImage (#389)
+          curl -fsSL -o /tmp/llvm.key https://apt.llvm.org/llvm-snapshot.gpg.key
+          gpg --show-keys --with-colons /tmp/llvm.key | grep -q "^fpr:::::::::$LLVM_KEY_FINGERPRINT:"
+          gpg --dearmor -o /usr/share/keyrings/llvm.gpg /tmp/llvm.key
+          echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] https://apt.llvm.org/jammy/ llvm-toolchain-jammy-$LLVM_VERSION main" \
+            > /etc/apt/sources.list.d/llvm.list
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            "clang-$LLVM_VERSION" "llvm-$LLVM_VERSION" "lld-$LLVM_VERSION"
+          for t in clang clang++ llvm-nm llvm-ar llvm-ranlib; do ln -sf "/usr/bin/$t-$LLVM_VERSION" "/usr/local/bin/$t"; done
+          curl -fsSL -o /tmp/cmake.tar.gz \
+            "https://github.com/Kitware/CMake/releases/download/v$CMAKE_VERSION/cmake-$CMAKE_VERSION-linux-x86_64.tar.gz"
+          echo "$CMAKE_SHA256_LINUX  /tmp/cmake.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/cmake.tar.gz -C /opt && ln -sf "/opt/cmake-$CMAKE_VERSION-linux-x86_64/bin/"* /usr/local/bin/
+          clang++ -v 2>&1 | grep -E 'version|Selected GCC'   # Clang 18 on GCC 12's libstdc++
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
+        with: { fetch-depth: 0 }     # git describe names the package
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"   # the container's root is not the checkout's owner
 
       - name: vcpkg at the manifest's baseline
         run: |
@@ -60,8 +99,8 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: vcpkg-linux-${{ hashFiles('vcpkg.json', 'tools/vcpkg-triplets/*') }}
-          restore-keys: vcpkg-linux-   # vcpkg's own cache is by package ABI: an older one still serves
+          key: vcpkg-linux-jammy-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'tools/vcpkg-triplets/*', 'tools/vcpkg-ports/**') }}
+          restore-keys: vcpkg-linux-jammy-   # vcpkg's own cache is by package ABI: an older one still serves
 
       # The runner has no GPU, so Dawn's Vulkan backend runs on a CPU driver.
       # SwiftShader, at the commit Dawn's DEPS pins: Mesa's lavapipe (25.2) cannot
@@ -72,7 +111,7 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: swiftshader
-          key: swiftshader-cddb5c91-1
+          key: swiftshader-cddb5c91-jammy-1
       - name: SwiftShader (build)
         if: steps.swiftshader.outputs.cache-hit != 'true'
         run: |
@@ -110,7 +149,7 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: third_party/dawn-build
-          key: dawn-linux-${{ env.DAWN_CACHE }}
+          key: dawn-linux-jammy-${{ env.DAWN_CACHE }}   # built in the 22.04 container (#404)
       - name: Dawn (build)
         if: steps.dawn.outputs.cache-hit != 'true'
         run: tools/build-dawn.sh && rm -rf third_party/dawn-src
@@ -125,11 +164,12 @@ jobs:
       - name: Dawn third-party audit
         run: |
           set +o pipefail
-          lib=$(ls third_party/dawn-build/lib/*webgpu_dawn* | head -1); ls -la third_party/dawn-build/lib
-          nm=nm; command -v llvm-nm >/dev/null && nm=llvm-nm
+          libs=(third_party/dawn-build/lib/*webgpu_dawn*); lib=${libs[0]}; ls -la third_party/dawn-build/lib
+          nm="nm"; command -v llvm-nm >/dev/null && nm="llvm-nm"
           "$nm" -C --defined-only "$lib" 2>/dev/null | awk '{ $1=""; $2=""; print }' \
             | grep -oE '^ *(\(anonymous namespace\)::)?[A-Za-z_][A-Za-z0-9_]*::' | sort | uniq -c | sort -rn | head -60
           "$nm" --defined-only "$lib" 2>/dev/null | awk '{print $3}' | grep -E '^_?(vk|spv|D3D|DXGI|dxc)' | cut -c1-40 | sort -u | head -40
+          # shellcheck disable=SC1003 # tr's argument is one backslash, not an escaped quote
           grep -aoE 'third_party[\\/]+[A-Za-z0-9_.-]+([\\/]+[A-Za-z0-9_.-]+){0,3}' "$lib" | tr '\\' / | sed 's#/\+#/#g' | sort | uniq -c | sort -rn | head -60
 
       - name: Configure and build
@@ -138,7 +178,9 @@ jobs:
             -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DORION_SHELL_DIR="$SHELL_DIR" \
             -DCMAKE_TOOLCHAIN_FILE="$ORION_VCPKG/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_OVERLAY_TRIPLETS="$GITHUB_WORKSPACE/tools/vcpkg-triplets" \
-            -DVCPKG_TARGET_TRIPLET=x64-linux-dynamic-release
+            -DVCPKG_TARGET_TRIPLET=x64-linux-dynamic-release \
+            -DCMAKE_SHARED_LINKER_FLAGS="$STATIC_RUNTIME" -DCMAKE_MODULE_LINKER_FLAGS="$STATIC_RUNTIME" \
+            -DCMAKE_EXE_LINKER_FLAGS="$STATIC_RUNTIME"
           cmake --build build -- -k 0   # every error in one run, not the first
       - if: always() && steps.vcpkg.outputs.cache-hit != 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
@@ -179,11 +221,68 @@ jobs:
         run: |
           dotnet tool install -g vpk --version "$VPK_VERSION"
           VPK="$HOME/.dotnet/tools/vpk" tools/package-linux.sh "$SHELL_DIR" build dist
+          cp "$RUNNER_TEMP/selftest.dng" dist/
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4
         with:
           name: orion-linux
           path: dist/releases/*
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4
+        with:
+          name: orion-linux-floor-photo
+          path: dist/selftest.dng
+          retention-days: 1
+
+  # The AppImage on systems it was not built on, as a user meets them (#404): bare
+  # Ubuntu images with no libicu and only their own libstdc++, plus the Vulkan
+  # loader and fontconfig every desktop has. No GPU here, so the engine cannot
+  # open a photo: this proves AppRun's one-line refusals, that .NET starts on the
+  # bundled ICU (with no system ICU, AppLocalIcu or nothing), and that the shim and
+  # every library it loads resolve. The batch export's file names need a GPU.
+  linux-floor:
+    needs: linux
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - ubuntu:22.04@sha256:076e7bf82319619f28dd0aa9c02ab34b055ad37100395b4f49a2ffba04fb5e11
+          - ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
+    container: ${{ matrix.image }}
+    defaults:
+      run:
+        shell: bash -e {0}   # as the linux job's: compgen and arrays are bash's
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093   # v4
+        with: { name: orion-linux, path: pkg }
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093   # v4
+        with: { name: orion-linux-floor-photo, path: pkg }
+      - name: Bare system, the AppImage unpacked
+        run: |
+          ldd --version | head -1
+          if compgen -G '/usr/lib/x86_64-linux-gnu/libicu*' >/dev/null; then echo "the image has a system ICU" >&2; exit 1; fi
+          cd pkg && images=(./*.AppImage) && image=${images[0]} && chmod +x "$image" && "$image" --appimage-extract >/dev/null && ls squashfs-root
+      - name: AppRun refuses in one line, without .NET
+        run: |
+          # $1: what must be missing; the rest: AppRun's arguments.
+          refuses() { want=$1; shift
+            set +e; out=$(env -u DISPLAY pkg/squashfs-root/AppRun "$@" 2>&1); code=$?; set -e
+            echo "exit $code: $out"
+            [ $code -ne 0 ] && [ "$(printf '%s\n' "$out" | wc -l)" -eq 1 ] && printf '%s' "$out" | grep -q "^Orion cannot start: .*$want"; }
+          refuses libvulkan.so.1 photo.dng
+          apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libvulkan1
+          refuses libfontconfig.so.1 photo.dng
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libfontconfig1
+          refuses DISPLAY photo.dng
+          if compgen -G '/usr/lib/x86_64-linux-gnu/libicu*' >/dev/null; then echo "a package brought a system ICU" >&2; exit 1; fi
+      - name: .NET on the bundled ICU, the shim and its libraries (batch export)
+        run: |
+          mkdir in && for n in X x café cafe$(printf '\314\201'); do cp pkg/selftest.dng "in/$n.dng"; done
+          set +e; pkg/squashfs-root/AppRun --batch-export out in/*.dng > run.log 2>&1; code=$?; set -e
+          cat run.log
+          # Four jobs planned (case- and accent-folded names) and each refused for want of a GPU, not a crash.
+          grep -q '^orion: exported 0 of 4$' run.log && [ $code -eq 1 ]
+          if grep -Ei 'unhandled exception|valid ICU|app-local ICU|DllNotFound|GLIBC' run.log; then exit 1; fi
 
   windows:
     runs-on: windows-2022
@@ -241,11 +340,12 @@ jobs:
       - name: Dawn third-party audit
         run: |
           set +o pipefail
-          lib=$(ls third_party/dawn-build/lib/*webgpu_dawn* | head -1); ls -la third_party/dawn-build/lib
-          nm=nm; command -v llvm-nm >/dev/null && nm=llvm-nm
+          libs=(third_party/dawn-build/lib/*webgpu_dawn*); lib=${libs[0]}; ls -la third_party/dawn-build/lib
+          nm="nm"; command -v llvm-nm >/dev/null && nm="llvm-nm"
           "$nm" -C --defined-only "$lib" 2>/dev/null | awk '{ $1=""; $2=""; print }' \
             | grep -oE '^ *(\(anonymous namespace\)::)?[A-Za-z_][A-Za-z0-9_]*::' | sort | uniq -c | sort -rn | head -60
           "$nm" --defined-only "$lib" 2>/dev/null | awk '{print $3}' | grep -E '^_?(vk|spv|D3D|DXGI|dxc)' | cut -c1-40 | sort -u | head -40
+          # shellcheck disable=SC1003 # tr's argument is one backslash, not an escaped quote
           grep -aoE 'third_party[\\/]+[A-Za-z0-9_.-]+([\\/]+[A-Za-z0-9_.-]+){0,3}' "$lib" | tr '\\' / | sed 's#/\+#/#g' | sort | uniq -c | sort -rn | head -60
 
       - name: Configure and build

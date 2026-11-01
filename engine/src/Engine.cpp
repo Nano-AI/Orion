@@ -6,13 +6,33 @@
 #include "ResourcePaths.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
+#include <functional>
 #include <stdexcept>
 #include <algorithm>
 #include <variant>
 #include <vector>
 
 namespace orion {
+
+namespace {
+
+/// The last resort's words (#406): which effect the card refused, what the
+/// graph needs at once and what the card gave it before refusing, both
+/// counting the graph's own resident plates. Keeps "out of GPU memory", which
+/// the shell keys its shedding on.
+gpu::OutOfMemory outOfMemory(const pipe::DevelopPipeline& graph, std::uint64_t free) {
+    const auto gb = [](std::uint64_t b) {
+        char text[32];
+        std::snprintf(text, sizeof text, "%.1f GB", double(b) / 1e9);
+        return std::string(text);
+    };
+    return gpu::OutOfMemory("out of GPU memory: rendering " + graph.failedEffect() +
+                            " needs " + gb(graph.neededBytes()) + ", " + gb(free) + " free");
+}
+
+}  // namespace
 
 Engine::Engine() : device_(gpu::Device::create()) {
     // Eager, so hdrMergeProgress/hdrMergeCancel from another thread never
@@ -21,7 +41,11 @@ Engine::Engine() : device_(gpu::Device::create()) {
     stacker_ = std::make_unique<stack::Stacker>(*device_, res::shaderDir());
 }
 
-Engine::~Engine() = default;
+Engine::~Engine() {
+    // The Dawn device outlives this engine while another holds it (#392).
+    develop_.reset(); preview_.reset(); region_.reset(); display_.reset(); samples_.reset(); hdrMerge_.reset();
+    device_->reclaim();
+}
 
 const pipe::LensDatabase& Engine::lensDatabase() {
     // Function-local static: parsed on the first open, never on a path where
@@ -59,6 +83,8 @@ void Engine::setHeadless(bool on) noexcept {
 }
 
 void Engine::openRaw(const std::string& path) {
+    // A refusal's ceiling belongs to the photo that met it (#406).
+    device_->forgetOutOfMemory();
     // Either a mosaic or a demosaiced linear DNG — a merged HDR frame comes
     // back through this same door, which is the point of writing one.
     auto decoded = raw::decode(path);
@@ -292,6 +318,18 @@ double Engine::renderRegion(const Region& v, bool interacting) {
         }
         origin = o;
     };
+    // Past fit the canvas shows regions and nothing on screen reads the full
+    // graph: its textures go back (#318's release), ~3.3 GB at 24 MP, before
+    // the window allocates, not after: at 42 MP beside a desktop, the full
+    // graph an export's size estimate had just rendered left every region
+    // out of memory (#401). The next full render (export, an edit the region
+    // refuses) rebuilds them.
+    if (!fullReleased_) {
+        develop_->graph().releaseOutputs();
+        device_->reclaim();
+        fullReleased_ = true;
+        fullCurrent_ = false;
+    }
     std::uint32_t ox = 0, oy = 0, ww = 0, wh = 0;
     span(x0, x1, fw, ox, ww);
     span(y0, y1, fh, oy, wh);
@@ -327,16 +365,20 @@ double Engine::renderRegion(const Region& v, bool interacting) {
         regionView_ = v;
     }
     region_->apply(adj_);
-    const double ms = region_->render();
-    regionCurrent_ = true;
-    // Past fit the canvas shows regions and nothing on screen reads the full
-    // graph: give its textures back (#318's release), ~3.3 GB at 24 MP. The
-    // next full render (export, an edit the region refuses) rebuilds them.
-    if (!fullReleased_) {
-        develop_->graph().releaseOutputs();
-        fullReleased_ = true;
-        fullCurrent_ = false;
+    double ms = 0.0;
+    try {
+        ms = region_->render();
+    } catch (...) {
+        // A window that failed (out of memory, a lost device) keeps nothing:
+        // the next one starts from empty rather than beside this one's
+        // half-allocated graph (#401).
+        region_.reset();
+        regionLoaded_ = regionCurrent_ = false;
+        regionView_ = {};
+        device_->reclaim();
+        throw;
     }
+    regionCurrent_ = true;
     return ms;
 }
 
@@ -357,6 +399,8 @@ void Engine::releaseRenderMemory() noexcept {
     if (preview_) preview_->graph().releaseOutputs();
     if (region_)  region_->graph().releaseOutputs();
     if (display_) display_->release();   // the kernel stays compiled
+    samples_.reset();
+    device_->reclaim();
 }
 
 pipe::DisplayCopy& Engine::displayCopy() {
@@ -412,7 +456,40 @@ const pipe::DevelopPipeline& Engine::previewDevelop() const {
 
 double Engine::render() {
     if (!develop_) throw std::runtime_error("no image open");
-    const double ms = develop_->render();
+    // Out of GPU memory part way, the graph keeps what it did get and starves
+    // the preview and every other open photo: give it back, as a release would.
+    const auto giveBack = [&] {
+        develop_->graph().releaseOutputs();
+        // A region graph, if any, is not what is wanted now: the next region rebuilds it (#401).
+        if (region_) region_->graph().releaseOutputs();
+        regionCurrent_ = false;
+        device_->reclaim();
+        fullReleased_ = true;
+        fullCurrent_ = false;
+    };
+    double ms = 0.0;
+    try {
+        ms = develop_->render();
+    } catch (const gpu::OutOfMemory&) {
+        // ⚠ What ran out was the plan's guess at the card (#392): Dawn cannot
+        // say what is free, so until a refusal the rule budgets to 2.5 GB.
+        // The refusal set the device's ceiling, so once more from empty is
+        // planned to it, frugal where the cache will not fit (#406). Lean, one
+        // render, only if that fails too.
+        giveBack();
+        try {
+            ms = develop_->render();
+        } catch (const gpu::OutOfMemory&) {
+            giveBack();
+            ms = renderLean(giveBack);
+        } catch (...) {
+            giveBack();
+            throw;
+        }
+    } catch (...) {
+        giveBack();
+        throw;
+    }
     fullReleased_ = false;
     fullCurrent_ = true;
     return ms;
@@ -519,11 +596,14 @@ void Engine::autoEnhance(pipe::Adjustments& adj) {
     std::vector<std::uint32_t> rgb(std::size_t(kBins) * 3);
     std::vector<std::uint32_t> combined(kBins);
 
+    // ⚠ Through render(), not the graph's own: it is what gives the memory back
+    // and retries lean when the card runs out (#392). The look turns on
+    // clarity, whose 24 MP full graph peaks at 2.3 GB on its own, beside
+    // whatever the cache kept from the edit before, and the graph's own render
+    // failed there with nothing to say why and the cache still held.
     const auto measureNow = [&]() {
         develop_->apply(adj);
-        develop_->render();
-        fullCurrent_ = true;
-        fullReleased_ = false;
+        render();
         previewCurrent_ = regionCurrent_ = false;   // neither has had these
         histogram(rgb.data(), kBins);
         ae::combine(rgb.data(), kBins, combined.data());
@@ -554,34 +634,42 @@ void Engine::autoEnhance(pipe::Adjustments& adj) {
     // the picture the photographer took, not to the correction about to be
     // applied to it — deriving them afterwards would let the solver's own work
     // decide how much shadow lift the frame "needs".
-    const ae::Controls look = ae::look(measureNow());
-    adj.fusion  = look.fusion;
-    adj.clarity = look.clarity;
-
-    // Then solve, with the look already in place, because it moves the
-    // histogram the solver is reading.
     ae::Controls c{};
+    const pipe::Adjustments before = adj_;
+    try {
+        const ae::Controls look = ae::look(measureNow());
+        adj.fusion  = look.fusion;
+        adj.clarity = look.clarity;
 
-    // Stop when the median arrives rather than after a fixed count. Every step
-    // undershoots — see kDamping — so a frame far from the anchor needs more
-    // steps than a frame near it, and a flat count either short-changes the
-    // first or makes the second pay for renders it does not need.
-    for (int pass = 0; pass < ae::kMaxPasses; ++pass) {
+        // Then solve, with the look already in place, because it moves the
+        // histogram the solver is reading.
+        //
+        // Stop when the median arrives rather than after a fixed count. Every step
+        // undershoots — see kDamping — so a frame far from the anchor needs more
+        // steps than a frame near it, and a flat count either short-changes the
+        // first or makes the second pay for renders it does not need.
+        for (int pass = 0; pass < ae::kMaxPasses; ++pass) {
+            adj.exposureEv = c.exposureEv;
+            adj.blacks     = c.blacks;
+            adj.whites     = c.whites;
+
+            const ae::Stats s = measureNow();
+            if (std::abs(s.median - ae::kMidGray) < ae::kSettled) break;
+            c = ae::refine(c, s);
+        }
+
         adj.exposureEv = c.exposureEv;
         adj.blacks     = c.blacks;
         adj.whites     = c.whites;
-
-        const ae::Stats s = measureNow();
-        if (std::abs(s.median - ae::kMidGray) < ae::kSettled) break;
-        c = ae::refine(c, s);
+        develop_->apply(adj);
+        adj_ = adj;
+        render();
+    } catch (...) {
+        // A measuring pass's values are nobody's edit: the caller's go back.
+        adj_ = before;
+        develop_->apply(adj_);
+        throw;
     }
-
-    adj.exposureEv = c.exposureEv;
-    adj.blacks     = c.blacks;
-    adj.whites     = c.whites;
-    develop_->apply(adj);
-    adj_ = adj;
-    develop_->render();
 }
 
 void Engine::histogram(std::uint32_t* out, std::uint32_t bins) {
@@ -605,19 +693,41 @@ void Engine::histogram(std::uint32_t* out, std::uint32_t bins) {
         ++out[c * bins + bin];
     };
 
+    // ⚠ **Sampled on the GPU, read back small (#393).** A full readback of
+    // a 24 MP frame to keep one pixel in 31 cost 82 ms on the UI thread under
+    // Dawn on Linux, every settled render. histogram_sample gathers the same
+    // pixels in the output's own format, so the bins are unchanged.
+    const std::uint32_t n = std::uint32_t((count + kStride - 1) / kStride);
+    const std::uint32_t tw = std::min<std::uint32_t>(n, 2048), th = (n + tw - 1) / tw;
+    const gpu::PixelFormat format = d.output().format();
+    if (!sampleKernel_) {
+        sampleLibrary_ = gpu::Library::createFromFile(*device_, res::shaderDir() + "/histogramSample.metallib");
+        sampleKernel_ = gpu::Kernel::create(*device_, *sampleLibrary_, "histogramSample");
+    }
+    if (!samples_ || samples_->width() != tw || samples_->height() != th || samples_->format() != format)
+        samples_ = gpu::Texture::create(*device_, tw, th, format);   // kept: no allocation a render
+    gpu::Texture* samples = samples_.get();
+    struct {
+        std::uint32_t size[2], width, count, stride, unused;
+    } p{{tw, th}, w, std::uint32_t(count), std::uint32_t(kStride), 0};
+    static_assert(sizeof p == 24);
+    gpu::CommandBuffer cb(*device_);
+    cb.dispatch(*sampleKernel_, {&d.output(), samples}, &p, sizeof p, tw, th);
+    cb.commitAndWait();
+
     // Read only in the output's native format. Expanding every pixel to float
     // used another 16 bytes per pixel even though only one in 31 is sampled.
-    if (d.output().format() == gpu::PixelFormat::RGBA16Float) {
-        std::vector<__fp16> pixels(count * 4);
-        d.output().download(pixels.data(), std::size_t(w) * 4 * sizeof(__fp16), w, h);
-        for (std::size_t i = 0; i < count; i += kStride) {
+    if (format == gpu::PixelFormat::RGBA16Float) {
+        std::vector<__fp16> pixels(std::size_t(tw) * th * 4);
+        samples->download(pixels.data(), std::size_t(tw) * 4 * sizeof(__fp16), tw, th);
+        for (std::size_t i = 0; i < n; ++i) {
             for (std::uint32_t c = 0; c < 3; ++c)
                 add(c, static_cast<float>(pixels[i * 4 + c]));
         }
     } else {
-        std::vector<std::uint8_t> pixels(count * 4);
-        d.output().download(pixels.data(), std::size_t(w) * 4, w, h);
-        for (std::size_t i = 0; i < count; i += kStride) {
+        std::vector<std::uint8_t> pixels(std::size_t(tw) * th * 4);
+        samples->download(pixels.data(), std::size_t(tw) * 4, tw, th);
+        for (std::size_t i = 0; i < n; ++i) {
             for (std::uint32_t c = 0; c < 3; ++c)
                 add(c, pixels[i * 4 + c] / 255.0f);
         }
@@ -670,10 +780,10 @@ void Engine::exportImage(const std::string& path, const util::ExportOptions& opt
     WideOutputFor wide(*develop_, options.depth == util::BitDepth::Sixteen);
 
     // Make sure what we write matches what is on screen.
-    develop_->render();
+    renderForExport();
 
-    // The orientation node's texture is square; only the oriented rectangle
-    // inside it holds pixels.
+    // The orientation node's texture can be larger than the picture (it grows
+    // with room to spare, #399); only the oriented rectangle inside it holds pixels.
     const std::uint32_t w = develop_->outputWidth();
     const std::uint32_t h = develop_->outputHeight();
 
@@ -690,10 +800,69 @@ void Engine::exportImage(const std::string& path, const util::ExportOptions& opt
     rereleaseFull();
 }
 
+void Engine::renderForExport() {
+    // Out of memory part way, the graph keeps every texture it did get, and
+    // past fit no region frees them again (they are already "released"):
+    // at 42 MP beside a desktop, a size estimate that failed so left 2.2 GB
+    // behind and every region after it out of memory (#401). Give it back.
+    const auto giveBack = [&] {
+        develop_->graph().releaseOutputs();
+        device_->reclaim();
+        fullReleased_ = true;
+        fullCurrent_ = false;
+    };
+    // Out of memory, once more planned to the ceiling the refusal set, then
+    // lean, as the canvas's render does (#392, #406): an export fails only
+    // where the canvas would, and says why the same way.
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        try {
+            develop_->render();
+            return;
+        } catch (const gpu::OutOfMemory&) {
+            giveBack();
+        } catch (...) {
+            giveBack();
+            throw;
+        }
+    }
+    renderLean(giveBack);
+}
+
+double Engine::renderLean(const std::function<void()>& giveBack) {
+    // One render, not the photo's from then on (#392's lean retry was sticky
+    // because the cache refilled; the memory rule now plans each render to the
+    // ceiling the refusal set, #406). The headless engine stays lean (#312).
+    struct Restore {
+        pipe::Pipeline& graph;
+        bool was;
+        ~Restore() { graph.setReleaseEveryRender(was); }
+    } restore{develop_->graph(), headless_};
+    develop_->graph().setReleaseEveryRender(true);
+    // What the card can give this graph: the most the retry reached, less
+    // what the rest of the process held when it started.
+    device_->resetPeak();
+    const std::uint64_t start = device_->peakBytes();
+    const std::uint64_t others = start - std::min<std::uint64_t>(
+        start, develop_->graph().allocatedBytes());
+    try {
+        return develop_->render();
+    } catch (const gpu::OutOfMemory&) {
+        const std::uint64_t reached = device_->peakBytes();
+        giveBack();
+        throw outOfMemory(*develop_, reached - std::min(reached, others));
+    } catch (...) {
+        giveBack();
+        throw;
+    }
+}
+
 void Engine::rereleaseFull() noexcept {
     // An export past fit renders the full graph directly; give its ~3.3 GB
     // back again, as the region did (#22). The next export rebuilds them.
-    if (fullReleased_ && develop_) develop_->graph().releaseOutputs();
+    if (fullReleased_ && develop_) {
+        develop_->graph().releaseOutputs();
+        device_->reclaim();
+    }
 }
 
 std::size_t Engine::exportedSize(const util::ExportOptions& options) {
@@ -710,7 +879,7 @@ std::vector<std::uint16_t> Engine::exportPixels(const util::ExportOptions& optio
     // The estimate has to encode the same pixels the real write will — which
     // includes the depth, since eight bits is roughly half the PNG.
     WideOutputFor wide(*develop_, options.depth == util::BitDepth::Sixteen);
-    develop_->render();
+    renderForExport();
 
     w = develop_->outputWidth();
     h = develop_->outputHeight();

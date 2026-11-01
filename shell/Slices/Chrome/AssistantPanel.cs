@@ -17,8 +17,8 @@ namespace OrionShell.Chrome;
 ///
 /// The terminal is Iciclecreek.Avalonia.Terminal (MIT): an xterm emulator over
 /// a real PTY, as SwiftTerm's LocalProcessTerminalView is in Swift, running
-/// `/bin/zsh -l -i -c 'exec "$0" "$@"' claude …` in the working directory.
-/// zsh always starts, so a missing agent is "command not found" in the
+/// `/bin/zsh -l -i -c 'exec "$0" "$@"' claude …` in the working directory
+/// (the login shell on Linux: AssistantModel.Shell). The shell always starts, so a missing agent is "command not found" in the
 /// terminal rather than a launch failure.
 [Panel("assistant", Region.Sheet)]
 public sealed class AssistantPanel : DockPanel {
@@ -111,9 +111,9 @@ public sealed class AssistantPanel : DockPanel {
         }
     }
 
-    /// The agent in `directory`, under an interactive login zsh, as Swift's startProcess.
+    /// The agent in `directory`, under an interactive login shell, as Swift's startProcess.
     static void Launch(TerminalControl terminal, string command, string directory, string? server) =>
-        terminal.LaunchProcess(directory, "/bin/zsh", AssistantModel.BuildArgv(command, server));
+        terminal.LaunchProcess(directory, AssistantModel.Shell(Environment.GetEnvironmentVariable("SHELL")), AssistantModel.BuildArgv(command, server));
 
     /// What starts the process instead of Launch: the selftest points it at a
     /// harmless echo. Null is Launch, at a window only.

@@ -18,10 +18,11 @@ public partial class MainWindow : Window {
 
     public MainWindow() : this("Light") { }
 
-    /// The tool column's range: the boards' 322 is the floor every panel is laid
-    /// out for (seven tabs side by side); past 560 a slider is longer than any
-    /// hand needs, and the photo pays for it.
-    public const double ToolColMax = 560, CanvasMin = 360;
+    /// The tool column's floor: the boards' 322, which every panel is laid out
+    /// for (seven tabs side by side). Its widest is ToolColMax, measured from the
+    /// tab names' face (MainWindow.ToolColumn.cs, #403): 560 where that face
+    /// allows, since past it a slider is longer than any hand needs and the photo pays.
+    public const double CanvasMin = 360;
 
     public MainWindow(string tab) {
         InitializeComponent();
@@ -36,16 +37,20 @@ public partial class MainWindow : Window {
         Body.ColumnDefinitions = [
             new ColumnDefinition(GridLength.Star) { MinWidth = CanvasMin },
             new ColumnDefinition(1, GridUnitType.Pixel),
-            new ColumnDefinition(Layout.ToolCol, GridUnitType.Pixel) { MinWidth = Layout.ToolCol, MaxWidth = ToolColMax },
+            new ColumnDefinition(Layout.ToolCol, GridUnitType.Pixel) { MinWidth = Layout.ToolCol, MaxWidth = ToolColBase },
         ];
         DressSplitter();
-        foreach (var entry in Panels.All) {
+        // Not a sheet: one is built when its command opens it (CommandTable.Sheet).
+        // Built here, it was thrown away, after the HDR sheet had read every
+        // photo's capture data on this thread: 336 raws, half a minute (#399).
+        foreach (var entry in Panels.All.Where(p => p.Region != Region.Sheet)) {
             var panel = Panels.Create(entry.Type);
             if (entry.Tab is { } t) _tabs[t].Add(panel);
             else Host(entry.Region)?.Children.Add(panel);
         }
         BuildTabBar();
         Select(Panels.Tabs.Contains(tab) ? tab : "Light");
+        WatchTabFace();
         GalleryMode.Changed += ShowFace;
         // The gallery's key map sees a key before any control does, as Swift's
         // local monitor does: the grid's ScrollViewer would take the arrows.
@@ -110,20 +115,20 @@ public partial class MainWindow : Window {
     /// its icon and name, the rest their icon alone, named by a tooltip with the
     /// key and to a screen reader. Seven equal cells, the chosen one never
     /// narrower than its icon and name: at 322 it takes what it needs and the
-    /// icons share the rest; at 560 all seven are equal.
+    /// icons share the rest; at the widest (ToolColMax) all seven are equal.
     void BuildTabBar() {
         for (int i = 0; i < Panels.Tabs.Length; i++) {
             string tab = Panels.Tabs[i];
             TabBar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
             var button = new StateButton {
-                Kind = ButtonKind.Segment, Height = 24, MinWidth = 0, Padding = new Thickness(8, 0),   // off the scale on purpose: SelfTest.Design holds 8 spare each side at 322 and equal cells at 560
+                Kind = ButtonKind.Segment, Height = 24, MinWidth = 0, Padding = new Thickness(TabPadding, 0),   // FitToolColumn may narrow it; SelfTest.Design holds the room at 322 and the widest
                 HorizontalAlignment = HorizontalAlignment.Stretch, CornerRadius = new CornerRadius(Radius.Md),
                 Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Gap, Transitions = [Glide(RenderTransformProperty)], Children = {
                     Icons.Create(Panels.TabIcons[i], IconSize.Md, Palette.Text),
                     new TextBlock { Text = tab, FontSize = Faces.Label, VerticalAlignment = VerticalAlignment.Center, Transitions = [Glide(OpacityProperty)] },
                 } },
             };
-            ToolTip.SetTip(button, $"{tab} (⌘{i + 1})");
+            ToolTip.SetTip(button, $"{tab} ({Commands.KeyLabel($"tab-{tab.ToLowerInvariant()}")})");
             Avalonia.Automation.AutomationProperties.SetName(button, tab);
             button.Click += (_, _) => Select(tab, animate: true);
             Grid.SetColumn(button, i);

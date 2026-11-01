@@ -12,6 +12,7 @@
 #include "raw/RawImage.h"
 #include "util/ImageWriter.h"
 
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -273,6 +274,10 @@ private:
     /// The region graph and what it was last loaded with (#22).
     std::unique_ptr<pipe::DevelopPipeline> region_;
     std::unique_ptr<pipe::DisplayCopy>     display_;
+    /// histogram_sample.slang and its target, made on the first histogram.
+    std::unique_ptr<gpu::Library>          sampleLibrary_;
+    std::unique_ptr<gpu::Kernel>           sampleKernel_;
+    std::unique_ptr<gpu::Texture>          samples_;
     // ponytail: the whole mosaic stays on the CPU for the region graph to cut
     // windows from (2 bytes a pixel, 48 MB at 24 MP); read windows back from
     // the full graph's source texture if that ever matters.
@@ -289,6 +294,10 @@ private:
     /// no preview) first when it has to.
     [[nodiscard]] const pipe::DevelopPipeline& measured();
     /// After an export past fit, the full graph's outputs go back again.
+    void renderForExport();   // the full graph for a read, given back if it fails part way (#401)
+    /// The full graph once more after `giveBack`, lean (#392), and if the card
+    /// still refuses, the message naming the effect, need and free (#406).
+    double renderLean(const std::function<void()>& giveBack);
     void rereleaseFull() noexcept;
     Region                                 regionView_{};
     /// What `setAdjustments` last pushed, for the region graph's own apply.

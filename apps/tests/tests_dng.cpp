@@ -422,6 +422,40 @@ void testDngEmbeddedPreview() {
     std::remove(path.c_str());
 }
 
+void testDngEmbeddedXmp() {
+    section("a DNG's embedded XMP reads through the facade, byte for byte (#405)");
+
+    const std::string path = "/tmp/orion-dng-xmp.dng";
+    const auto rgb = gradientFrame();
+    orion::util::DngLinearImage img;
+    img.width = kW;
+    img.height = kH;
+    img.rgb = rgb.data();
+    img.xyzToCam = kXyzToCam;
+    img.asShotNeutral = kNeutral;
+    img.camera = "SONY ILCE-7RM3";
+    img.xmp = "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">"
+              "<rdf:Description xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\" xmp:Rating=\"3\"/></rdf:RDF></x:xmpmeta>";
+    try {
+        orion::util::writeDngLinear(path, img);
+    } catch (const std::exception& e) {
+        report(false, "XMP DNG write succeeds", e.what());
+        return;
+    }
+    std::uint32_t size = 0;
+    report(orion_read_xmp(path.c_str(), nullptr, 0, &size) == ORION_OK && size == img.xmp.size(),
+           "the size query answers the packet's length");
+    std::string got(size, '\0');
+    report(orion_read_xmp(path.c_str(), reinterpret_cast<std::uint8_t*>(got.data()), size, &size) == ORION_OK
+               && got == img.xmp,
+           "and the packet comes back as written");
+    img.xmp.clear();
+    orion::util::writeDngLinear(path, img);
+    report(orion_read_xmp(path.c_str(), nullptr, 0, &size) == ORION_OK && size == 0,
+           "a DNG with none answers 0, not an error");
+    std::remove(path.c_str());
+}
+
 void testLinearDngBaselineExposure() {
     section("BaselineExposure is a decode-time gain, and the clip rides with it");
 

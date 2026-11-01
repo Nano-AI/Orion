@@ -382,6 +382,21 @@ above, they carry:
   XZ Utils' liblzma — 0BSD.
   zlib — Copyright (C) 1995-2024 Jean-loup Gailly and Mark Adler. The zlib licence.
 
+Linux only (decision #404):
+
+  ICU (International Components for Unicode, `libicuuc`, `libicui18n`,
+    `libicudata`), which .NET uses for culture-aware text - Copyright © 2016 and
+    later Unicode, Inc. and others. The Unicode License v3; its LICENSE, with the
+    notices of the third-party code it includes, travels as `icu.txt`. Its data
+    is built from ICU's source data with part of it left out
+    (`tools/vcpkg-ports/icu/data-filter.json`).
+  The GNU C++ library (libstdc++) and the GCC support library (libgcc), linked
+    into Orion's own libraries and vcpkg's (`-static-libstdc++ -static-libgcc`)
+    so the package does not depend on the system's - Copyright the Free Software
+    Foundation. GPL version 3 with the GCC Runtime Library Exception 3.1, which
+    lets a program compiled by GCC, or by GPL-compatible software such as Clang,
+    carry them under terms of its own choosing.
+
 Windows only:
 
   ANGLE (`av_libglesv2.dll`, through Avalonia.Angle.Windows.Natives) — Copyright

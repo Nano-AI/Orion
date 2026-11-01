@@ -82,6 +82,7 @@ static partial class SelfTest {
               "a ninth mask row is refused");
 
         // A second session, never rendered full size: its preview reads at the photo's shape.
+        SetAside();
         using var fresh = Session.Open(session.Path);
         if (fresh == null) { Check(false, "a second session opens the photo"); return; }
         var graph = fresh.Render(preview: true);
@@ -97,17 +98,24 @@ static partial class SelfTest {
         // MB across a full render that took footprint 2814 → 4166). Metal frees them
         // a few hundred ms after the release, so wait for it, up to 3 s. Three
         // quarters of what the render added must come back: without the release,
-        // 422 of 1351 MB came back on its own within the 3 s (measured).
-        long opened = Footprint();
+        // 422 of 1351 MB came back on its own within the 3 s (measured). What the
+        // render must have added to make the check mean anything is a working
+        // plane of the photo (RGBA16F), not a fixed 256 MB: since #406 a render
+        // frees its intermediates as it goes and keeps far less (129 MB on the
+        // CI's 3600 x 2400 DNG, whose plane is 66 MB).
+        long opened = Footprint(fresh);
         fresh.Render(preview: false);
-        long rendered = Footprint(), released = rendered, target = opened + (rendered - opened) / 4;
+        long rendered = Footprint(fresh), released = rendered, target = opened + (rendered - opened) / 4;
+        long plane = (long)full.Width * full.Height * 8;
         fresh.ReleaseRenderMemory();
         for (var wait = System.Diagnostics.Stopwatch.StartNew(); wait.ElapsedMilliseconds < 3000 && released > target; Thread.Sleep(50))
-            released = Footprint();
-        Check(rendered - opened > 256L << 20 && released <= target,
+            released = Footprint(fresh);
+        Check(rendered - opened > plane && released <= target,
               $"ReleaseRenderMemory gives back {(rendered - released) >> 20} MB of a full render's {(rendered - opened) >> 20} ({opened >> 20} → {rendered >> 20} → {released >> 20} MB footprint)");
         Check(fresh.Read(Graph.Full) == null && fresh.Render(preview: false) == Graph.Full && fresh.Read(Graph.Full) != null,
               "after a release the full picture is gone until the next render brings it back");
+        fresh.Dispose();
+        engine.Render(preview: false);
     }
 
     static unsafe (double R, double G, double B) MeanRgb(Avalonia.Media.Imaging.Bitmap? picture) {
@@ -125,9 +133,14 @@ static partial class SelfTest {
     /// The process's physical footprint (what Activity Monitor calls Memory),
     /// which counts Metal's private textures where RSS does not: ri_phys_footprint
     /// of rusage_info_v0, 16 bytes of uuid and seven uint64s in.
-    static unsafe long Footprint() {
-        // No phys_footprint off macOS; the working set holds what CI's CPU GPU drivers allocate (#376).
-        if (!OperatingSystem.IsMacOS()) return Environment.WorkingSet;
+    static unsafe long Footprint(Session session) {
+        // No phys_footprint off macOS: the working set, plus the GPU memory Dawn holds, which
+        // a discrete card keeps out of it (a full 24 MP render added 0 MB to the working set
+        // and 1,378 MB to the card, #392).
+        if (!OperatingSystem.IsMacOS()) {
+            Native.orion_engine_gpu_memory(session.Handle, out ulong gpu);
+            return Environment.WorkingSet + (long)gpu;
+        }
         byte* info = stackalloc byte[512];
         return proc_pid_rusage(Environment.ProcessId, 0, info) == 0 ? *(long*)(info + 72) : 0;
     }

@@ -13,6 +13,7 @@ namespace OrionShell;
 sealed partial class App {
     /// Headless: --selftest, --bench, --command, --screenshot. Returns the exit code.
     public static int RunUnattended() {
+        if (Run.Bench && BenchScenario is { } scenario) return RunScenario(scenario);   // tools/bench.py (Unattended.Bench.cs)
         OpenPhotos();
         Pump(() => !Opening);
         try {
@@ -44,6 +45,9 @@ sealed partial class App {
                     Dispatcher.UIThread.RunJobs();
                 }
                 EngineModel.Shared.Render(preview: false);   // a still is for looking at, not for speed
+                window.UpdateLayout();
+                Dispatcher.UIThread.RunJobs();
+                Pump(() => !Library.Thumbnails.Busy);   // read in the background (#399): a still shows them all
                 window.UpdateLayout();
                 Dispatcher.UIThread.RunJobs();
                 Shoot(window, Run.Screenshot);
@@ -125,6 +129,7 @@ sealed partial class App {
         CacheReplay.Print();
         var engine = EngineModel.Shared;
         if (engine.Handle == 0) return;
+        if (PanOnly) { Pan(window); return; }
         int n = engine.Photos.Count;
         void Settle() => Pump(() => !Opening && !Busy);
         // To laid out: the session active, its picture rendered, the window laid out.
@@ -139,7 +144,9 @@ sealed partial class App {
             Dispatcher.UIThread.RunJobs();
             return sw.Elapsed.TotalMilliseconds;
         }
-        static string Ms(List<double> t) => $"{string.Join(", ", t.Select(x => $"{x:0}"))} ms (median {t.Order().ElementAt(t.Count / 2):0})";
+        // One photo has no neighbour to swap to: say so rather than take the median of nothing.
+        static string Ms(List<double> t) => t.Count == 0 ? "none (one photo)"
+            : $"{string.Join(", ", t.Select(x => $"{x:0}"))} ms (median {t.Order().ElementAt(t.Count / 2):0})";
 
         Settle();
         Console.WriteLine($"bench list: {n} photos · settled at photo {engine.Current} · {Kept} · {Memory()}");
@@ -175,7 +182,7 @@ sealed partial class App {
 
         // Back and forth across the list at 60 ms a press, watching memory.
         Settle();
-        double peak = 0;
+        double peak = Footprint().Footprint;   // one photo browses nowhere: still a number
         foreach (int dir in new[] { 1, -1, 1, -1 })
             for (int i = 0; i < Math.Min(15, n - 1); i++) {
                 if (dir > 0) engine.Next(); else engine.Previous();
@@ -230,7 +237,12 @@ sealed partial class App {
     static extern int proc_pid_rusage(int pid, int flavor, byte[] buffer);
 
     /// rusage_info_v0: resident_size at byte 64, phys_footprint (what Activity Monitor calls memory, GPU buffers included) at 72.
+    /// Elsewhere there is no proc_pid_rusage: the working set, and it plus the GPU memory Dawn holds (#392).
     static (double Rss, double Footprint) Footprint() {
+        if (!OperatingSystem.IsMacOS()) {
+            Native.orion_engine_gpu_memory(EngineModel.Shared.Handle, out ulong gpu);
+            return (Environment.WorkingSet / 1048576.0, (Environment.WorkingSet + (long)gpu) / 1048576.0);
+        }
         var info = new byte[256];
         proc_pid_rusage(Environment.ProcessId, 0, info);
         return (BitConverter.ToUInt64(info, 64) / 1048576.0, BitConverter.ToUInt64(info, 72) / 1048576.0);

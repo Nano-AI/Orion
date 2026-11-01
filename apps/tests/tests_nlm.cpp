@@ -123,12 +123,13 @@ struct Gpu {
         return out;
     }
 
-    Frame runNlm(const Card& c, float k, int radius, int patch) {
+    /// `model` scales the σ the kernel is told, against the card's own.
+    Frame runNlm(const Card& c, float k, int radius, int patch, float model = 1.0f) {
         auto in = make(c), out = make(c);
         in->upload(c.rgba.data(), std::size_t(c.w) * 4 * sizeof(__fp16));
         orion::pipe::params::Nlm p{};
         p.size[0] = c.w; p.size[1] = c.h;
-        p.noiseA = 0.0f; p.noiseB = c.sigma * c.sigma;
+        p.noiseA = 0.0f; p.noiseB = model * model * c.sigma * c.sigma;
         p.k = k; p.radius = radius; p.patch = patch;
         orion::gpu::CommandBuffer cb(device);
         cb.dispatch(*nlm, {in.get(), out.get()}, &p, sizeof p, c.w, c.h);
@@ -220,21 +221,29 @@ void testNlmGpu() {
 
     // 1. The kernel is the paper's algorithm: agreement with the CPU reference,
     //    at the shipped window.
-    {
-        const Frame got = gpu.runNlm(card, 0.4f, orion::pipe::nlm::kRadius, orion::pipe::nlm::kPatch);
+    //
+    //    ⚠ And with a model that reads the noise at a third of what it is, as a
+    //    real camera's can: h is then so small that every weight sits near
+    //    FLT_MIN, where a GPU flushes w·u to zero but keeps w, and the kernel
+    //    painted near-black single pixels into an A7 III's sky. The reference
+    //    is double, so it never underflows.
+    for (const float model : {1.0f, 1.0f / 3.0f}) {
+        const Frame got = gpu.runNlm(card, 0.4f, orion::pipe::nlm::kRadius,
+                                     orion::pipe::nlm::kPatch, model);
         const auto want = orion::pipe::nlm::reference(card.lumaPlane(card.rgba),
                                                       orion::pipe::nlm::kRadius,
-                                                      orion::pipe::nlm::kPatch,
-                                                      0.0f, card.sigma * card.sigma, 0.4f);
+                                                      orion::pipe::nlm::kPatch, 0.0f,
+                                                      model * model * card.sigma * card.sigma, 0.4f);
         float worst = 0.0f;
         for (std::uint32_t y = 0; y < card.h; ++y)
             for (std::uint32_t x = 0; x < card.w; ++x)
                 worst = std::max(worst, std::fabs(card.lumaAt(got, x, y) -
                                                   want.v[std::size_t(y) * card.w + x]));
-        report(worst < 1e-3f, "GPU agrees with the CPU reference within 1e-3",
+        const std::string at = model < 1.0f ? " with the noise under-read 3x" : "";
+        report(worst < 1e-3f, "GPU agrees with the CPU reference within 1e-3" + at,
                "worst " + std::to_string(worst));
         report(std::fabs(card.mean(got) - card.mean(card.rgba)) < 1e-3f,
-               "mean shift under 1e-3");
+               "mean shift under 1e-3" + at);
     }
 
     // 2. Removal and retention at both windows, against the wavelet chain at

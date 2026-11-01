@@ -137,7 +137,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | <16 ms slider feedback (preview ROI pipe) | M0 | **Benchmark, not a feature — validate first** |
 | Per-node caching, degrade-then-refine on drag | M1 | |
 | Before/after, split view | M2 | Split-with-divider ships (`CompareOverlay`); the Y-style side-by-side does not — queued **M6, S6.6** (#212) |
-| Side-by-side compare | M6 | S6.6 (#212) |
+| Side-by-side compare | M6 | ✅ Two photos, select and candidate, zoom and pan linked, ratings on the active side: `compare-side-by-side` (C), branch `lh/compare` (#400). The before/after Y-split of S6.6 is still the divider (#212) |
 | Busy state on photo open | M6 | S6.3 (#212) — #151: the canvas holds the *previous* photograph for the 210.9 ms of a cold open, and nothing anywhere marks it stale |
 | Slider color scales | M6 | S6.4 (#212) — temp blue→yellow, tint green→magenta, mixer tracks tinted per band. `AnalogTrack` is flat + accent today |
 | Interactive histogram | M6 | S6.5 (#212) — clipping overlay on the image, drag a region to move the matching slider |

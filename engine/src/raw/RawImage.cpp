@@ -78,6 +78,11 @@ RawInfo readInfo(const std::string& path) {
     info.aperture    = other.aperture;
     info.focalLength = other.focal_len;
     info.timestamp   = static_cast<std::int64_t>(other.timestamp);
+    if (idata.xmpdata != nullptr && idata.xmplen > 0) {
+        // xmplen counts the NUL LibRaw appends; the packet ends at the first one.
+        const char* end = std::find(idata.xmpdata, idata.xmpdata + idata.xmplen, '\0');
+        info.xmp.assign(static_cast<const char*>(idata.xmpdata), end);
+    }
     // LibRaw reads OpcodeList1/2/3 as-is into rawopcodes[0..2] (0.22). Older
     // LibRaw (Ubuntu 24.04 ships 0.21) has no such field: no file opcodes, so
     // lens correction falls through to lensfun (#376). Every build Orion makes

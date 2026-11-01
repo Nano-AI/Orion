@@ -132,6 +132,11 @@ The masked chain (#300) receives gain 1 and is unchanged.
 Unavailable, with a one-line reason in the panel, on a linear DNG source, where the capture chain is not built because there is no mosaic to fit a model to.
 
 **Where it sits.** In linear camera RGB before lens correction and before sharpening, like the shrink it rides on.
+
+**Implementation note, GPU memory (#406).**
+Texture rides on the starlet chain, which now sums its scales fine to coarse and, when the memory rule makes a render frugal, frees each level as read (`deep-research-2026-07-27.md` §2's note); the gain and its constants are unchanged.
+A 42 MP frame with Texture peaks at 1,855 MiB (synthetic 7952 x 5304), where the first render had run out of a 3 GB card and its lean retry peaked at 2,507 MiB.
+On a 42 MP ARW at Texture 0.5 the 16-bit output moves by at most 272 (mean 2.8) and the 8-bit by at most 1 (mean 0.01), the half-float rounding of the running sum.
 Sharpening is a different operator (unsharp mask, scale-free, edge-shaped); Texture is coefficient gain on two known scales with a known floor.
 A photograph can carry both, and on a high-ISO frame it should: Texture to put the surface back, Sharpening's Masking to keep the grain out of the edges.
 
@@ -238,6 +243,10 @@ Read from textures that is ~11k fetches per pixel, which `denoise-masked.md` §4
 Through **threadgroup memory** it is one 40×40 tile load per 16×16 group (apron `r + f = 12`, 6.4 KB of luma) and every patch difference reads shared memory.
 ⚠ This is the first `groupshared` kernel in the tree, so the first step is a smoke test that Slang's `groupshared` and `GroupMemoryBarrierWithGroupSync` come through to Metal threadgroup memory on this toolchain.
 The fallback, if they do not, is the plain gather at search 11×11 and patch 3×3, which is also one of the two windows the bench measures.
+
+**Implementation note, GPU memory (#406).**
+The kernel writes no weight planes to stream: each pixel's weights live in registers, the luma tile in threadgroup memory, and the node's one RGBA16F output is all it allocates.
+Its output is the starlet chain's input, an ordinary node: when a frugal render chooses what to keep, its pass is weighted at forty blurs (about 150 ms at 42 MP), so it is the first output kept.
 
 ### What "measured" means, in order
 

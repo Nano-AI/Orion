@@ -149,4 +149,14 @@ static class LibraryUi {
         item.Click += (_, _) => act();
         return item;
     }
+
+    /// Side by side (#400) from a photo's menu: it beside the photo open, or the
+    /// selection's two when it is part of one. Shows C, the key, so the menu teaches it.
+    public static MenuItem CompareItem(LibraryModel.Photo photo) {
+        var item = Item("Compare side by side", () =>
+            CanvasSlice.SideBySide.Enter(with: LibraryModel.Shared.CullScope(photo).Count > 1 ? null : photo));
+        item.InputGesture = new Avalonia.Input.KeyGesture(Avalonia.Input.Key.C);
+        item.IsEnabled = !CanvasSlice.SideBySide.On && LibraryModel.Shared.Photos.Count >= 2;
+        return item;
+    }
 }

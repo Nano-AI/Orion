@@ -56,6 +56,16 @@ static class CanvasScenes {
     /// No Swift scene: 3× about the upper right, so the navigator has a region to show.
     public static void Navigator() => CanvasState.Viewport.ZoomBy(3, new Point(0.62, 0.3));
 
+    /// No Swift scene (#400): the first two photos side by side, linked, 3× about
+    /// the upper right and nudged left, the candidate active.
+    public static void SideBySide() {
+        CanvasSlice.SideBySide.Enter(wait: true);
+        var lead = CanvasSlice.SideBySide.Right;
+        CanvasSlice.SideBySide.Activate(lead);
+        lead.View.ZoomBy(3, new Point(0.62, 0.3));
+        lead.View.Pan(new Vector(0.1, 0));
+    }
+
     /// No Swift scene: the targeted tool armed, the pointer on the sky.
     public static void Loupe(Control loupe) {
         EngineModel.Shared.Tool = CanvasTool.Targeted;

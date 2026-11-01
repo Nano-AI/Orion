@@ -192,24 +192,27 @@ void DevelopPipeline::buildCaptureNodes() {
     nNlm_ = pipeline_.add({"denoise:nlm", "nlmLuma", {nHlFill_},
                            PixelFormat::RGBA16Float, {}});
 
+    // ⚠ Fine to coarse, each shrink beside the blur that makes its coarse
+    // level (#406). The sum is the same, I = c_J + Σ w_j, added in the other
+    // order: the finest scale starts it from zero and the coarsest adds c_J.
+    // Coarse to fine, every level had to exist before the first shrink could
+    // run, so the input and four full-resolution levels were alive at once
+    // (six RGBA16F planes, 2 GB at 42 MP); this way a scale reads only c_j,
+    // c_{j+1} and the sum so far, and the graph frees each level as its last
+    // reader runs. Added interleaved because the scheduler runs ready nodes
+    // in the order they were added.
     for (int j = 0; j < kDenoiseScales; ++j) {
-        const int input = (j == 0) ? nNlm_ : nAtrousBlur_[j - 1];
+        const int fine = (j == 0) ? nNlm_ : nAtrousBlur_[j - 1];
         nAtrousBlur_[j] = pipeline_.add({"denoise:blur " + std::to_string(j),
-                                         "atrousBlur", {input},
+                                         "atrousBlur", {fine},
                                          PixelFormat::RGBA16Float, {}});
-    }
-    for (int j = kDenoiseScales - 1; j >= 0; --j) {
-        const int fine   = (j == 0) ? nNlm_ : nAtrousBlur_[j - 1];
         const int coarse = nAtrousBlur_[j];
-        // The coarsest scale accumulates onto the residual itself; every finer
-        // one accumulates onto the scale below it.
-        const int accum  = (j == kDenoiseScales - 1) ? nAtrousBlur_[j]
-                                                     : nAtrousShrink_[j + 1];
+        // The finest scale's sum starts from zero, so its `accum` slot is
+        // unread; the field slot is unread with useField 0. Coarse is a
+        // harmless texture to fill both with.
+        const int accum = (j == 0) ? coarse : nAtrousShrink_[j - 1];
         nAtrousShrink_[j] = pipeline_.add({"denoise:shrink " + std::to_string(j),
                                            "atrousShrink",
-                                           // The field slot is unread with
-                                           // useField 0; coarse is a harmless
-                                           // texture to fill it with.
                                            {fine, coarse, accum, coarse},
                                            PixelFormat::RGBA16Float, {}});
     }
@@ -246,7 +249,7 @@ void DevelopPipeline::buildCaptureNodes() {
                                            true, chromaW_, chromaH_});
     }
     nChromaUp_ = pipeline_.add({"denoise:chroma up", "denoiseChromaUp",
-                                {nAtrousShrink_[0], nChromaShrink_[0], nChromaDown_},
+                                {nAtrousShrink_[kDenoiseScales - 1], nChromaShrink_[0], nChromaDown_},
                                 PixelFormat::RGBA16Float, {}});
 
     // ── Lens corrections ──────────────────────────────────────────────────
@@ -799,6 +802,7 @@ void DevelopPipeline::applyDenoise(const Adjustments& adj,
             shrink.detail = adj.denoiseDetail;
             shrink.step = 1 << j;
             shrink.useField = 0;
+            shrink.ends = shrinkEnds(j);
             // The shader picks the scales it applies at from `step`.
             shrink.texture = std::fabs(adj.texture) > 1e-4f ? adj.texture : 0.0f;
             pipeline_.setParams(nAtrousShrink_[j], &shrink, sizeof shrink);

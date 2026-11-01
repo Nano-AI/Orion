@@ -110,8 +110,8 @@ static partial class SelfTest {
         engine.Set("exposure_ev", ev + 0.1f);
         var part = engine.Shown.Uv;
         Check(engine.Shown.Graph == Graph.Region && part.Width < 1 && part.Height <= 1 && engine.View is { } seen
-              && seen.Uv == part && seen.Pixels.Width > 0,
-              $"past fit with a plain edit, the engine renders only the part in view at the screen's pixels (#22): {engine.Shown.Graph} {part}");
+              && part == ViewRegion.Around(seen).Uv && part.Contains(seen.Uv) && seen.Pixels.Width > 0,
+              $"past fit with a plain edit, the engine renders only the part in view and its margin, at the screen's pixels (#22, #401): {engine.Shown.Graph} {part}");
         engine.Set("exposure_ev", ev);
 
         // Over the compare divider, which is the canvas's sibling, the pinch still zooms.
@@ -124,6 +124,9 @@ static partial class SelfTest {
         window.MouseWheel(At(window, canvas, p), new Vector(0, 1), RawInputModifiers.None);
         Check(vp.Zoom > z, "a mouse wheel's whole notch zooms (Swift: a scroll without precise deltas)");
         z = vp.Zoom;
+        window.MouseWheel(At(window, canvas, p), new Vector(0, 0.125), RawInputModifiers.None);
+        Check(vp.Zoom > z, "a high-resolution wheel's eighth of a notch zooms too (libinput's v120 on Linux), not pans");
+        z = vp.Zoom;
         var c = vp.Center;
         window.MouseWheel(At(window, canvas, p), new Vector(0.4, 0.3), RawInputModifiers.None);
         Check(vp.Zoom == z && vp.Center.X < c.X && vp.Center.Y < c.Y, "a trackpad's two-finger scroll pans and does not zoom");
@@ -135,15 +138,22 @@ static partial class SelfTest {
         string took = Frames();
         Check(banded is < 1 and > 0.5 && vp.IsFit, $"pinching out past fit rubber-bands ({banded:0.000}×, never below 0.5) and springs back to fit ({vp.Zoom:0.000}× after {took})");
 
-        // A double-click springs to 1:1 about the point, a second back to fit; 9 jumps.
+        // A double-click springs to 1:1 about the point, a second back to fit; 9 jumps. Counted by the zooms
+        // shown on the way, not by Live after the click: where a headless frame takes longer than the frame
+        // interval (WARP, Linux's CPU Skia), the press's own RunJobs renders the whole spring before it
+        // returns (#395). A jump, or a spring with no clock, shows two at most.
         vp.Reset();
         window.UpdateLayout();
         var q = At(window, canvas, p);
+        var zooms = new List<double>();
+        void Saw() => zooms.Add(vp.Zoom);
+        CanvasState.Changed += Saw;
         window.MouseDown(q, MouseButton.Left); window.MouseUp(q, MouseButton.Left);
         window.MouseDown(q, MouseButton.Left); window.MouseUp(q, MouseButton.Left);
-        bool moving = vp.Live;
         took = Frames();
-        Check(moving && vp.Percent == 100, $"a double-click springs to 100% ({vp.Percent}%, {(moving ? "moving" : "still")} after the click, {took})");
+        CanvasState.Changed -= Saw;
+        int between = zooms.Where(z => z > 1.001 && z < vp.Zoom * 0.999).Distinct().Count();
+        Check(between >= 5 && !vp.Live && vp.Percent == 100, $"a double-click springs to 100% ({vp.Percent}%, {between} zooms on the way, {took})");
         vp.Reset();
         Commands.Run("actual-size");
         Check(!vp.Live && vp.Percent == 100, "the 9 key jumps to 100%: a key never animates");
@@ -174,7 +184,50 @@ static partial class SelfTest {
         Frames();
         Check(Math.Abs(vp.Center.X - Math.Min(from + Viewport.Projected(0.1), 1 - edge)) < 1e-6,
               $"a flick travels its projection, 0.1/s → {Viewport.Projected(0.1):0.000} ({from:0.000} → {vp.Center.X:0.000})");
+        RestingPanChecks(window, canvas);
         vp.Reset();
+    }
+
+    /// A pan moves the pixels already rendered (#401): nothing renders while the
+    /// hand is down, held still past the rest delay too, nor once it lets go
+    /// inside the margin the last region was rendered with; past it, the view
+    /// renders once it rests, and the region then covers it.
+    static void RestingPanChecks(Window window, CanvasPanel canvas) {
+        var engine = EngineModel.Shared;
+        var size = canvas.Bounds.Size;
+        var mid = At(window, canvas, new Point(size.Width / 2, size.Height / 2));
+        CanvasState.Viewport.ZoomBy(1, new Point(0.5, 0.5));   // 3× from PanChecks, centred
+        Frames(() => false, 0.5);   // at rest: this view's render
+        void Drag(double dx, bool hold) {
+            window.MouseDown(mid, MouseButton.Left);
+            for (int i = 1; i <= 20; i++) window.MouseMove(mid + new Vector(dx * i / 20, 0));
+            if (hold) Frames(() => false, 0.4);   // held still, the button down, past the 150 ms rest
+            Thread.Sleep(60);   // placed, not thrown: no flick carries it on
+            window.MouseUp(mid + new Vector(dx, 0), MouseButton.Left);
+            Frames(() => false, 0.5);
+        }
+        int before = Session.Renders;
+        Drag(-size.Width * ViewRegion.Margin / 2, hold: true);
+        int inside = Session.Renders - before;
+        Check(inside == 0, $"a pan held still and let go inside the rendered margin renders nothing ({inside} renders, {engine.Shown.Graph})");
+        before = Session.Renders;
+        Drag(size.Width * ViewRegion.Margin * 3, hold: false);
+        int past = Session.Renders - before;
+        bool region = engine.Shown.Graph == Graph.Region;
+        Check(region ? past > 0 && engine.View is { } seen && engine.Shown.Uv.Contains(seen.Uv) : past == 0,
+              region ? $"a pan past the margin renders once it rests, and the region covers the view ({past} renders)"
+                     : $"the whole picture at full size covers any view: a pan renders nothing ({past} renders)");
+        // The margin itself: ViewRegion.Margin of the view each side, cut at the picture's edge, never past Dawn's 8192.
+        double m = ViewRegion.Margin * 0.2;
+        var view = (new Rect(m / 2, 0.4, 0.2, 0.2), new PixelSize(2000, 2000));   // nearer the left edge than a margin
+        var near = ViewRegion.Around(view);
+        var big = (new Rect(0.4, 0.4, 0.2, 0.2), new PixelSize(7000, 7000));
+        var huge = ViewRegion.Around(big);
+        Check(near.Uv.X == 0 && Math.Abs(near.Uv.Right - (m / 2 + 0.2 + m)) < 1e-9 && Math.Abs(near.Uv.Height - (0.2 + 2 * m)) < 1e-9
+              && near.Pixels == new PixelSize((int)Math.Round(near.Uv.Width * 10000), (int)Math.Round(near.Uv.Height * 10000))
+              && huge.Pixels.Width <= 8192 && huge.Pixels.Height <= 8192 && ViewRegion.Covers(huge, big) && ViewRegion.Covers(near, view)
+              && !ViewRegion.Covers(near, (view.Item1, new PixelSize(4000, 4000))),
+              $"the region's margin is cut at the picture's edge and at 8192 pixels, and a zoom is never covered ({near.Uv}, {near.Pixels}; {huge.Pixels})");
     }
 
     static void CompareUxChecks(Window window, CanvasPanel canvas, CompareOverlay overlay) {
@@ -187,6 +240,11 @@ static partial class SelfTest {
         double on = sw.Elapsed.TotalMilliseconds;
         Frames(() => CompareState.Original?.PixelSize.Width >= CanvasNative.ImageSize.Width, 60);   // the sharp one, from its worker
         Commands.Run("compare");
+        // From a settled heap: the sharp original's worker has just allocated and
+        // closed an engine, and a gen-1 collection falling due inside the toggle
+        // added ~8 ms on two runs in three, which is the collector, not the toggle.
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
         sw.Restart();
         Commands.Run("compare");
         double again = sw.Elapsed.TotalMilliseconds;

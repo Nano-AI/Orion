@@ -37,6 +37,7 @@ add_executable(orion-tests
     tests_grain.cpp
     tests_vignette.cpp
     tests_pipeline.cpp
+    tests_gpu_budget.cpp
     tests_dawn_parity.cpp
     tests_dng.cpp
     tests_lens_sources.cpp
@@ -51,6 +52,7 @@ add_executable(orion-tests
     tests_stack_split.cpp
     tests_stack_facade.cpp
     tests_stack_calibrate.cpp
+    tests_export_sharpen.cpp
 )
 
 target_include_directories(orion-tests PRIVATE ${CMAKE_SOURCE_DIR}/engine/src ${LIBRAW_INCLUDE_DIR})

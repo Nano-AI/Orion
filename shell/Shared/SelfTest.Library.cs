@@ -146,9 +146,9 @@ static partial class SelfTest {
             Check(rejected.Rejected && p.Rating == 0 && File.ReadAllText(Sidecar.PathFor(photo)).Contains("xmp:Rating=\"-1\""),
                   "a rejection is xmp:Rating -1 in the sidecar and clears the rating");
             library.SetRating(p, 4);
-            var want = new Sidecar { Rating = 4, Label = "Red", Develop = edit }.Text();
+            var want = new Sidecar { Rating = 4, Label = "Red", Develop = edit, Source = Path.GetFileName(photo) }.Text();
             Check(!p.Rejected && File.ReadAllText(Sidecar.PathFor(photo), Encoding.UTF8) == want,
-                  "a rating un-rejects and lands as Swift writes it, the label and the edit kept");
+                  "a rating un-rejects and lands in Orion's own bytes, the label, the edit and whose it is kept");
             var listed = LibraryModel.Listed(photo, 0);
             Check(listed.Rating == 4 && !listed.Rejected && listed.Label == "Red", "a folder lists each photo's marks from its sidecar");
             File.WriteAllText(Sidecar.PathFor(photo), "<x orion:Develop=\"%%%\"/>");

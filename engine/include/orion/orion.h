@@ -548,6 +548,12 @@ OrionStatus orion_engine_render(OrionEngine* engine, double* out_ms);
  * NULL until the next render, which rebuilds them. Safe with nothing open. */
 OrionStatus orion_engine_release_render_memory(OrionEngine* engine);
 
+/* Bytes of GPU memory the engine's device holds from the driver, every engine
+ * in the process together (they share one device). What a process footprint
+ * misses on a discrete GPU. 0 where the backend cannot say: Metal, whose
+ * textures the footprint already counts. */
+OrionStatus orion_engine_gpu_memory(OrionEngine* engine, uint64_t* out_bytes);
+
 /* Dimensions of the open image, as rendered — so the crop and the crop tool's
  * preview canvas both change this. */
 OrionStatus orion_engine_image_size(const OrionEngine* engine,
@@ -703,6 +709,15 @@ OrionStatus orion_read_info(const char* path, OrionRawInfo* out);
 OrionStatus orion_read_thumbnail(const char* path, uint8_t* buffer,
                                  uint32_t capacity, uint32_t* out_size,
                                  int32_t* out_turns);
+
+/* Copies the XMP packet a file embeds (a DNG's XMLPacket tag, as LibRaw reads
+ * it) into `buffer`, not NUL-terminated. Pass a NULL buffer to query the size
+ * first; *out_size receives the byte count needed or written, 0 when the file
+ * carries none (ORION_OK). A buffer too small returns ORION_ERR_BAD_ARG with
+ * *out_size still set, so one call with a generous buffer usually suffices. The shell reads it as a sidecar's baseline for a
+ * format Adobe embeds XMP into, and never writes it back (#405). */
+OrionStatus orion_read_xmp(const char* path, uint8_t* buffer,
+                           uint32_t capacity, uint32_t* out_size);
 
 /* Export. Renders at full resolution and writes the file. */
 typedef enum OrionImageFormat {

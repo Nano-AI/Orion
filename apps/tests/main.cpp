@@ -28,7 +28,11 @@ int main() {
     testBindingCount();
     testDisabledCacheReleaseGpu();
     testReleaseEveryRenderGpu();
+    testGpuBudget42MpGpu();
+    testWarmGraphMatchesFreshGpu();
+    testMemoryRuleGpu();
     testDawnParityGpu();
+    testEveryKernelCompilesOnDawnGpu();
 
     testWhiteBalance();
     testPlanckianLocus();
@@ -58,6 +62,7 @@ int main() {
     testDenoiseDetailGpu();
     testDenoiseDetailZeroIsShippedGpu();
     testDenoiseMaskedGpu();
+    testDenoiseOrderGpu();
     testNlmGpu();
     testTextureGpu();
     testDenoiseSmoothnessGpu();
@@ -121,10 +126,12 @@ int main() {
     testExportFormats();
     testExportWatermark();
     testExportJxl();
+    testExportSharpening();
     testFloatToHalf();
     testDngRoundTrip();
     testLinearDngOpens();
     testDngEmbeddedPreview();
+    testDngEmbeddedXmp();
     testLinearDngBaselineExposure();
     testLinearDngEngineOpen();
     testFacadeSessionSeams();

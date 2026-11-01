@@ -1,0 +1,53 @@
+#!/bin/sh
+# The Linux AppImage's entry point (decisions #396, #404). It checks what Orion
+# needs before .NET starts, because without them the app can end with no window
+# and no message, and says what is missing in one line on stderr, exiting 1.
+# It sets no LD_LIBRARY_PATH: the shim finds its libraries by RUNPATH (#396).
+# tools/package-linux.sh copies it in and writes the ICU major version over @ICU@.
+here="$(dirname "$(readlink -f "$0")")"
+bin="$here/usr/bin"
+fail() { echo "Orion cannot start: $*" >&2; exit 1; }
+
+# Its own files: a package missing one was cut short or unpacked badly.
+for f in Orion Orion.dll liborion_shim.so libicuuc.so.@ICU@ libicui18n.so.@ICU@ libicudata.so.@ICU@ shaders data/lensfun; do
+    [ -e "$bin/$f" ] || fail "its own file usr/bin/$f is missing from $here; download the AppImage again"
+done
+
+# Modes that only print need nothing more; the headless ones need no display.
+headless=no libs=yes
+for a in "$@"; do
+    case $a in
+        --list|--commands) headless=yes libs=no ;;
+        --selftest|--screenshot|--bench|--command|--batch-export|--hdr-merge|--agent) headless=yes ;;
+    esac
+done
+
+# A library the system must provide, where the dynamic loader would look for it.
+system_lib() {
+    old_ifs=$IFS; IFS=:
+    for d in ${LD_LIBRARY_PATH:-}; do [ -n "$d" ] && [ -e "$d/$1" ] && { IFS=$old_ifs; return 0; }; done
+    IFS=$old_ifs
+    for l in /sbin/ldconfig /usr/sbin/ldconfig; do
+        [ -x "$l" ] && "$l" -p 2>/dev/null | grep -qF "$1 (libc6,x86-64)" && return 0
+    done
+    for d in /usr/lib/x86_64-linux-gnu /lib/x86_64-linux-gnu /usr/lib64 /lib64 /usr/lib /lib; do
+        [ -e "$d/$1" ] && return 0
+    done
+    return 1
+}
+# The Vulkan loader: Dawn draws through Vulkan and loads libvulkan.so.1 at run
+# time, so a machine without it opens a window that can show no photo.
+if [ $libs = yes ] && ! system_lib libvulkan.so.1; then
+    fail "no Vulkan loader (libvulkan.so.1) on this system; install your distribution's Vulkan loader (libvulkan1 or vulkan-loader) and your GPU's Vulkan driver"
+fi
+# Skia, which draws the window and the headless frames, needs fontconfig.
+if [ $libs = yes ] && ! system_lib libfontconfig.so.1; then
+    fail "no fontconfig (libfontconfig.so.1) on this system; install your distribution's fontconfig (libfontconfig1)"
+fi
+
+# Avalonia draws through X11, or XWayland under a Wayland session.
+if [ $headless = no ] && [ -z "${DISPLAY:-}" ]; then
+    fail "no X display (DISPLAY is not set); run it from a desktop session, or under XWayland on Wayland"
+fi
+
+exec "$bin/Orion" "$@"

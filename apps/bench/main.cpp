@@ -89,9 +89,10 @@ int main(int argc, char** argv) {
         // read back, so the pair is worth watching together.
         //
         // ⚠ **Not a threshold, and the two are not directly comparable.**
-        // `peakLiveBytes` costs *every* node in `order_` including the disabled
-        // ones a real render never dispatches, so it over-counts — which is why
-        // the pool comes in well under it rather than near it. What makes a
+        // `peakLiveBytes` lets textures of differing shapes share an
+        // allocation and costs every enabled node whether or not it is dirty,
+        // so it is a schedule, not a measurement (#406 stopped it costing the
+        // disabled ones a real render never dispatches). What makes a
         // regression visible here is the number moving, not the ratio reaching
         // any particular value. The oracle that actually catches a wrong
         // liveness is the bit-identical A/B render below (#158).

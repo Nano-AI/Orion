@@ -3,11 +3,16 @@
 #include "bench.h"
 #include "Engine.h"
 
+#if defined(__APPLE__)
 #include <mach/mach.h>
+#endif
 #include <cstdio>
+#include <fstream>
+#include <unistd.h>
 
 namespace bench {
 namespace {
+#if defined(__APPLE__)
 std::uint64_t footprint() {
     task_vm_info_data_t info{};
     mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
@@ -16,6 +21,16 @@ std::uint64_t footprint() {
         throw std::runtime_error("cannot measure process footprint");
     return info.phys_footprint;
 }
+#else
+// Resident pages (/proc/self/statm's second field). Not the macOS footprint:
+// a discrete GPU's memory is not in it, which the texture count beside it is.
+std::uint64_t footprint() {
+    std::ifstream statm("/proc/self/statm");
+    std::uint64_t size = 0, resident = 0;
+    if (!(statm >> size >> resident)) throw std::runtime_error("cannot measure process footprint");
+    return resident * static_cast<std::uint64_t>(sysconf(_SC_PAGESIZE));
+}
+#endif
 
 std::uint64_t hash(const orion::pipe::DevelopPipeline& d) {
     const auto& tex = d.output();

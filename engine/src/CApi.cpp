@@ -368,6 +368,12 @@ OrionStatus orion_engine_release_render_memory(OrionEngine* engine) {
     return ORION_OK;
 }
 
+OrionStatus orion_engine_gpu_memory(OrionEngine* engine, uint64_t* out_bytes) {
+    if (engine == nullptr || out_bytes == nullptr) return ORION_ERR_BAD_ARG;
+    *out_bytes = engine->impl.device().allocatedBytes();   // noexcept
+    return ORION_OK;
+}
+
 OrionStatus orion_engine_preview_size(const OrionEngine* engine,
                                       unsigned* out_w, unsigned* out_h) {
     if (engine == nullptr || out_w == nullptr || out_h == nullptr)
@@ -662,6 +668,19 @@ OrionStatus orion_read_info(const char* path, OrionRawInfo* out) {
     return guard(nullptr, [&]() -> OrionStatus {
         const auto info = orion::raw::readInfo(path);
         fillInfo(info, out);
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_read_xmp(const char* path, uint8_t* buffer,
+                           uint32_t capacity, uint32_t* out_size) {
+    if (path == nullptr || out_size == nullptr) return ORION_ERR_BAD_ARG;
+    return guard(nullptr, [&]() -> OrionStatus {
+        const auto info = orion::raw::readInfo(path);
+        *out_size = static_cast<uint32_t>(info.xmp.size());
+        if (buffer == nullptr || info.xmp.empty()) return ORION_OK;   // size query, or none
+        if (capacity < info.xmp.size()) return ORION_ERR_BAD_ARG;
+        std::memcpy(buffer, info.xmp.data(), info.xmp.size());
         return ORION_OK;
     });
 }

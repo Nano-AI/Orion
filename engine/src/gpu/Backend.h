@@ -73,6 +73,11 @@ struct Device::Impl {
     virtual std::unique_ptr<Readback::Slot> staging() { return nullptr; }
     /// Texture::createShared's, or null where the backend has none (Metal).
     virtual std::unique_ptr<Texture::Impl> sharedTexture(std::uint32_t, std::uint32_t) { return nullptr; }
+    /// Device::reclaim's; nothing to do where the driver frees on its own (Metal).
+    virtual void reclaim() noexcept {}
+    virtual std::uint64_t allocatedBytes() const noexcept { return 0; }
+    /// Device::freeBytes's own figure, or Device::kUnknown (Dawn has none).
+    virtual std::uint64_t freeBytes() const noexcept { return ~std::uint64_t(0); }
 };
 
 /// One staging buffer of a `Readback` (#386).
@@ -87,6 +92,10 @@ struct Readback::Slot {
     /// Done with it: free for the next `start`.
     virtual void release() = 0;
 };
+
+/// The driver's own count of what the card can still give, device-wide
+/// (VramFree.cpp, #406): NVML or amdgpu's sysfs on Linux, else Device::kUnknown.
+std::uint64_t driverFreeBytes(std::uint32_t vendorId, std::uint32_t deviceId) noexcept;
 
 std::unique_ptr<Device::Impl> makeMetalDevice();
 /// Throws std::runtime_error when the engine was built without Dawn.

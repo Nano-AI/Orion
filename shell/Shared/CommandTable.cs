@@ -30,7 +30,10 @@ static class CommandTable {
     static MaskGroup Mask => MaskGroup.Shared;
     /// What the culling keys act on: the gallery's focus while it is up, else the
     /// photo on the canvas (cullActions), so the grid and the keys never disagree.
-    static LibraryModel.Photo? Focused => GalleryMode.On ? GalleryMode.Focus : LibraryModel.Shared.Open;
+    static LibraryModel.Photo? Focused => GalleryMode.On ? GalleryMode.Focus : SideBySide.On ? SideBySide.ActivePhoto : LibraryModel.Shared.Open;
+    /// What a culling key marks: the side-by-side compare's active side alone (#400), else the cull scope.
+    static List<LibraryModel.Photo> Scope => SideBySide.On ? [Focused!] : LibraryModel.Shared.CullScope(Focused!);
+    static bool Comparing => SideBySide.On;
 
     public static IEnumerable<Command> All => [
         // View
@@ -38,11 +41,17 @@ static class CommandTable {
                                               () => Editable, () => Shell?.Select(t))),
         Built("gallery", "Gallery", "G", "OrionApp+Commands.swift", () => E.Photos.Count > 0, GalleryMode.Toggle),
         Built("compare", "Compare original", "OemPipe", "Engine+Compare.swift", () => Loaded && Develop, CompareState.Toggle),
+        // Lightroom's Compare view (#400): two photos side by side, zoom and pan linked.
+        Built("compare-side-by-side", "Compare side by side", "C", "SideBySide.cs", () => Comparing || E.Photos.Count >= 2, SideBySide.Toggle),   // cheap: the toolbar reads every CanRun on each repaint
+        Built("compare-link", "Link zoom and pan", "L", "SideBySide.cs", () => Comparing, SideBySide.ToggleLink),
+        Built("compare-swap", "Swap compared photos", "Down", "SideBySide.cs", () => Comparing && SideBySide.Right.Index >= 0, SideBySide.Swap),
+        Built("compare-make-select", "Make candidate the select", "Up", "SideBySide.cs", () => Comparing && SideBySide.Right.Index >= 0, SideBySide.MakeSelect),
         Built("swap-split", "Swap split", null, "OrionApp+Chrome.swift", () => CompareState.Comparing && Develop,
               () => { CompareState.Vertical = !CompareState.Vertical; CanvasState.Touch(); }),
-        Built("fit", "Fit in window", "Cmd+D0, D0", "Viewport.swift", () => Loaded && Develop, () => CanvasState.Viewport.Reset()),
+        Built("fit", "Fit in window", "Cmd+D0, D0", "Viewport.swift", () => Loaded && Develop,
+              () => { if (Comparing) SideBySide.Fit(); else CanvasState.Viewport.Reset(); }),
         Built("actual-size", "Actual size", "Cmd+D9, D9", "Viewport.swift", () => Loaded && Develop,
-              () => CanvasState.Viewport.ToggleFitAndActual()),
+              () => { if (Comparing) SideBySide.ActualSize(); else CanvasState.Viewport.ToggleFitAndActual(); }),
 
         // File
         Built("open-photo", "Open photo…", null, "OrionApp+Files.swift", () => true, LibraryFiles.OpenPhoto),
@@ -58,7 +67,7 @@ static class CommandTable {
         Built("stack", "Stack photos…", null, "StackSheet.cs", () => Loaded && StackSheet.HasCandidates, () => Sheet("sheet-stack", "Stack")),
         Built("stop-batch", "Stop", null, "OrionApp+Files.swift", () => ChromeStubs.BatchProgress != null, ExportRun.Stop),
         // The shell writes no interaction log (InteractionLog.swift), so there is no file to reveal.
-        Stub("reveal-session-log", "Reveal session log in Finder", null, "InteractionLog.swift", () => true),
+        Stub("reveal-session-log", OperatingSystem.IsMacOS() ? "Reveal session log in Finder" : "Show session log in its folder", null, "InteractionLog.swift", () => true),
 
         // Edit
         Built("undo", "Undo", "Cmd+Z", "EditHistory.swift", () => ChromeStubs.CanUndo && Develop && !Locked, EditHistory.Undo),
@@ -70,26 +79,26 @@ static class CommandTable {
         // Photo
         // Over the selection when the focus is part of one (cullScope), so the keys and the strip's menu agree.
         Built("reject", "Reject", "R", "Library.swift", () => Focused != null,
-              () => LibraryModel.Shared.SetRejected(LibraryModel.Shared.CullScope(Focused!), !Focused!.Rejected)),
+              () => LibraryModel.Shared.SetRejected(Scope, !Focused!.Rejected)),
         .. Enumerable.Range(0, 6).Select(n => Built($"rate-{n}", n == 0 ? "No rating" : $"{n} star{(n == 1 ? "" : "s")}",
                                                     n == 0 ? "OemTilde" : $"D{n}", "Library.swift",
-                                                    () => Focused != null, () => LibraryModel.Shared.SetRating(LibraryModel.Shared.CullScope(Focused!), n))),
+                                                    () => Focused != null, () => LibraryModel.Shared.SetRating(Scope, n))),
         // In the gallery a step moves the focus ring, never the canvas: two hundred
         // frames must not be two hundred decodes (cullActions.step).
         Built("next-photo", "Next photo", "Cmd+Right, Right", "Library.swift", () => E.Photos.Count > 0,
-              () => { if (GalleryMode.On) GalleryMode.Move(GalleryMode.Direction.Right); else E.Next(); }),
+              () => { if (GalleryMode.On) GalleryMode.Move(GalleryMode.Direction.Right); else if (Comparing) SideBySide.Step(1); else E.Next(); }),
         Built("previous-photo", "Previous photo", "Cmd+Left, Left", "Library.swift", () => E.Photos.Count > 0,
-              () => { if (GalleryMode.On) GalleryMode.Move(GalleryMode.Direction.Left); else E.Previous(); }),
+              () => { if (GalleryMode.On) GalleryMode.Move(GalleryMode.Direction.Left); else if (Comparing) SideBySide.Step(-1); else E.Previous(); }),
         Built("select-all", "Select all photos", "Cmd+A", "PhotoSelection.swift", () => Focused != null, LibraryModel.Shared.SelectAll),
         Built("deselect", "Deselect", "Cmd+Shift+A", "PhotoSelection.swift", () => LibraryModel.Shared.HasExplicitSelection,
               LibraryModel.Shared.CollapseSelection),   // needs a selection of two
         // Both confirm before touching a file, and the confirmation moves to the Trash, never deletes.
         Built("trash", "Move to Trash…", "Cmd+Back", "OrionApp+Files.swift", () => Focused != null,
-              () => Trash.Confirm(LibraryModel.Shared.CullScope(Focused!))),
+              () => Trash.Confirm(Scope)),
         Built("delete-rejected", "Delete rejected photos…", null, "OrionApp+Files.swift", () => LibraryModel.Shared.RejectedCount > 0,
               () => Trash.Confirm(LibraryModel.Shared.Photos.Where(p => p.Rejected).ToList())),
         Built("apply-crop", "Apply crop", "Enter", "OrionApp+Commands.swift", () => Cropping, () => Shell?.Select("Light")),
-        Built("cancel-crop", "Cancel crop", "Escape", "OrionApp+Commands.swift", () => E.Tool != CanvasTool.None || Cropping, Escape),
+        Built("cancel-crop", "Cancel crop", "Escape", "OrionApp+Commands.swift", () => E.Tool != CanvasTool.None || Cropping || Comparing, Escape),
         // The Mask tab's keys (u4); `[` `]` fold into the rotate rows, which own those keys, and Escape's armed-tool step disarms a draw.
         Built("mask-overlay", "Show mask overlay", "O", "DevelopPanels+Mask.swift", () => Masking, () => Mask.Overlay ^= true),
         Built("mask-feather-less", "Less mask feather", "Shift+OemOpenBrackets", "DevelopPanels+Mask.swift", () => Masking && Mask.Current != null, () => Feather(-0.1f)),
@@ -119,6 +128,7 @@ static class CommandTable {
     /// handleKey's Escape: an armed tool first, from any tab; then the crop,
     /// reset to the whole frame, and back to Light.
     static void Escape() {
+        if (Comparing) { SideBySide.Exit(); return; }
         if (E.Tool != CanvasTool.None) { E.Tool = CanvasTool.None; return; }
         CropEdit.Reset();
         Shell?.Select("Light");

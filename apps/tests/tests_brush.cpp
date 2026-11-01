@@ -474,12 +474,13 @@ void testBrushPrefixPredicate() {
     const params::BrushShape shape{3, 4.8f, 1.0f, 0.7f};
 
     // Texels in the layout the dab texture actually carries: four floats a dab,
-    // `(x, y, erasing, 0)`, post-transform.
+    // `(x, y, erasing, 0)`, post-transform. A division, for the reason
+    // `diagonal` in tests_brush_accum.cpp gives.
     const auto line = [](int count) {
         std::vector<float> t(std::size_t(count) * 4, 0.0f);
         for (int i = 0; i < count; ++i) {
-            t[std::size_t(i) * 4 + 0] = 0.06f + 0.005f * float(i);
-            t[std::size_t(i) * 4 + 1] = 0.06f + 0.004f * float(i);
+            t[std::size_t(i) * 4 + 0] = 0.06f + float(5 * i) / 1000.0f;
+            t[std::size_t(i) * 4 + 1] = 0.06f + float(4 * i) / 1000.0f;
         }
         return t;
     };
@@ -655,12 +656,13 @@ void testBrushPrefixWiring() {
 
     // Dab centers in **displayed** coordinates, which is what the app sends and
     // what `apply` runs through `mask::toFrame`. A diagonal, so the transform is
-    // exercised in both axes.
+    // exercised in both axes. A division, so every call gives the same bits:
+    // see `diagonal` in tests_brush_accum.cpp.
     const auto line = [](int count) {
         std::vector<float> xy(std::size_t(count) * 2, 0.0f);
         for (int i = 0; i < count; ++i) {
-            xy[std::size_t(i) * 2 + 0] = 0.06f + 0.005f * float(i);
-            xy[std::size_t(i) * 2 + 1] = 0.06f + 0.004f * float(i);
+            xy[std::size_t(i) * 2 + 0] = 0.06f + float(5 * i) / 1000.0f;
+            xy[std::size_t(i) * 2 + 1] = 0.06f + float(4 * i) / 1000.0f;
         }
         return xy;
     };

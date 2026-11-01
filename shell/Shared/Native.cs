@@ -11,6 +11,10 @@ public static unsafe partial class Native {
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     public static partial nint shim_open_mode(string path, int headless);
 
+    /// Why this thread's last shim_open_mode returned 0 (a UTF-8 C string, the shim's).
+    [LibraryImport(Lib)]
+    public static partial nint shim_open_error();
+
     [LibraryImport(Lib)]
     public static partial void shim_close(nint shim);
 
@@ -80,6 +84,7 @@ public static unsafe partial class Native {
     [LibraryImport(Lib)]
     public static partial void present_release(nint presenter, ulong value);
 
+    /// The embedded JPEG's length, 0 for none, or minus the length it needs when `capacity` is short.
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     public static partial int shim_thumbnail(string path, byte* dst, int capacity, out int turns);
 
@@ -95,6 +100,10 @@ public static unsafe partial class Native {
 
     [LibraryImport(Lib)]
     public static partial int orion_engine_release_render_memory(nint engine);
+
+    /// GPU memory the process's device holds; 0 on Metal, where the footprint counts it.
+    [LibraryImport(Lib)]
+    public static partial int orion_engine_gpu_memory(nint engine, out ulong bytes);
 
     /// One tone-curve channel (0 master, 1-3 R G B) as interleaved x, y; returns the point count.
     [LibraryImport(Lib)]

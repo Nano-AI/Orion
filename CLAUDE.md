@@ -104,6 +104,14 @@ shell/bin-native/present_test RAW              zero-copy surface vs CPU readback
 (cd mcp && npm test)               the MCP server against a fake app
 ```
 
+Speed and memory are judged by `tools/bench.py` (#402), not by a gate's fixed
+line: it runs named scenarios headless (a cold and a warm folder open, a swap, a
+drag, a pan, a 42 MP full render's GPU peak, an export, orion-bench), five
+processes each, and calls a change slower only when the shift's confidence
+interval clears zero and the shift is at least 5%. `--save-baseline` on the
+base, then a plain run on the change; `--ab TREE` interleaves two builds, which
+is the stronger comparison. It is heavy: one at a time, as below.
+
 CI (`.github/workflows/build.yml`, #376) builds and runs `orion-tests` and the
 selftest on all three systems for pushes to `main` and `ci/**` and for pull requests, and packages
 Windows and Linux as artifacts. `tools/ci-selftest.py` holds the selftest to a

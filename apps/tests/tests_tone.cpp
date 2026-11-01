@@ -164,11 +164,17 @@ void testDenoiseGpu() {
         cb.commitAndWait();
     }
 
-    // Shrink chain, coarse to fine, starting from the residual.
+    // Shrink chain as the graph runs it (#406): fine to coarse, the sum
+    // starting from zero at the finest scale and taking the residual c_J at
+    // the coarsest.
     std::vector<std::unique_ptr<orion::gpu::Texture>> shrinks;
     for (int j = 0; j < kScales; ++j) shrinks.push_back(make());
+    const auto ends = [&](int j) {
+        return (j == 0 ? orion::pipe::params::kShrinkFirst : 0) |
+               (j == kScales - 1 ? orion::pipe::params::kShrinkLast : 0);
+    };
 
-    for (int j = kScales - 1; j >= 0; --j) {
+    for (int j = 0; j < kScales; ++j) {
         orion::pipe::params::AtrousShrink sp{};
         sp.size[0] = kW; sp.size[1] = kH;
         // The synthetic noise is constant, so it is all in the b term.
@@ -178,13 +184,13 @@ void testDenoiseGpu() {
         sp.strengthLuma = 2.0f;
         sp.strengthChroma = 2.0f;
         sp.step = 1 << j;
+        sp.ends = ends(j);
 
         const orion::gpu::Texture* fine =
             (j == 0) ? c0.get() : blurs[std::size_t(j - 1)].get();
         const orion::gpu::Texture* coarse = blurs[std::size_t(j)].get();
         const orion::gpu::Texture* accum =
-            (j == kScales - 1) ? blurs[std::size_t(j)].get()
-                               : shrinks[std::size_t(j + 1)].get();
+            (j == 0) ? coarse : shrinks[std::size_t(j - 1)].get();
 
         orion::gpu::CommandBuffer cb(*device);
         cb.dispatch(*shrinkKernel,
@@ -194,7 +200,7 @@ void testDenoiseGpu() {
     }
 
     std::vector<__fp16> out(std::size_t(kW) * kH * 4);
-    shrinks[0]->download(out.data(), std::size_t(kW) * 4 * sizeof(__fp16), kW, kH);
+    shrinks[kScales - 1]->download(out.data(), std::size_t(kW) * 4 * sizeof(__fp16), kW, kH);
 
     // Residual against the clean signal, well away from the edge and the
     // border, where the transform has nothing either side to work with.
@@ -239,17 +245,18 @@ void testDenoiseGpu() {
            "step " + std::to_string(right - left));
 
     // Strength zero must reconstruct exactly: I = c_J + sum of w_j. If that is
-    // not an identity, every other setting is built on sand.
-    for (int j = kScales - 1; j >= 0; --j) {
+    // not an identity, every other setting is built on sand. In the graph's
+    // order, so the two ends (sum from zero, residual last) are what is tested.
+    for (int j = 0; j < kScales; ++j) {
         orion::pipe::params::AtrousShrink sp{};
         sp.size[0] = kW; sp.size[1] = kH;
         sp.strengthLuma = 0.0f;
         sp.strengthChroma = 0.0f;
+        sp.ends = ends(j);
         const orion::gpu::Texture* fine =
             (j == 0) ? c0.get() : blurs[std::size_t(j - 1)].get();
         const orion::gpu::Texture* accum =
-            (j == kScales - 1) ? blurs[std::size_t(j)].get()
-                               : shrinks[std::size_t(j + 1)].get();
+            (j == 0) ? blurs[std::size_t(j)].get() : shrinks[std::size_t(j - 1)].get();
         orion::gpu::CommandBuffer cb(*device);
         cb.dispatch(*shrinkKernel,
                     {fine, blurs[std::size_t(j)].get(), accum,
@@ -257,7 +264,7 @@ void testDenoiseGpu() {
                     &sp, sizeof sp, kW, kH);
         cb.commitAndWait();
     }
-    shrinks[0]->download(out.data(), std::size_t(kW) * 4 * sizeof(__fp16), kW, kH);
+    shrinks[kScales - 1]->download(out.data(), std::size_t(kW) * 4 * sizeof(__fp16), kW, kH);
 
     double worst = 0.0;
     for (std::uint32_t i = 0; i < kW * kH; ++i) {

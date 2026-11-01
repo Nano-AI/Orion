@@ -62,6 +62,9 @@ static partial class AgentInspect {
     /// Vision's face boxes on the developed picture at 1024 px, in display space
     /// and carried into frame space. ⚠ Vision jitters by about 0.01 between runs.
     public static JsonObject Faces(string raw, string? state) {
+        // Vision is macOS's; elsewhere there is no detector, said as matte says it, not an entry point missing.
+        if (!OperatingSystem.IsMacOS())
+            return new JsonObject { ["path"] = raw, ["faces"] = new JsonArray(), ["reason"] = "face detection is not available on this system." };
         using var s = AgentCli.OpenEngine(raw, Sidecar.Read(raw)?.Develop, state);
         var rgba = s.Rgba(Graph.Full, out int w, out int h) ?? throw new AgentCli.Failure("no photo open");
         double k = Math.Min(1.0, 1024.0 / Math.Max(w, h));

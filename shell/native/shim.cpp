@@ -15,9 +15,11 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <iterator>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <vector>
 #include "shim.h"
@@ -143,22 +145,34 @@ static bool restore(Shim* s, int row, unsigned revision) {
     return true;
 }
 
+// Why this thread's last shim_open_mode returned null: the engine that knew is gone.
+static std::string& openError() {
+    thread_local std::string why;
+    return why;
+}
+
 extern "C" {
 
 // `headless`: orion_engine_set_headless before the open, for a process that
 // develops once and exits (`Orion --agent`, `--batch-export`; decision #312).
 Shim* shim_open_mode(const char* path, int headless) {
     return shim_guard<Shim*>(nullptr, [&]() -> Shim* {
+        openError() = "out of memory";   // all a throw below can be; short enough not to allocate
         auto* s = new Shim;   // the only throw: every facade call below is guarded
         if (orion_engine_create(&s->engine) != ORION_OK ||
             (headless && orion_engine_set_headless(s->engine, 1) != ORION_OK) ||
             orion_engine_open_raw(s->engine, path) != ORION_OK) {
-            std::fprintf(stderr, "shim_open: %s\n",
-                         orion_last_error(s->engine));   // NULL: why there is no engine
+            // No engine is no GPU it can use (#393), not a photo it cannot decode.
+            const char* why = orion_last_error(s->engine);   // NULL: why there is no engine
+            try {
+                openError() = s->engine ? std::string(why) : std::string("the GPU engine could not start: ") + why;
+            } catch (...) {}   // out of memory says itself; the engine below still goes
+            std::fprintf(stderr, "shim_open: %s\n", openError().c_str());
             if (s->engine) orion_engine_destroy(s->engine);
             delete s;
             return nullptr;
         }
+        openError().clear();
         orion_engine_as_shot(s->engine, &s->adj);
         defaults(s->adj);
         orion_engine_set_adjustments(s->engine, &s->adj);
@@ -167,6 +181,9 @@ Shim* shim_open_mode(const char* path, int headless) {
 }
 
 Shim* shim_open(const char* path) { return shim_open_mode(path, 0); }
+
+// The reason the calling thread's last shim_open_mode failed; empty after one that opened.
+const char* shim_open_error(void) { return openError().c_str(); }
 
 void shim_close(Shim* s) {
     if (!s) return;
@@ -424,11 +441,13 @@ int shim_share(Shim* s, int which, int level, void** handle, int* generation, in
     return 1;
 }
 
-// The camera's embedded JPEG, for the filmstrip.
+// The camera's embedded JPEG, for the filmstrip: its length, 0 when there is
+// none, or minus the length it needs when `capacity` is too small for it.
 int shim_thumbnail(const char* path, uint8_t* dst, int capacity, int* turns) {
     uint32_t size = 0;
-    if (orion_read_thumbnail(path, dst, uint32_t(capacity), &size, turns) != ORION_OK) return 0;
-    return int(size);
+    const OrionStatus status = orion_read_thumbnail(path, dst, uint32_t(capacity), &size, turns);
+    if (status == ORION_ERR_BAD_ARG && size > uint32_t(capacity) && size <= uint32_t(INT32_MAX)) return -int(size);
+    return status == ORION_OK ? int(size) : 0;
 }
 
 #ifndef __APPLE__

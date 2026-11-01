@@ -174,6 +174,11 @@ void writeDngLinear(const std::string& path, const DngLinearImage& image) {
     std::vector<Entry> meta;
     meta.push_back(asciiEntry(271, make));                  // Make
     meta.push_back(asciiEntry(272, model));                 // Model
+    if (!image.xmp.empty()) {                               // XMLPacket, carried verbatim
+        Entry e{700, kByte, static_cast<std::uint32_t>(image.xmp.size()), {}};
+        e.data.assign(image.xmp.begin(), image.xmp.end());
+        meta.push_back(std::move(e));
+    }
     meta.push_back(byteEntry(50706, {1, 4, 0, 0}));         // DNGVersion
     meta.push_back(byteEntry(50707, {1, 4, 0, 0}));         // DNGBackwardVersion — FP data is a 1.4 feature
     meta.push_back(asciiEntry(50708, image.camera));        // UniqueCameraModel

@@ -48,7 +48,8 @@ static partial class Trash {
     public static string Question(IReadOnlyList<LibraryModel.Photo> photos) =>
         photos.Count == 1 ? $"Move {photos[0].Name} to the Trash?" : $"Move {photos.Count} photos to the Trash?";
 
-    public const string Message = "Their edits go with them: sidecars, saved versions and masks. Recover from the Trash in Finder.";
+    public static readonly string Message = "Their edits go with them: sidecars, saved versions and masks. "
+        + (OperatingSystem.IsMacOS() ? "Recover from the Trash in Finder." : OperatingSystem.IsWindows() ? "Recover from the Recycle Bin." : "Recover from the Trash.");
 
     /// One file to the system's Trash: null when it went, else why not.
     public static string? Move(string path) {
@@ -59,8 +60,8 @@ static partial class Trash {
                                                                    Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
                 return null;
             }
-            // stub(#315): .NET has no trash on Linux; the freedesktop.org Trash spec is the port. Never a delete instead.
-            return "moving to the Trash is not built on this system";
+            if (OperatingSystem.IsLinux()) return FreedesktopTrash.Move(path);   // .NET has none: the freedesktop.org spec (#394)
+            return "moving to the Trash is not built on this system";   // never a delete instead
         } catch (Exception e) {
             return e.Message;
         }

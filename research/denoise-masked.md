@@ -80,6 +80,10 @@ The gate for the color-only defect is a noisy colored frame: `strengthLuma 0, st
 
 ## 2. Masked denoising: a second, short chain where the mask can reach it
 
+**Implementation note, GPU memory (#406).**
+The masked chain is wired as the capture chain is, fine to coarse, its levels and the field freed as read when the memory rule makes a render frugal (`deep-research-2026-07-27.md` §2's note).
+The mathematics and the formats are unchanged.
+
 ### 2.1 The rule it has to satisfy
 
 `research/masking.md` §2b: an adjustment can be local when the coverage can scale its **parameter**, and the tone bands show the accepted shape of an exception, a non-pointwise filter whose parameter is per pixel and whose neighbourhood is read "as it stood".

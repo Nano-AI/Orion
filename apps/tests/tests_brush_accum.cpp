@@ -46,11 +46,16 @@ orion::raw::BayerImage rampFrame(std::uint32_t n) {
 /// crosses several 64-dab blocks — a prefix that never lands mid-block would
 /// hide the off-by-a-block error the shader's `max(b * DAB_BLOCK, firstDab)`
 /// exists to prevent.
+///
+/// ⚠ A division, not `ox + 0.0026f * float(i)`: Clang fuses that multiply-add
+/// where it folds a constant and rounds twice where it runs, so on x86 (no FMA)
+/// `diagonal(40)` and `diagonal(60)` disagreed by an ulp at dab 11 and the
+/// predicate rightly refused the append (#398).
 std::vector<float> diagonal(int count, float ox = 0.06f, float oy = 0.06f) {
     std::vector<float> xy(std::size_t(count) * 2, 0.0f);
     for (int i = 0; i < count; ++i) {
-        xy[std::size_t(i) * 2 + 0] = ox + 0.0026f * float(i);
-        xy[std::size_t(i) * 2 + 1] = oy + 0.0021f * float(i);
+        xy[std::size_t(i) * 2 + 0] = ox + float(26 * i) / 10000.0f;
+        xy[std::size_t(i) * 2 + 1] = oy + float(21 * i) / 10000.0f;
     }
     return xy;
 }

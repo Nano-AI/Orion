@@ -151,6 +151,7 @@ static partial class SelfTest {
     }
 
     static void TrashChecks(EngineModel engine) {
+        FreedesktopTrashCheck();
         var open = LibraryModel.Shared.Open!;
         var moved = new List<string>();
         var dialog = Trash.Dialog([open], p => { moved.Add(p); return null; });
@@ -171,6 +172,31 @@ static partial class SelfTest {
               && engine.Get("exposure_ev") == ev + 0.7f, "a confirmed trash moves that photo and keeps the open one with its edits");
         engine.Load(list);
         engine.Open(current);
+    }
+
+    /// The real move on Linux, into a scratch XDG_DATA_HOME (the photographer's Trash is never touched):
+    /// a photo off the library's list and its siblings land in Trash/files, each with its .trashinfo.
+    static void FreedesktopTrashCheck() {
+        if (!OperatingSystem.IsLinux()) return;
+        string folder = Directory.CreateTempSubdirectory("orion-trash-").FullName, data = Path.Combine(folder, "data");
+        string? was = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+        Environment.SetEnvironmentVariable("XDG_DATA_HOME", data);
+        try {
+            string photo = Path.Combine(folder, "caf\u00e9 1.ARW"), trash = Path.Combine(data, "Trash");
+            var names = new[] { "caf\u00e9 1.ARW", "caf\u00e9 1.xmp", "caf\u00e9 1.orion-snapshots.json", "caf\u00e9 1.orion-matte-a.png" };
+            foreach (var n in names) File.WriteAllText(Path.Combine(folder, n), "x");
+            string? why = LibraryFiles.Trash([photo], Trash.Move);   // what "Move to Trash" calls; no Trash folder exists yet
+            string info = File.Exists(Path.Combine(trash, "info", names[0] + ".trashinfo")) ? File.ReadAllText(Path.Combine(trash, "info", names[0] + ".trashinfo")) : "";
+            Check(why == null && !File.Exists(photo) && names.All(n => File.Exists(Path.Combine(trash, "files", n)) && File.Exists(Path.Combine(trash, "info", n + ".trashinfo")))
+                  && info.StartsWith($"[Trash Info]\nPath={Uri.EscapeDataString(photo).Replace("%2F", "/")}\nDeletionDate=") && info.Contains("caf%C3%A9%201.ARW"),
+                  $"Linux trash: the photo, its sidecar and versions go to the freedesktop.org Trash, each with its .trashinfo ({why ?? info.Replace('\n', ' ')})");
+            File.WriteAllText(photo, "y");
+            Check(Trash.Move(photo) == null && File.ReadAllText(Path.Combine(trash, "files", "caf\u00e9 1.2.ARW")) == "y"
+                  && File.ReadAllText(Path.Combine(trash, "files", names[0])) == "x", "Linux trash: a second photo of the same name never replaces the first");
+        } finally {
+            Environment.SetEnvironmentVariable("XDG_DATA_HOME", was);
+            Directory.Delete(folder, recursive: true);
+        }
     }
 
     static void ExportChecks(EngineModel engine) {

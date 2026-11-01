@@ -27,11 +27,21 @@ public sealed partial class Session : IDisposable {
     }
 
     /// Decodes the RAW and applies the default look. Null when the shim cannot
-    /// open it; its reason goes to stderr. `headless`: no preview graph and no
-    /// intermediates kept between renders, for a process that develops once and
-    /// exits (`--agent`, `--batch-export`; decision #312), never the canvas.
-    public static Session? Open(string path, bool headless = false) =>
-        Native.shim_open_mode(path, headless ? 1 : 0) is var shim and not 0 ? new Session(path, shim) : null;
+    /// open it; its reason goes to stderr and to OpenFailure. `headless`: no
+    /// preview graph and no intermediates kept between renders, for a process
+    /// that develops once and exits (`--agent`, `--batch-export`; decision #312),
+    /// never the canvas.
+    public static Session? Open(string path, bool headless = false) {
+        nint shim = Native.shim_open_mode(path, headless ? 1 : 0);
+        if (shim != 0) { Failures.TryRemove(path, out _); return new Session(path, shim); }
+        Failures[path] = Marshal.PtrToStringUTF8(Native.shim_open_error()) ?? "";   // same thread: the shim's reason is per thread
+        return null;
+    }
+
+    /// The engine's reason the last Open of `path` failed (no GPU it can use, a
+    /// file LibRaw refused), or null if it opened or was never tried (#393).
+    public static string? OpenFailure(string path) => Failures.TryGetValue(path, out var why) && why.Length > 0 ? why : null;
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> Failures = new();
 
     public string Path { get; }
 
@@ -103,8 +113,9 @@ public sealed partial class Session : IDisposable {
             bitmap = new WriteableBitmap(new PixelSize(w, h), new Vector(96, 96), PixelFormat.Rgba8888, AlphaFormat.Opaque);
             _pictures[graph] = bitmap;
         }
-        Fill(bitmap, graph, w, h);
-        return bitmap;
+        if (Fill(bitmap, graph, w, h)) return bitmap;
+        _pictures.Remove(graph);   // nor kept for Picture
+        return null;
     }
 
     /// The last render of `graph` in a bitmap of its own, which no later render
@@ -112,19 +123,20 @@ public sealed partial class Session : IDisposable {
     public unsafe WriteableBitmap? Copy(Graph graph) {
         if (graph == Graph.None || Native.shim_read(Shim, (int)graph, null, 0, out int w, out int h) == 0) return null;
         var bitmap = new WriteableBitmap(new PixelSize(w, h), new Vector(96, 96), PixelFormat.Rgba8888, AlphaFormat.Opaque);
-        Fill(bitmap, graph, w, h);
-        return bitmap;
+        return Fill(bitmap, graph, w, h) ? bitmap : null;
     }
 
-    unsafe void Fill(WriteableBitmap bitmap, Graph graph, int w, int h) {
+    /// False when the read failed (a lost device, out of memory): the bitmap then
+    /// holds whatever it held, which is never shown as the picture (#393).
+    unsafe bool Fill(WriteableBitmap bitmap, Graph graph, int w, int h) {
         using var fb = bitmap.Lock();
-        if (fb.RowBytes == w * 4) {
-            Native.shim_read(_shim, (int)graph, (byte*)fb.Address, fb.RowBytes * h, out _, out _);
-        } else {
-            var tmp = new byte[w * h * 4];
-            fixed (byte* p = tmp) Native.shim_read(_shim, (int)graph, p, tmp.Length, out _, out _);
-            for (int y = 0; y < h; y++) Marshal.Copy(tmp, y * w * 4, fb.Address + y * fb.RowBytes, w * 4);
-        }
+        if (fb.RowBytes == w * 4)
+            return Native.shim_read(_shim, (int)graph, (byte*)fb.Address, fb.RowBytes * h, out _, out _) != 0;
+        var tmp = new byte[w * h * 4];
+        fixed (byte* p = tmp)
+            if (Native.shim_read(_shim, (int)graph, p, tmp.Length, out _, out _) == 0) return false;
+        for (int y = 0; y < h; y++) Marshal.Copy(tmp, y * w * 4, fb.Address + y * fb.RowBytes, w * 4);
+        return true;
     }
 
     /// Queues the canvas's copy of the last render of `graph`, `level` halvings

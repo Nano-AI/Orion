@@ -76,6 +76,10 @@ public:
     /// Bytes currently held by free textures — the pool's own overhead.
     [[nodiscard]] std::size_t idleBytes() const noexcept;
 
+    /// Whether an `acquire` of this shape would be served from the free list.
+    [[nodiscard]] bool holds(std::uint32_t width, std::uint32_t height,
+                             PixelFormat format) const noexcept;
+
     /// Bytes handed out and not yet returned.
     [[nodiscard]] std::size_t liveBytes() const noexcept { return liveBytes_; }
 
@@ -93,7 +97,6 @@ public:
     /// pool's to free.
     void shrink() noexcept;
 
-private:
     /// Width, height, format. Ordered so `std::map` can key on it directly.
     struct Shape {
         std::uint32_t width = 0;
@@ -107,6 +110,11 @@ private:
         }
     };
 
+    /// How many free textures of each shape: what `Pipeline::planPeak`
+    /// starts its simulated pool from (#406).
+    [[nodiscard]] std::map<Shape, std::size_t> idleCounts() const;
+
+private:
     Device* device_ = nullptr;
     std::map<Shape, std::vector<std::unique_ptr<Texture>>> free_;
     std::size_t liveBytes_ = 0;

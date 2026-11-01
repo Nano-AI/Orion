@@ -87,15 +87,17 @@ static partial class SelfTest {
         Check(names.Select(n => n.FontWeight).Distinct().Count() == 1 && names[2].Foreground == Palette.Text
               && names.Select((n, i) => n.IsVisible == (i == 2)).All(b => b) && pill.Bounds == tabs[2].Bounds
               && tabs.All(b => b.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single().Width == IconSize.Md)
-              && tabs.Select((b, i) => ToolTip.GetTip(b) as string == $"{Panels.Tabs[i]} (⌘{i + 1})" && Spoken(b) == Panels.Tabs[i]).All(b => b),
+              && tabs.Select((b, i) => ToolTip.GetTip(b) as string == $"{Panels.Tabs[i]} ({(OperatingSystem.IsMacOS() ? "⌘" : "Ctrl+")}{i + 1})" && Spoken(b) == Panels.Tabs[i]).All(b => b),
               $"the chosen tab alone shows its name, on the pill ({pill.Bounds} under {tabs[2].Bounds}); the rest are IconSize.Md icons named by tooltip and screen reader");
 
-        // At the column's narrowest and widest, whichever tab is chosen, every cell holds its content with 8 to spare
-        // each side; at the widest the seven cells are equal, as a segmented control's are.
+        // At the column's narrowest and widest, whichever tab is chosen, every cell holds its content with the room
+        // to spare each side (7.75, shrunk toward 4 only past 600); at the widest the seven cells are equal, as a
+        // segmented control's are. The widest is measured from the names' face (#403): 560 in SF Pro and Segoe UI.
         var column = window.FindControl<Grid>("Body")!.ColumnDefinitions[2];
         var cramped = new List<string>();
-        double narrowest = double.MaxValue;
-        foreach (double width in new[] { Layout.ToolCol, MainWindow.ToolColMax }) {
+        double narrowest = double.MaxValue, bar = 2 * window.TabRoomNow;
+        if (window.ToolColFit.StartsWith("does not fit")) cramped.Add(window.ToolColFit);
+        foreach (double width in new[] { Layout.ToolCol, window.ToolColMax }) {
             column.Width = new GridLength(width);
             foreach (var tab in Panels.Tabs) {
                 window.Select(tab);
@@ -103,16 +105,18 @@ static partial class SelfTest {
                 if (width == Layout.ToolCol)   // the icon-only cells: the chosen one sizes itself to its name
                     narrowest = Math.Min(narrowest, tabs.Where((b, i) => Panels.Tabs[i] != tab)
                                                         .Min(b => b.Bounds.Width - ((Control)b.Content!).DesiredSize.Width));
-                cramped.AddRange(tabs.Where(b => b.Bounds.Width - ((Control)b.Content!).DesiredSize.Width < 15.5)
+                cramped.AddRange(tabs.Where(b => b.Bounds.Width - ((Control)b.Content!).DesiredSize.Width < bar)
                                      .Select(b => $"{Spoken(b)} at {width} with {tab} chosen ({b.Bounds.Width:0.#} pt)"));
-                if (width == MainWindow.ToolColMax && tabs.Max(b => b.Bounds.Width) - tabs.Min(b => b.Bounds.Width) > 1)
+                if (width == window.ToolColMax && tabs.Max(b => b.Bounds.Width) - tabs.Min(b => b.Bounds.Width) > 1)
                     cramped.Add($"unequal cells at {width} with {tab} chosen");
             }
         }
         column.Width = new GridLength(Layout.ToolCol);
         // The measurement itself, so a reviewer can see how close 322 is without a failure to read it from.
-        Console.WriteLine($"selftest: tab fit at {Layout.ToolCol}: narrowest icon-only cell has {narrowest:0.0} pt beside its icon (bar 15.5)");
-        Check(cramped.Count == 0, "the tabs fit 322 and 560 with room in every cell, and are equal at 560" + (cramped.Count > 0 ? ": " + string.Join("; ", cramped.Take(4)) : ""));
+        Console.WriteLine($"selftest: tab fit at {Layout.ToolCol}: narrowest icon-only cell has {narrowest:0.0} pt beside its icon (bar {bar})");
+        Console.WriteLine($"selftest: tool column widest {window.ToolColMax} ({window.ToolColFit})");
+        Check(cramped.Count == 0, $"the tabs fit {Layout.ToolCol} and the widest with room in every cell, and are equal at the widest ({window.ToolColFit})"
+                                  + (cramped.Count > 0 ? ": " + string.Join("; ", cramped.Take(4)) : ""));
 
         // A click: the pill's first frame is exactly where the old tab's was, it lands under the new one, and it gets
         // there by transform, easing out under 200 ms, as the name fades in. Under reduced motion it is there at once.

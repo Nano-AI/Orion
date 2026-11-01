@@ -30,20 +30,17 @@ void DevelopPipeline::buildLocalDenoiseNodes() {
                                      nMaskRefine_[6], nMaskRefine_[7]},
                                     PixelFormat::RG16Float, {}, {}});
 
-    // The capture chain's wiring exactly (`buildCaptureNodes`), on the working
-    // picture. Every node's first input is the picture side, so a disabled
-    // chain resolves straight back to `profile:hue/sat`.
+    // The capture chain's wiring exactly (`buildCaptureNodes`: fine to
+    // coarse, #406), on the working picture. Every node's first input is the
+    // picture side, so a disabled chain resolves straight back to
+    // `profile:hue/sat`.
     for (int j = 0; j < kDenoiseScales; ++j) {
-        const int input = (j == 0) ? nHueSat_ : nLocalBlur_[j - 1];
+        const int fine = (j == 0) ? nHueSat_ : nLocalBlur_[j - 1];
         nLocalBlur_[j] = pipeline_.add({"local denoise:blur " + std::to_string(j),
-                                        "atrousBlur", {input},
+                                        "atrousBlur", {fine},
                                         PixelFormat::RGBA16Float, {}, {}});
-    }
-    for (int j = kDenoiseScales - 1; j >= 0; --j) {
-        const int fine   = (j == 0) ? nHueSat_ : nLocalBlur_[j - 1];
         const int coarse = nLocalBlur_[j];
-        const int accum  = (j == kDenoiseScales - 1) ? nLocalBlur_[j]
-                                                     : nLocalShrink_[j + 1];
+        const int accum  = (j == 0) ? coarse : nLocalShrink_[j - 1];
         nLocalShrink_[j] = pipeline_.add({"local denoise:shrink " + std::to_string(j),
                                           "atrousShrink",
                                           {fine, coarse, accum, nDenoiseField_},
@@ -123,6 +120,7 @@ void DevelopPipeline::applyLocalDenoise(const Adjustments& adj,
         shrink.step = 1 << j;
         // The strengths come from the field; the two scalars are unread.
         shrink.useField = 1;
+        shrink.ends = shrinkEnds(j);
         pipeline_.setParams(nLocalShrink_[j], &shrink, sizeof shrink);
     }
 }

@@ -737,8 +737,14 @@ struct AtrousShrink {
     /// halves it into Starck et al.'s `p`. 0 everywhere but the capture chain.
     /// research/high-iso.md §2.
     float         texture;
-    std::int32_t  _pad1;
+    /// Where this scale sits when the chain runs fine to coarse (#406):
+    /// `kShrinkFirst` starts the sum from zero (`accum` unread), `kShrinkLast`
+    /// adds the residual c_{j+1}. 0 is the coarse-to-fine chain, whose first
+    /// `accum` is the residual itself.
+    std::int32_t  ends;
 };
+inline constexpr std::int32_t kShrinkFirst = 1;
+inline constexpr std::int32_t kShrinkLast  = 2;
 static_assert(sizeof(AtrousShrink) == 48);
 static_assert(offsetof(AtrousShrink, texture) == 40);
 

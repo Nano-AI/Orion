@@ -35,7 +35,7 @@ struct Node {
     std::vector<int>        inputs;   // node ids, or kSource
     gpu::PixelFormat        format;   // this node's output format
     std::vector<std::byte>  params;   // opaque block bound at buffer(0)
-    std::vector<int>        aux;      // auxiliary texture ids, bound after inputs
+    std::vector<int>        aux{};    // auxiliary texture ids, bound after inputs
 
     // Output dimensions, when this node changes them — rotation swaps width
     // and height, and crop will shrink them. Zero means "same as the graph".
@@ -44,6 +44,15 @@ struct Node {
 
     std::uint32_t outWidth  = 0;
     std::uint32_t outHeight = 0;
+
+    /// A level of a multi-node effect that only its own chain reads, which
+    /// reruns whole whenever any of it is dirty: never kept when the memory
+    /// rule is frugal (`Pipeline::decideMemory`, #406).
+    bool transient = false;
+
+    /// What this node's pass costs per output pixel against a plain one, for
+    /// which cached outputs a frugal render keeps (#406). 1 unless measured.
+    float costWeight = 1.0f;
 };
 
 struct NodeTiming {
@@ -88,6 +97,15 @@ public:
     void setNodeFormat(int nodeId, gpu::PixelFormat format);
 
     [[nodiscard]] gpu::PixelFormat nodeFormat(int nodeId) const;
+
+    /// Changes a node's output size, reallocating on its next dispatch, as
+    /// `setNodeFormat` does: for the one node whose size follows the edit
+    /// (geometry, #399). The caller decides how often; this always obeys.
+    void setNodeSize(int nodeId, std::uint32_t width, std::uint32_t height);
+
+    /// A node's output size: its own, else the graph's working size.
+    [[nodiscard]] std::uint32_t nodeWidth(int nodeId) const;
+    [[nodiscard]] std::uint32_t nodeHeight(int nodeId) const;
 
     /// Which node's texture a consumer should read, following any
     /// disabled nodes back to a live producer.
@@ -167,6 +185,25 @@ public:
     /// once-ever free already relies on, taken more often.
     void setReleaseEveryRender(bool on) noexcept { releaseEveryRender_ = on; }
 
+    /// Marks nodes `Node::transient` (#406).
+    void setTransient(const std::vector<int>& nodeIds);
+    void setCostWeight(int nodeId, float weight);
+
+    /// The memory rule's ceiling in bytes: a render plans within
+    /// min(this, what the device can still give plus what the graph holds).
+    /// 2.5e9 by decision #406; tests lower it.
+    void setMemoryBudget(std::uint64_t bytes) noexcept { budgetCap_ = bytes; }
+
+    /// What the rule decided for the last render (`decideMemory`): the
+    /// budget, the planned peak under the caching policy, the planned peak
+    /// frugal (0 when caching fit), and how many cached outputs it kept.
+    struct MemoryPlan {
+        std::uint64_t budget = 0, cached = 0, frugal = 0;
+        bool          frugalMode = false;
+        std::size_t   kept = 0;
+    };
+    [[nodiscard]] const MemoryPlan& lastPlan() const noexcept { return plan_; }
+
     /// Gives every node's texture back to Metal, pinned and terminal ones
     /// included, and marks the whole graph dirty: the state `compile()` left
     /// it in. The source, the aux plates and the kernels stay. For a photo
@@ -202,6 +239,8 @@ public:
     /// All owned texture payloads, including idle pool entries and auxiliary
     /// plates. Excludes driver overhead; use process footprint for total RAM.
     [[nodiscard]] std::size_t allocatedBytes() const noexcept;
+    /// The auxiliary plates alone: LUTs, mattes, the grain plate.
+    [[nodiscard]] std::size_t auxBytes() const noexcept;
 
     /// The bytes a graph would need if a texture were reused the moment its
     /// last consumer had run, rather than held for the graph's lifetime.
@@ -270,6 +309,10 @@ public:
     /// `TexturePool::peakLiveBytes`.
     [[nodiscard]] std::size_t poolPeakBytes() const noexcept { return pool_.peakLiveBytes(); }
 
+    /// The node whose texture the device refused on the last render, or -1:
+    /// what the out-of-memory message names (#406).
+    [[nodiscard]] int failedNode() const noexcept { return failedNode_; }
+
 private:
     void markDownstreamDirty(int nodeId);
 
@@ -279,6 +322,9 @@ private:
     /// #153 already computed this once per call; this is that same walk,
     /// factored out so render() can act on it instead of merely reporting it.
     [[nodiscard]] std::vector<std::size_t> computeLastUseSteps() const;
+
+    /// `lastReader_` from `computeLastUseSteps()`, for the graph as enabled now.
+    void computeLastReaders();
 
 
     /// Whether `n` must never be recycled: it is `setPinned`'s list, or it is
@@ -294,7 +340,7 @@ private:
     /// so rebuilding one whose own inputs have not changed reproduces the
     /// exact bytes it held before — this is what lets the pool recycle a
     /// texture without a reader ever seeing the difference.
-    void ensure(int id, gpu::CommandBuffer* batch);
+    void ensure(int id);
 
     /// Gives `id` a fresh texture (returning whatever it held to the pool
     /// first), dispatches its kernel, and frees any input whose last reader
@@ -302,7 +348,7 @@ private:
     /// `render()`'s dirty path and `ensure()`'s recovery path both funnel
     /// through it, so the two can never disagree about how a texture is
     /// acquired, dispatched or released.
-    void computeOne(int id, gpu::CommandBuffer* batch);
+    void computeOne(int id);
 
     /// After `reader` has been dispatched, releases every input whose last
     /// reader (per `lastReader_`) was `reader` — including `reader` itself,
@@ -323,6 +369,36 @@ private:
     /// exactly once for the pipeline's life; freeing on every match costs it
     /// forever.
     void maybeFree(int n, int reader);
+
+    /// Hands the pool's idle textures back to the driver now: the batch so far
+    /// is submitted and waited on first, because Dawn and Metal keep a texture
+    /// until the submit that used it is done (#399), then a fresh batch.
+    void giveBack();
+    /// The idle bytes a frugal render lets the pool hold before it gives them
+    /// back: one RGBA16F plane of the working frame. Under a plane, a give-back
+    /// (a submit and a wait, 2-7 ms) costs more than the memory it frees.
+    [[nodiscard]] std::size_t givePlane() const noexcept {
+        return std::size_t(width_) * height_ * gpu::bytesPerPixel(gpu::PixelFormat::RGBA16Float);
+    }
+
+    /// `render()`'s loop: every dirty, enabled node in order, inputs first.
+    void runDirty();
+
+    /// ⚠ **The memory rule, the one place it is decided (#406).** Plans this
+    /// render's peak under the caching policy, counting everything the graph
+    /// already holds (`planPeak`); if that exceeds the budget, this render is
+    /// frugal: effect levels are freed as read, every output is freed at its
+    /// last reader except a keep set chosen dearest-to-rebuild first while the
+    /// frugal plan stays under budget, cached outputs this render does not
+    /// read go back when it starts, the rest when it ends, and the pool gives
+    /// idle memory back before it allocates. PipelineMemory.cpp.
+    void decideMemory();
+    /// Walks this render as `runDirty` would, on shapes and bytes alone, from
+    /// what is resident and idle now, and returns the most it would hold.
+    [[nodiscard]] std::size_t planPeak(bool frugal, const std::vector<bool>& keep) const;
+    /// The clean outputs a render of the dirty nodes reads, with the inputs of
+    /// any of them it must rebuild.
+    [[nodiscard]] std::vector<bool> readThisRender(const std::vector<bool>& resident) const;
 
     gpu::Device&      device_;
     std::string       shaderDir_;
@@ -358,11 +434,13 @@ private:
     std::vector<int>                           pinned_;
 
     /// `lastReader_[n]`: the id of the last node (in topological order) that
-    /// reads `n`, or `n` itself if nothing does. Static — the graph's wiring
-    /// never changes after `compile()` — computed once there from
-    /// `computeLastUseSteps()` and read by `releaseIfDone`/`maybeFree` for the
-    /// rest of the pipeline's life.
+    /// reads `n`, or `n` itself if nothing does, among the nodes enabled now.
+    /// Computed at `compile()` from `computeLastUseSteps()`, again at the next
+    /// render after a node is switched (#406), and read by
+    /// `releaseIfDone`/`maybeFree`.
     std::vector<int>                           lastReader_;
+    /// A node was switched since `lastReader_` was computed (#406).
+    bool                                       lastReadersStale_ = false;
 
     /// `everFreed_[n]`: has `n`'s texture already been returned to the pool
     /// once. See `maybeFree`'s comment for why this must never happen twice.
@@ -383,6 +461,18 @@ private:
     bool trimPool_ = false; // a filter/format transition left disposable textures
 
     std::vector<NodeTiming> lastRun_;
+
+    /// The render's open command buffer (null when profiling), and the GPU
+    /// milliseconds of the batches `giveBack` already submitted.
+    std::unique_ptr<gpu::CommandBuffer> batch_;
+    double submittedMs_ = 0.0;
+    int failedNode_ = -1;
+
+    // The memory rule's state (#406).
+    bool              frugal_ = false;
+    std::vector<bool> keep_;
+    std::uint64_t     budgetCap_ = 2'500'000'000;
+    MemoryPlan        plan_;
 };
 
 }  // namespace orion::pipe

@@ -26,6 +26,7 @@ public sealed class SessionCache : ISessionSource {
     (int Index, Action<Session?> Ready)? _request;
     Task _closing = Task.CompletedTask;
     int _generation;
+    bool _shed;   // out of GPU memory once: no decoded neighbours from then on (Shed)
 
     public SessionCache(PhotoList photos, int pictureSlots = 20, Eviction policy = Eviction.AheadRecent) {
         _photos = photos;
@@ -57,14 +58,65 @@ public sealed class SessionCache : ISessionSource {
         Pump();
     }
 
+    /// A second photo on screen beside the first (the side-by-side compare, #400):
+    /// kept, it is handed over at once; otherwise it decodes on a worker, after a
+    /// prefetch of the same photo already running, so one photo never holds two
+    /// sessions. Lent as Acquire lends: Release keeps it warm. `ready` gets null
+    /// when it will not open (Session.OpenFailure says why) or the list changed meanwhile.
+    public void Borrow(int index, Action<Session?> ready) {
+        if (_kept.Remove(index, out var kept)) { _lent[kept] = index; ready(kept); return; }
+        int generation = _generation;
+        if (_decoding.TryGetValue(index, out var running)) {
+            running.ContinueWith(_ => Dispatcher.UIThread.Post(() => {
+                if (generation == _generation) Borrow(index, ready); else ready(null);
+            }));
+            return;
+        }
+        string path = _photos.Paths[index];
+        // In _decoding while it runs: Drain waits for it, and no prefetch of the same photo starts beside it.
+        var decode = Task.Run(() => {
+            var s = Session.OpenEdited(path);
+            try {
+                if (s?.Render(preview: true) == Graph.Preview) s.Read(Graph.Preview);   // the picture, off the UI thread, as Start
+            } catch (Exception e) {
+                Console.Error.WriteLine($"cache: {path}: {e.Message}");
+                s?.Dispose();
+                s = null;
+            }
+            return s;
+        });
+        _decoding[index] = decode;
+        decode.ContinueWith(t => Dispatcher.UIThread.Post(() => {
+            if (_decoding.GetValueOrDefault(index) == decode) _decoding.Remove(index);
+            var s = t.IsCompletedSuccessfully ? t.Result : null;
+            if (s != null && generation != _generation) { Close(s); s = null; }
+            if (s != null) _lent[s] = index;
+            ready(s);
+            Pump();
+        }));
+    }
+
     public Bitmap? Picture(int index) => _pictures.GetValueOrDefault(index);
+
+    /// The photo on screen ran out of GPU memory: closes every decoded neighbour and
+    /// decodes none from then on (#392). At 24 MP each holds ~260 MB of the card,
+    /// the margin by which a Monochrome click (clarity, 2.3 GB) missed on a 3 GB card.
+    /// The pictures stay: they are CPU memory. False when there was nothing to give back.
+    public bool Shed() {
+        bool any = _kept.Count > 0 || _decoding.Count > 0;
+        _shed = true;
+        foreach (var s in _kept.Values) Close(s);
+        _kept.Clear();
+        Drain();   // the closes run on a worker, and the retry needs their memory now
+        return any;
+    }
 
     public void Release(Session s) {
         if (!_lent.Remove(s, out int index)) { Close(s); return; }   // lent before a Clear
         // Edited since its last preview: render one so the kept picture shows the edit.
         if (s.RenderedFull && s.Render(preview: true) == Graph.Preview) s.Read(Graph.Preview);
         if (s.Picture is { } p) _pictures[index] = p;
-        if (_kept.TryAdd(index, s)) s.Lighten();
+        if (!_shed && _kept.TryAdd(index, s)) s.Lighten();
         else Close(s);
         Evict();
         Pump();
@@ -123,7 +175,7 @@ public sealed class SessionCache : ISessionSource {
     /// prefetch starts only when nothing runs.
     void Pump() {
         if (_request is { Index: var r } && !_decoding.ContainsKey(r) && _decoding.Count < 2) Start(r);
-        if (_decoding.Count > 0 || _plan.Current < 0) return;
+        if (_decoding.Count > 0 || _plan.Current < 0 || _shed) return;
         if (_plan.Next(Decoded.ToList(), _pictures.Keys.ToList(), _failed.Contains) is int next) Start(next);
     }
 
@@ -159,7 +211,7 @@ public sealed class SessionCache : ISessionSource {
         else {
             _plan.Decoded(index);
             if (s.Picture is { } p && _plan.Wants(_pictures.Keys.ToList(), index, _plan.PictureSlots)) _pictures[index] = p;
-            if (_plan.Wants(Decoded.ToList(), index, _plan.SessionSlots)) {
+            if (!_shed && _plan.Wants(Decoded.ToList(), index, _plan.SessionSlots)) {
                 s.Lighten();
                 _kept[index] = s;
             } else Close(s);

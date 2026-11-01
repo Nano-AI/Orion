@@ -58,6 +58,19 @@ std::size_t TexturePool::idleBytes() const noexcept {
     return total;
 }
 
+bool TexturePool::holds(std::uint32_t width, std::uint32_t height,
+                        PixelFormat format) const noexcept {
+    const auto it = free_.find(Shape{width, height, format});
+    return it != free_.end() && !it->second.empty();
+}
+
+std::map<TexturePool::Shape, std::size_t> TexturePool::idleCounts() const {
+    std::map<Shape, std::size_t> counts;
+    for (const auto& [shape, textures] : free_)
+        if (!textures.empty()) counts[shape] = textures.size();
+    return counts;
+}
+
 void TexturePool::shrink() noexcept {
     free_.clear();
 }

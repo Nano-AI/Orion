@@ -45,7 +45,7 @@ sealed class StackSplit : Control {
 
     /// The split for `path`'s embedded preview, seeded; null when the raw carries none.
     public static StackSplit? For(string path) {
-        if (Library.Thumbnails.Load(path) is not { } picture) return null;
+        if (Library.Thumbnails.Preview(path) is not { } picture) return null;
         var (rgb, w, h) = Rgb(picture, LongEdge);
         return new StackSplit(path, picture, rgb, w, h);
     }

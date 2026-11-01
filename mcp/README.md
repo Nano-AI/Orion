@@ -46,7 +46,9 @@ cd mcp && npm test        # node --test against test/fake-orion.sh, no GPU neede
 
 ## The photo open in Orion
 
-`current_photo` reads `~/Library/Application Support/Orion/current.json`
+`current_photo` reads `current.json` in Orion's folder:
+`~/Library/Application Support/Orion` on macOS, `%APPDATA%\Orion` on Windows,
+`$XDG_CONFIG_HOME/Orion` (default `~/.config/Orion`) on Linux
 (path overridable with `ORION_CURRENT`, mainly for tests), which Orion
 writes atomically on every photo change: `{"photo", "folder", "updated",
 "capture"}`.

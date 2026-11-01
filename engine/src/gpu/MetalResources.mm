@@ -99,7 +99,7 @@ std::unique_ptr<Texture::Impl> makeMetalTexture(void* device, std::uint32_t widt
         t->tex = [dev newTextureWithDescriptor:desc];
     }
     }
-    if (t->tex == nil) throw std::runtime_error("texture allocation failed");
+    if (t->tex == nil) throw OutOfMemory("texture allocation: out of GPU memory");
 
     return t;
 }

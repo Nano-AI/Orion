@@ -70,8 +70,13 @@ static partial class SelfTest {
         Check(AssistantModel.BuildArgv("codex", server).SequenceEqual([.. shell, "codex", "-c", $"mcp_servers.orion.command=\"{server}\""])
               && AssistantModel.BuildArgv("codex").SequenceEqual([.. shell, "codex"]) && AssistantModel.BuildArgv("claude").Length == 7,
               "codex takes the server as a TOML override, and neither takes one when .mcp.json registers it");
-        Check(AssistantModel.ClaudeAddCommand("/a/it's", "/b") == "xattr -dr com.apple.quarantine '/b' && claude mcp add orion -- '/a/it'\\''s'",
-              "the setup command quotes its paths for a shell");
+        Check(AssistantModel.ClaudeAddCommand("/a/it's", "/b") == (OperatingSystem.IsMacOS() ? "xattr -dr com.apple.quarantine '/b' && " : "")
+                                                                  + "claude mcp add orion -- '/a/it'\\''s'",
+              "the setup command quotes its paths for a shell, and clears a quarantine only where macOS sets one");
+        Check(OperatingSystem.IsLinux() ? AssistantModel.Shell("/bin/sh") == "/bin/sh" && AssistantModel.Shell(null) == "/bin/sh"
+                                          && AssistantModel.Shell("/no/such/zsh") == "/bin/sh" && AssistantModel.Shell("/usr/bin/fish") == "/bin/sh"
+                                        : AssistantModel.Shell("/bin/sh") == "/bin/zsh",
+              "the agent's shell: zsh on macOS; on Linux the login shell if it is an sh, else /bin/sh");
 
         string tools = Directory.CreateTempSubdirectory("orion-tools-").FullName;
         try {

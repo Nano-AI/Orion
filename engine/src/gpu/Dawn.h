@@ -31,6 +31,8 @@ struct Context {
     wgpu::Queue    queue;
     void*          metalDevice = nullptr;   // id<MTLDevice>, bridged, non-owning
     DeviceInfo     info;
+    /// The adapter's PCI ids, for the driver's free count (VramFree.cpp).
+    std::uint32_t  vendorId = 0, deviceId = 0;
 
     /// Every prepared shader loaded on this device, by path, with the
     /// pipelines made from it (DawnKernel.cpp). After the device so it goes
@@ -68,6 +70,7 @@ private:
     std::string pop();
     Context& ctx_;
     bool     open_ = true;
+    bool     oom_  = false;   // what pop() read was Dawn's OutOfMemory
 };
 
 wgpu::TextureFormat toWgpu(PixelFormat);

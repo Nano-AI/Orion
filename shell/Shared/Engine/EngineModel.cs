@@ -23,6 +23,10 @@ public sealed class EngineModel : INotifyPropertyChanged {
 
     public EngineModel() => _source = new SessionCache(_list);
 
+    /// A sidecar write that escaped to the full name says so on the status line (#405).
+    /// Posted, so a write flushed on a photo switch is not cleared by the open after it.
+    static EngineModel() => Sidecar.Noticed += message => Dispatcher.UIThread.Post(() => Shared.Say(message));
+
     /// Where sessions come from: the two-tier cache of decision #318.
     public SessionCache Cache => _source;
 
@@ -58,24 +62,33 @@ public sealed class EngineModel : INotifyPropertyChanged {
     bool _zoomed;
 
     /// What the canvas shows of the picture past fit: the part, normalized,
-    /// and the device pixels it covers. Renders past fit ask for only this
-    /// (#22). Set by the canvas as it draws; a change re-renders once the view
-    /// has rested, so a pan draws the last region over the preview meanwhile.
+    /// and the device pixels it covers. Renders past fit ask for this and a
+    /// margin round it (#22, ViewRegion). Set by the canvas whenever the view
+    /// is at rest, never while a hand or a spring moves it (#401): a pan moves
+    /// the pixels already rendered, over the preview where it uncovers more,
+    /// and a view that comes to rest outside what is rendered renders once.
     public (Avalonia.Rect Uv, Avalonia.PixelSize Pixels)? View {
         get => _view;
         set {
             if (_view == value) return;
             _view = value;
             if (!ZoomedPastFit || _session == null) return;
+            _viewRest?.Stop();
+            // Nothing a render would add: the whole picture at full size, or a region that holds this view at its detail.
+            if (Shown.Graph == Graph.Full || Shown.Graph == Graph.Region && _region is { } had && value is { } now && ViewRegion.Covers(had, now))
+                return;
             _viewRest ??= new DispatcherTimer(TimeSpan.FromMilliseconds(150), DispatcherPriority.Background, (t, _) => {
+                // A hand that took hold since: it moves pixels, and this renders once it rests again.
+                if (ViewHeld?.Invoke() == true) return;
                 ((DispatcherTimer)t!).Stop();
                 if (ZoomedPastFit && !Interacting && _session != null) Render(preview: false);
             });
-            _viewRest.Stop();
             _viewRest.Start();
         }
     }
-    (Avalonia.Rect Uv, Avalonia.PixelSize Pixels)? _view;
+    (Avalonia.Rect Uv, Avalonia.PixelSize Pixels)? _view, _region;   // _region: what the shown region was asked for
+    /// Set by the canvas: a hand or a spring holds the view now, and a render for its last rest waits.
+    public Func<bool>? ViewHeld { get; set; }
     DispatcherTimer? _viewRest;
     static readonly TimeSpan Rest = TimeSpan.FromMilliseconds(300);
     /// The status line's message: a stub saying it is not built, until the next open.
@@ -214,6 +227,8 @@ public sealed class EngineModel : INotifyPropertyChanged {
 
     /// Hands the photo on screen back to the source.
     public void Close() {
+        _viewRest?.Stop();   // a rest's render belongs to the photo it was for
+        _region = null;
         if (_session != null) {
             Leaving?.Invoke();
             _source.Release(_session);
@@ -225,7 +240,17 @@ public sealed class EngineModel : INotifyPropertyChanged {
     /// still Session, for anything that must be put back on it first.
     public event Action? Leaving;
 
-    public float Get(string field, int index = 0) => _session?.Get(field, index) ?? 0;
+    /// With no session (nothing open, or the engine could not start) a field reads as DevelopState's
+    /// Reset value, so a control shows its default, not a zero its range may not hold ("0 K") (#395).
+    public float Get(string field, int index = 0) => _session?.Get(field, index) ?? Reset(field, index);
+
+    static readonly Dictionary<string, System.Text.Json.Nodes.JsonNode?> Resets =
+        DevelopJson.Defaults().ToDictionary(p => Session.Snake(p.Key), p => p.Value);
+
+    static float Reset(string field, int index) => Resets.GetValueOrDefault(field) switch {
+        System.Text.Json.Nodes.JsonArray a => index < a.Count ? DevelopJson.Float(a[index]) ?? 0 : 0,
+        var v => DevelopJson.Float(v) ?? 0,
+    };
 
     /// Writes one field and renders: the preview graph while a drag is in
     /// progress, the full graph otherwise.
@@ -244,7 +269,11 @@ public sealed class EngineModel : INotifyPropertyChanged {
     public bool Apply(Action<Session> write, bool reread = false) {
         if (_session == null) return false;
         try {
-            write(_session);
+            try {
+                write(_session);
+            } catch (InvalidOperationException e) when (e.Message.Contains(OutOfGpuMemory) && _source.Shed()) {
+                write(_session);   // the decoded neighbours are a convenience: once more without them, as Render
+            }
         } catch (Exception e) when (e is NotBuiltException or ArgumentException or InvalidOperationException) {
             Say(e.Message);
             return false;
@@ -280,7 +309,9 @@ public sealed class EngineModel : INotifyPropertyChanged {
         var sw = Stopwatch.StartNew();
         // Past fit, only what is on screen, at the screen's resolution, drag or
         // rest (#22); the whole graph when the engine says this edit needs it.
+        // At rest, with a margin round the view; a drag's ticks, the view alone, as fast as it can be.
         var view = ZoomedPastFit ? View : null;
+        if (view is { } seen && !Interacting) view = ViewRegion.Around(seen);
         var graph = view is { } v ? s.RenderRegion(v.Uv, v.Pixels, Interacting) : Graph.None;
         if (graph == Graph.Region && !Interacting) {
             // The small whole-frame pass: what the histogram reads while the
@@ -288,6 +319,9 @@ public sealed class EngineModel : INotifyPropertyChanged {
             if (s.Render(preview: true) == Graph.Preview) s.Read(Graph.Preview);
         }
         if (graph == Graph.None) graph = s.Render(preview);
+        // Out of GPU memory: the decoded neighbours are a convenience, the photo on
+        // screen is not. Once more without them (#392).
+        if (graph == Graph.None && s.LastError.Contains(OutOfGpuMemory) && _source.Shed()) graph = s.Render(preview);
         double render = sw.Elapsed.TotalMilliseconds;
         sw.Restart();
         var size = s.Size(graph);
@@ -295,6 +329,7 @@ public sealed class EngineModel : INotifyPropertyChanged {
             SetTiming("render failed: " + s.LastError);
             return (render, 0);
         }
+        _region = graph == Graph.Region ? view : null;
         Shown.ShowLive(s, graph, graph == Graph.Region ? view!.Value.Uv : null);
         double copy = sw.Elapsed.TotalMilliseconds;
         Last = (render, copy);
@@ -304,6 +339,9 @@ public sealed class EngineModel : INotifyPropertyChanged {
         Rendered?.Invoke();
         return (render, copy);
     }
+
+    /// What the engine's message says when the card had no room (Dawn.h's ErrorScope, Metal's allocation).
+    internal const string OutOfGpuMemory = "out of GPU memory";
 
     internal void SetTiming(string text) { Timing = text; Changed(nameof(Timing)); }
 
