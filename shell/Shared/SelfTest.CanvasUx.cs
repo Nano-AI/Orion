@@ -154,9 +154,12 @@ static partial class SelfTest {
         window.UpdateLayout();
         Frames(() => !vp.Live, 1);   // the pan above rests first (#401 holds the view until it does): CI's Macs were still in it
         int swiped = CanvasPanel.Swiped;
+        double zoom0 = vp.Zoom;
+        var center0 = vp.Center;
         for (int i = 0; i < 6; i++) window.MouseWheel(At(window, canvas, p), new Vector(-0.6, 0.05), RawInputModifiers.None);   // 180 points, one gesture
-        Check(CanvasPanel.Swiped == swiped + 1 && vp.IsFit && !vp.Live,
-              $"at fit a sideways trackpad swipe steps one photo, once a gesture, and leaves the view alone ({CanvasPanel.Swiped - swiped} steps, fit {vp.IsFit}, live {vp.Live})");
+        // "Alone" is no zoom and no pan: the next photo may start its own fit motion (CI's photos differ in size), so Live is not the test.
+        Check(CanvasPanel.Swiped == swiped + 1 && vp.IsFit && vp.Zoom == zoom0 && vp.Center == center0,
+              $"at fit a sideways trackpad swipe steps one photo, once a gesture, and leaves the view alone ({CanvasPanel.Swiped - swiped} steps, fit {vp.IsFit}, zoom {zoom0:0.###} → {vp.Zoom:0.###}, centre {center0} → {vp.Center})");
         Thread.Sleep(350);   // a pause is a new gesture where there is no AppKit phase: swipe back, to the photo the checks below expect
         for (int i = 0; i < 6; i++) window.MouseWheel(At(window, canvas, p), new Vector(0.6, 0.05), RawInputModifiers.None);
         Check(CanvasPanel.Swiped == swiped + 2, $"after a pause the next swipe is a new gesture and steps again ({CanvasPanel.Swiped - swiped} steps)");
@@ -270,6 +273,7 @@ static partial class SelfTest {
         Commands.Run("compare");
         double on = sw.Elapsed.TotalMilliseconds;
         Frames(() => CompareState.Original?.PixelSize.Width >= CanvasNative.ImageSize.Width, 60);   // the sharp one, from its worker
+        var sharp = CompareState.Original;
         Commands.Run("compare");
         // From a settled heap: the sharp original's worker has just allocated and
         // closed an engine, and a gen-1 collection falling due inside the toggle
@@ -279,7 +283,9 @@ static partial class SelfTest {
         sw.Restart();
         Commands.Run("compare");
         double again = sw.Elapsed.TotalMilliseconds;
-        Check(on < 60 && again < 5 && CompareState.Showing && CompareState.Original!.PixelSize.Width == CanvasNative.ImageSize.Width,
+        // "Kept" is the same picture back, not a wall-clock bound: CI's shared Macs took 7 ms under a 5 ms one.
+        Check(on < 60 && again < 60 && ReferenceEquals(CompareState.Original, sharp) && CompareState.Showing &&
+              CompareState.Original!.PixelSize.Width == CanvasNative.ImageSize.Width,
               $"compare on takes {on:0.0} ms, {again:0.0} ms the second time: the original is made off the UI thread, once per photo, kept");
 
         // A divider drag: 1:1 from where it was taken, no engine render, no canvas-wide change.
