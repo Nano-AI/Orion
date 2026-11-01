@@ -35,12 +35,26 @@ sealed partial class App {
             if (Run.Screenshot != null) {
                 Pump(() => Library.StackSuggestion.Scanned.IsCompleted, 10);   // the folder's stack line, posted when its scan lands
                 Dispatcher.UIThread.RunJobs();                                 // and shown
-                // The Stack sheet posed with ORION_STACK_AVAILABLE (bytes free): press Stack, so the still is its memory warning.
-                if (Target is Border { Child: Sheets.StackSheet sheet } &&
-                    ulong.TryParse(Environment.GetEnvironmentVariable("ORION_STACK_AVAILABLE"), out ulong free)) {
-                    Sheets.Stack.AvailableOverride = free;
-                    var press = sheet.Press();
-                    Pump(() => press.IsCompleted, 30);
+                if (Target is Border { Child: Sheets.StackSheet stack }) {
+                    // ORION_STACK_MODE (noise, stars, landscape) poses the Stack sheet in that mode; then every frame's
+                    // preview is read, so the still shows the strip filled.
+                    if (Enum.TryParse(Environment.GetEnvironmentVariable("ORION_STACK_MODE"), ignoreCase: true, out Sheets.Stack.Mode mode))
+                        stack.Mode = mode;
+                    Pump(() => stack.PreviewsRead && (stack.Mode != Sheets.Stack.Mode.Landscape || stack.PreviewShown is Sheets.StackSplit), 30);
+                    window.UpdateLayout();
+                    Dispatcher.UIThread.RunJobs();
+                    // With ORION_STACK_AVAILABLE (bytes free): press Stack, so the still is its memory warning.
+                    if (ulong.TryParse(Environment.GetEnvironmentVariable("ORION_STACK_AVAILABLE"), out ulong free)) {
+                        Sheets.Stack.AvailableOverride = free;
+                        var press = stack.Press();
+                        Pump(() => press.IsCompleted, 30);
+                    }
+                    // The headless clock runs only when ticked: tick it past the alert's arrival, so the still shows it arrived.
+                    for (int i = 0; i < 30; i++) {
+                        Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                        Dispatcher.UIThread.RunJobs();
+                        Thread.Sleep(16);
+                    }
                     window.UpdateLayout();
                     Dispatcher.UIThread.RunJobs();
                 }
@@ -105,6 +119,10 @@ sealed partial class App {
             Region.Filmstrip => (1440, Layout.Filmstrip),
             _ => (1100, 800),
         };
+        // A sheet that resizes (the Stack sheet) fills its frame: ORION_SHEET_SIZE=WxH poses it at that size.
+        if (entry.Region == Region.Sheet && Environment.GetEnvironmentVariable("ORION_SHEET_SIZE")?.Split('x') is [var w, var h]
+            && double.TryParse(w, out double width) && double.TryParse(h, out double height))
+            (frame.Width, frame.Height) = (width, height);
         if (entry.Region == Region.Tools) frame.Padding = new Thickness(Space.Pad, 0, Space.Pad, Space.Pad);
         window.Content = new ScrollViewer { Content = frame };
         Target = frame;

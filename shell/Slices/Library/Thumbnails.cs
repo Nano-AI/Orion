@@ -149,6 +149,9 @@ static class Thumbnails {
         return Load(path, Widths[(int)ThumbnailSize.Large], ref buffer);
     }
 
+    /// Preview on the thread pool: the Stack sheet's frame strip, so nineteen reads never hold up the UI thread.
+    public static Task<Bitmap?> LoadAsync(string path) => Task.Run(() => Preview(path));
+
     /// The preview, decoded `width` wide and turned upright, through `buffer`,
     /// which grows for a larger one.
     static unsafe Bitmap? Load(string path, int width, ref byte[] buffer) {

@@ -10,7 +10,7 @@ namespace OrionShell.Sheets;
 /// the software cannot make: which frame's framing wins.
 [Panel("sheet-hdr-merge", Region.Sheet)]
 public sealed class HdrMergePanel : Border {
-    internal sealed record Candidate(string Path, string Camera, float Iso, float Shutter, float Aperture);
+    internal sealed record Candidate(string Path, string Camera, float Iso, float Shutter, float Aperture, DateTime? Captured = null);
 
     readonly List<Candidate> _candidates;
     readonly StackPanel _rows = new() { Spacing = Space.Pad };
@@ -32,7 +32,11 @@ public sealed class HdrMergePanel : Border {
         // for two or more from one camera (HdrMergeFlow.ineligibility), which is said in place of the rows.
         _candidates = Library.LibraryModel.Shared.Targets.Select(p => Read(p.Path)).ToList();
         _reference = DefaultReference(_candidates);
-        if (Ineligibility(_candidates) is { } why) _rows.Children.Add(SheetKit.Note(why, Palette.Warn));
+        if (Ineligibility(_candidates) is { } why) {
+            var alert = new SheetAlert();
+            alert.Show("These frames cannot merge", why);
+            _rows.Children.Add(alert);
+        }
         else Paint();
 
         Idle();
@@ -114,7 +118,7 @@ public sealed class HdrMergePanel : Border {
 
     internal static Candidate Read(string path) =>
         Chrome.CaptureInfo.ReadFile(path) is { } info
-            ? new(path, info.Camera, info.Iso, info.Shutter, info.Aperture)
+            ? new(path, info.Camera, info.Iso, info.Shutter, info.Aperture, info.Captured)
             : new(path, "", 0, 0, 0);
 
     /// HdrMergeFlow.ineligibility: why these frames cannot merge, or null.

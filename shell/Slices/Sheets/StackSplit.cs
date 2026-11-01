@@ -40,12 +40,13 @@ sealed class StackSplit : Control {
         _tint = new WriteableBitmap(new PixelSize(w, h), new Vector(96, 96), PixelFormat.Rgba8888, AlphaFormat.Premul);
         Tint();
         Cursor = new Cursor(StandardCursorType.Cross);
-        HorizontalAlignment = HorizontalAlignment.Left;   // a portrait frame keeps its measured width, not the row's
+        // Centred in the Stack sheet's preview, at the frame's own proportions (MeasureOverride).
+        HorizontalAlignment = HorizontalAlignment.Center;
+        VerticalAlignment = VerticalAlignment.Center;
     }
 
-    /// The split for `path`'s embedded preview, seeded; null when the raw carries none.
-    public static StackSplit? For(string path) {
-        if (Library.Thumbnails.Preview(path) is not { } picture) return null;
+    /// The split for `path`'s embedded preview, `picture` (the sheet's, already loaded), seeded.
+    public static StackSplit For(string path, Bitmap picture) {
         var (rgb, w, h) = Rgb(picture, LongEdge);
         return new StackSplit(path, picture, rgb, w, h);
     }
@@ -108,31 +109,27 @@ sealed class StackSplit : Control {
             }
     }
 
-    /// The painter, its brush (Add sky · Remove sky, size) and the detector's refusal, if any.
-    public Control Editor() {
+    /// The brush: Add sky · Remove sky, and its size. The painter itself is the sheet's preview.
+    public Control Tools() {
         var brush = new Segmented(["Add sky", "Remove sky"], 0);
         brush.Changed += i => Adding = i == 0;
-        var size = new Slider { Minimum = 0.01, Maximum = 0.2, Value = Radius, Foreground = Palette.Accent, MinHeight = 0, Width = 160,
+        var size = new Slider { Minimum = 0.01, Maximum = 0.2, Value = Radius, Foreground = Palette.Accent, MinHeight = 0,
                                 VerticalAlignment = VerticalAlignment.Center };
         size.ValueChanged += (_, e) => Radius = e.NewValue;
         ToolTip.SetTip(size, "Brush size");
         Avalonia.Automation.AutomationProperties.SetName(size, "Brush size");
-        var sized = new Avalonia.Controls.StackPanel {
-            Orientation = Orientation.Horizontal, Spacing = Space.Sm, HorizontalAlignment = HorizontalAlignment.Right,
-            Children = { new TextBlock { Text = "Size", FontSize = Faces.Mark, Foreground = Palette.Dim, VerticalAlignment = VerticalAlignment.Center }, size },
-        };
-        var tools = new DockPanel { Children = { brush, sized } };
-        DockPanel.SetDock(brush, Dock.Left);
-        var editor = new Avalonia.Controls.StackPanel { Spacing = Space.Sm, Children = { this, tools } };
-        if (NoSky != null) editor.Children.Add(SheetKit.Note("No horizon found — paint the sky.", Palette.Warn));
-        return editor;
+        var label = new TextBlock { Text = "Size", FontSize = Faces.Mark, Foreground = Palette.Dim, VerticalAlignment = VerticalAlignment.Center,
+                                    Margin = new Thickness(0, 0, Space.Md, 0) };
+        DockPanel.SetDock(label, Dock.Left);
+        return new Avalonia.Controls.StackPanel { Spacing = Space.Md, Children = { brush, new DockPanel { Children = { label, size } } } };
     }
 
-    /// The sheet's width, or less for a portrait frame: never taller than MaxTall.
+    /// As large as the room allows at the frame's proportions, as an Image with Stretch.Uniform would be.
     protected override Size MeasureOverride(Size available) {
-        const double MaxTall = 260;
-        double w = double.IsFinite(available.Width) ? available.Width : MatteWidth, h = w * MatteHeight / MatteWidth;
-        return h <= MaxTall ? new Size(w, h) : new Size(MaxTall * MatteWidth / MatteHeight, MaxTall);
+        double k = Math.Min(double.IsFinite(available.Width) ? available.Width / MatteWidth : double.PositiveInfinity,
+                            double.IsFinite(available.Height) ? available.Height / MatteHeight : double.PositiveInfinity);
+        if (!double.IsFinite(k)) k = 1;
+        return new Size(MatteWidth * k, MatteHeight * k);
     }
 
     public override void Render(DrawingContext context) {

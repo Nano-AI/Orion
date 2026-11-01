@@ -4,6 +4,8 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Animation;
+using Avalonia.Media.Transformation;
 
 namespace OrionShell.Sheets;
 
@@ -97,5 +99,64 @@ static class SheetKit {
         };
         box.SelectionChanged += (_, _) => { if (box.SelectedIndex >= 0) changed(box.SelectedIndex); };
         return box;
+    }
+}
+
+/// The sheets' one alert language: the warning triangle in `warn`, a headline, a line or two of detail and,
+/// when there is a choice to make, its buttons, on a raised plate. Not a dialog: it sits in the sheet where
+/// the trouble is. It arrives on Motion.Enter, ease-out, rising 4 px as it fades in (a fade alone under
+/// reduced motion), and goes at once: the next thing the sheet shows should not wait on it.
+sealed class SheetAlert : Border {
+    readonly TextBlock _headline = new() { FontSize = Faces.Body, FontWeight = FontWeight.SemiBold, Foreground = Palette.Text, TextWrapping = TextWrapping.Wrap };
+    // `label`, not `dim`: 5.9:1 on the raised plate where dim is 4.6.
+    readonly TextBlock _detail = new() { FontSize = Faces.Label, Foreground = Palette.Label, TextWrapping = TextWrapping.Wrap, LineHeight = 16 };
+
+    public SheetAlert(params Control[] buttons) {
+        Background = Palette.Raised;
+        BorderBrush = Palette.Line;
+        BorderThickness = new Thickness(1);
+        CornerRadius = new CornerRadius(Radius.Lg);
+        Padding = new Thickness(Space.Md, Space.Md, Space.Pad, Space.Md);
+        IsVisible = false;
+        var icon = Icons.Create("exclamationmark.triangle", IconSize.Md, Palette.Warn);
+        icon.VerticalAlignment = VerticalAlignment.Top;
+        icon.Margin = new Thickness(0, 0, Space.Md, 0);
+        var words = new StackPanel { Spacing = Space.Xs, Children = { _headline, _detail } };
+        if (buttons.Length > 0) {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Sm, HorizontalAlignment = HorizontalAlignment.Right,
+                                       Margin = new Thickness(0, Space.Sm, 0, 0) };
+            row.Children.AddRange(buttons);
+            words.Children.Add(row);
+        }
+        DockPanel.SetDock(icon, Dock.Left);
+        Child = new DockPanel { Children = { icon, words } };
+        Avalonia.Automation.AutomationProperties.SetLiveSetting(this, Avalonia.Automation.AutomationLiveSetting.Assertive);
+    }
+
+    public string Headline => _headline.Text ?? "";
+    public string Detail => _detail.Text ?? "";
+
+    /// Shown with these words; arriving only if it was not already showing (new words in place do not replay it).
+    public void Show(string headline, string? detail = null) {
+        _headline.Text = headline;
+        _detail.Text = detail ?? "";
+        _detail.IsVisible = !string.IsNullOrEmpty(detail);
+        Avalonia.Automation.AutomationProperties.SetName(this, detail == null ? headline : $"{headline}. {detail}");
+        if (IsVisible) return;
+        Transitions = null;
+        Opacity = 0;
+        RenderTransform = Motion.Reduced ? null : TransformOperations.Parse("translateY(4px)");
+        IsVisible = true;
+        Transitions = [
+            new DoubleTransition { Property = OpacityProperty, Duration = Motion.Enter, Easing = Motion.EaseOut },
+            new TransformOperationsTransition { Property = RenderTransformProperty, Duration = Motion.Enter, Easing = Motion.EaseOut },
+        ];
+        Opacity = 1;
+        if (!Motion.Reduced) RenderTransform = TransformOperations.Parse("translateY(0px)");
+    }
+
+    public void Hide() {
+        Transitions = null;
+        IsVisible = false;
     }
 }
