@@ -108,7 +108,7 @@ static class Thumbnails {
             while (Next() is (var photo, var size)) {
                 Bitmap? picture = null;
                 try {
-                    picture = Load(photo.Path, Widths[(int)size]);
+                    picture = Load(photo.Path, Widths[(int)size], ref _buffer);
                 } catch (Exception e) {
                     // One unreadable file is a raw with no preview, not the end of the strip.
                     Console.Error.WriteLine($"thumbnail {photo.Name}: {e.Message}");
@@ -142,16 +142,24 @@ static class Thumbnails {
         }
     }
 
-    /// The preview, decoded `width` wide and turned upright, on the reader thread.
-    static unsafe Bitmap? Load(string path, int width) {
+    /// One preview read now, on the caller's thread, at the large size (the Stack
+    /// sheet's split painter, #391): with its own buffer, so it never races the reader.
+    public static Bitmap? Preview(string path) {
+        var buffer = new byte[8 << 20];
+        return Load(path, Widths[(int)ThumbnailSize.Large], ref buffer);
+    }
+
+    /// The preview, decoded `width` wide and turned upright, through `buffer`,
+    /// which grows for a larger one.
+    static unsafe Bitmap? Load(string path, int width, ref byte[] buffer) {
         int size, turns;
-        fixed (byte* p = _buffer) size = Native.shim_thumbnail(path, p, _buffer.Length, out turns);
+        fixed (byte* p = buffer) size = Native.shim_thumbnail(path, p, buffer.Length, out turns);
         if (size < 0) {
-            _buffer = new byte[-size];
-            fixed (byte* p = _buffer) size = Native.shim_thumbnail(path, p, _buffer.Length, out turns);
+            buffer = new byte[-size];
+            fixed (byte* p = buffer) size = Native.shim_thumbnail(path, p, buffer.Length, out turns);
         }
         if (size <= 0) return null;
-        using var stream = new MemoryStream(_buffer, 0, size);
+        using var stream = new MemoryStream(buffer, 0, size);
         return Upright(Bitmap.DecodeToWidth(stream, width), turns);
     }
 
