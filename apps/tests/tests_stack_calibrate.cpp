@@ -15,6 +15,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <random>
 #include <utility>
 
@@ -266,6 +267,8 @@ void testStackCalibratedRaws() {
     if (!dir) { std::printf("    skipped: ORION_SAMPLES is not set\n"); return; }
     const std::string a = std::string(dir) + "/_PIC8095.ARW", b = std::string(dir) + "/_PIC8148.ARW",
                       c = std::string(dir) + "/_PIC8220.ARW";
+    for (const auto* need : {&a, &b, &c})
+        if (!std::filesystem::exists(*need)) { std::printf("    skipped: no %s\n", need->c_str()); return; }
     const std::string outs[3] = {"/tmp/orion-stack-raw0.dng", "/tmp/orion-stack-raw1.dng", "/tmp/orion-stack-raw2.dng"};
     for (const auto& o : outs) std::remove(o.c_str());
     OrionEngine* engine = nullptr;
