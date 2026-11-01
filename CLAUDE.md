@@ -1,6 +1,6 @@
 # Orion
 
-Fast, subscription-free desktop RAW photo editor. Ships on macOS as an Avalonia app; Windows and Linux build and test in CI (#376), not yet released. Modern minimal UI, capable of dramatic edits. Built by a solo developer. Source-available, never redistributed (#359).
+Fast, subscription-free desktop RAW photo editor. One Avalonia app for macOS, Windows and Linux, released as alpha pre-releases on GitHub (v0.6.0-alpha.1 was the first for all three); Windows and Linux have not yet run on real hardware. Modern minimal UI, capable of dramatic edits. Built by a solo developer. Source-available, never redistributed (#359).
 
 ## Read these first
 Everything lives in `planning/`. On a fresh session, read in this order:
@@ -21,7 +21,8 @@ Everything lives in `planning/`. On a fresh session, read in this order:
 **Work to do is tracked as [GitHub issues](https://github.com/Nano-AI/Orion/issues)**,
 not in the docs. Open: issue 24 Windows and Linux builds (packages build in CI;
 zero-copy present and a GPU Linux runner remain), issue 5 lens correction (DNG
-opcodes shipped; Adobe profiles wait on the developer), issue 25 visibility.
+opcodes shipped; Adobe profiles wait on the developer), issue 25 visibility,
+issue 4 features (camera profiles; its JPEG XL half shipped).
 Closed: issue 22 region of interest (#371), issue 23 parity (#380), issue 6 JPEG
 XL (#363). `STATUS.md` points at them. Write them as "issue N": a bare `#N` is a decision.
 One parent issue per piece of work, with a checklist; no sub-issue per item.
@@ -73,22 +74,26 @@ steps.
   under an open licence is a one-way door: it happened once by mistake (#358).
 
 ## Stack
-C++20 engine · Metal GPU compute on macOS, Dawn on Windows (D3D12) and Linux (Vulkan) (#317, #376) · Slang shaders · LibRaw decode · OpenColorIO + lcms2 color · XMP sidecars as source of truth · **Avalonia 12 / .NET 10 app** (`shell/`, #315, #316).
+C++20 engine · Metal GPU compute on macOS, Dawn on Windows (D3D12) and Linux (Vulkan) (#317, #376) · Slang shaders · LibRaw decode · OpenColorIO + lcms2 color · XMP sidecars as source of truth · **Avalonia 12 / .NET 10 app** (`shell/`, #315, #316) · Velopack installers and in-app updates from GitHub Releases (#389).
 
-The app is `shell/`: it ships as `Orion.app` through `tools/package-app.sh` and
-is meant for all three systems (issue 24). The SwiftUI app it replaced was
+The app is `shell/`, one codebase for all three systems (issue 24). It is packaged
+by `tools/package-app.sh` (a DMG), `tools/package-windows.sh` (Setup.exe and a
+portable zip) and `tools/package-linux.sh` (an AppImage), each through Velopack (#389),
+which also writes the update feed a release must carry. The SwiftUI app it replaced was
 retired by decision #380; its history is in git, and its settings carry over on
 first launch (`shell/Shared/SettingsImport.cs`). There is no SQLite index any
 more — that was the Swift app's.
 
-**UI rules:** the engine is reached only through two hand-written C surfaces: the facade `engine/include/orion/orion.h`, and the shim over it, `shell/native/shim.h` / `shim.cpp` (`shim_*`, what the shell's P/Invoke calls, built as `liborion_shim`). Both: POD only, no templates, no move-only types, and **no C++ exception may escape either (it would terminate the process)**: the facade's entry points run in `guard()` (`engine/src/CApiGuard.h`), the shim's allocating ones in `shim_guard()`. On macOS the canvas gets the engine's picture with no CPU copy — an IOSurface on `MTLSharedEvent`s into Avalonia's Metal renderer (#357) — and falls back to a CPU copy headless; Windows and Linux always copy through the CPU for now (#376). Every command is registered with a name (`--commands`), so it can be driven without the UI. Dear ImGui is for internal debug tooling only, never product UI. macOS 14+ floor.
+**UI rules:** the engine is reached only through two hand-written C surfaces: the facade `engine/include/orion/orion.h`, and the shim over it, `shell/native/shim.h` / `shim.cpp` (`shim_*`, what the shell's P/Invoke calls, built as `liborion_shim`). Both: POD only, no templates, no move-only types, and **no C++ exception may escape either (it would terminate the process)**: the facade's entry points run in `guard()` (`engine/src/CApiGuard.h`), the shim's allocating ones in `shim_guard()`. On macOS the canvas gets the engine's picture with no CPU copy — an IOSurface on `MTLSharedEvent`s into Avalonia's Metal renderer (#357) — and falls back to a CPU copy headless; Windows and Linux always copy through the CPU for now (#376). Every command is registered with a name (`--commands`), so it can be driven without the UI. macOS 14+ floor.
 
 ## Tests
 
 Build first: `cmake --build build`, then `shell/native/build.sh` and
 `dotnet build -c Release shell` (`shell/README.md`). The gates that render take
 their photographs from `ORION_SAMPLES` (a folder of RAWs; default `samples/`).
-**None of them opens a window.**
+**None of them opens a window.** A fresh worktree has neither `build/` nor
+`mcp/node_modules`: build them, or link them from a checkout that has them
+(`check-agent` fails with "Server closed stdout" without the second).
 
 ```
 ./build/apps/tests/orion-tests                 engine maths + real GPU renders
@@ -97,7 +102,7 @@ shell/bin-native/present_test RAW              zero-copy surface vs CPU readback
 ./tools/check-decisions.py         the decision ledger indexes the tree
 ./tools/check-gestures.py          every gesture still arms the preview graph
 ./tools/check-screens.py           every tool tab renders headless, distinct and stable
-./tools/check-modes.py             --batch-export and --hdr-merge still run
+./tools/check-modes.py             --batch-export, --hdr-merge and --stack still run
 ./tools/check-wiring.py            mechanisms the product must actually call
 ./tools/check-agent.py             the MCP server drives a real render and a real approve
 ./tools/check-site.py              the landing page: links resolve, register unchanged, no dead GitHub URLs, no personal data
@@ -113,7 +118,7 @@ stated per-system skip list; the Linux runner has no GPU, so its GPU checks skip
 `_PIC8220` … found in `ORION_SAMPLES`; every step passes on each of those that is here
 (#380 changed `high_iso_recipe` to measure grain on the flattest patch, not the centre).
 
-Run all of them before claiming anything works. The GPU tests matter most: pure
+Run all of them before claiming a code change works (docs need none of them; see the working agreement). The GPU tests matter most: pure
 maths tests pass happily on code that renders garbage, because they never touch
 a texture. Two shipped bugs — a torn frame and a purple cast — were invisible to
 inspection and obvious to a five-line assertion.
@@ -141,7 +146,7 @@ as another, or renders differently twice. It cannot say a tab draws the
 the Swift app's asserting scenes were written against named mutations (#125)
 and then invoked by nobody (#121, #177).
 
-`check-modes.py` is the same story for `--batch-export` and `--hdr-merge`: each
+`check-modes.py` is the same story for `--batch-export`, `--hdr-merge` and `--stack` (#391): each
 asserts in its exit code, and neither was run by anything, so deleting either
 dispatch in `Program.cs` was green everywhere (#121, #179). ⚠ A deleted
 dispatch does not make Orion exit; it makes Orion **open a window**, so both
@@ -165,4 +170,14 @@ it, so triage by hand before believing it.
 - Benchmark every milestone. Latency regressions block new features.
 - Planning docs stay concise. Dense tables over prose.
 - **Nothing pops up.** The developer tiles windows with AeroSpace: tests run headless (`--selftest`, `--screenshot`, `--command`, headless Chrome for `web/`), never `open` or a visible browser tab. `--proof` opens a window; say so and ask first. Every gate in the Tests list is headless.
+- **Commits and pull requests** (#392, #393). One change is one short, concise commit on `main`, never one per file or per edit. Commit as often as the work needs locally (superpowers' review loop diffs each task from its own base), then squash before pushing: `git reset --soft $(git merge-base origin/main HEAD)` and one `git commit`. Never rewrite `main` or a branch someone else has pulled; force-push only your own unmerged branch, with `--force-with-lease`.
+
+  | Change | Pull request | Before it lands |
+  |---|---|---|
+  | **Docs only**: Markdown, `planning/`, `research/`, `feedback/`, `docs/` | No. Batch the session's doc edits into one commit and push it to `main`. | `check-decisions.py` if `DECISIONS.md` or a `#N` citation changed (a grep, seconds). No rebuild, no gates; CI skips these paths. |
+  | **Code**: everything else (`engine/`, `shell/`, `mcp/`, `tools/`, CMake, `.github/`) | Yes, from a branch, merged with `gh pr merge --squash` once CI is green. | Rebuild (engine, shim, shell) and run every gate in the Tests list through the guard. |
+  | **Site**: `web/` | No; `main` deploys it (`pages.yml`). | `check-site.py` and a headless look at 390 and 1440 px. No rebuild. |
+
+  A code change's docs ride in its pull request; a doc fix pushed onto an open pull request skips the build (`build.yml`'s
+  `changes` job). GitHub enforces the rest: squash merges only, branches deleted on merge, and `main` refuses force-pushes.
 - **Guard heavy runs.** A bench, gate or build that eats memory has crashed the laptop: one heavy run at a time, ≥30% memory free, load under ~8, `nice`d.
