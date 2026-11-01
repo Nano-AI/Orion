@@ -31,6 +31,9 @@ static partial class SelfTest {
         Dispatcher.UIThread.RunJobs();
         Check(window.ToolsHost.IsEffectivelyEnabled && window.ToolsHost.Opacity == 1, "with a photo open the tools are unlocked (MainWindow.LockTools)");
         float start = engine.Get("exposure_ev");
+        // Every spring here is stepped by the checks themselves, never by the
+        // real frames input through the window lets run (Spring.Manual).
+        Spring.Manual = true;
         try {
             SpringChecks(window);
             var slider = Slider(window, "Exposure");
@@ -42,9 +45,11 @@ static partial class SelfTest {
             ReducedChecks(window, engine, track);
             ReadoutChecks(window, engine, slider);
             ControlChecks(window, engine, slider, track);
+            Spring.Manual = false;   // what a tick costs includes the real frames
             engine.Set("exposure_ev", start);
             DragCost("in the window", window, slider, track);
         } finally {
+            Spring.Manual = false;
             Motion.Forced = false;   // the selftest's baseline (SelfTest.Run), not the machine's
             engine.Set("exposure_ev", start);
             window.Close();

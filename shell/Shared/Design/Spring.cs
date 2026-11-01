@@ -28,6 +28,14 @@ public sealed class Spring(Visual owner, double response, double at = 0) {
     public bool Moving => Value != Target || Velocity != 0 || Fade > 0;
     public event Action? Moved;
 
+    /// The selftest's clock: while set, no spring steps itself on real frames,
+    /// only on `Step` (AnalogTrack.Advance). Input raised through a window pumps
+    /// the dispatcher, and a synchronous render inside that input (a drag's end
+    /// renders the full graph) lets the real frame after it step by the render's
+    /// whole duration: the thumb's spring-back landed before the check could
+    /// see it move, "(0 ms)", whenever that render was slow enough.
+    internal static bool Manual { get; set; }
+
     /// Heads for `target` from the on-screen value, at the speed it has or at
     /// `velocity` when a gesture hands one over.
     public void To(double target, double? velocity = null) {
@@ -60,6 +68,7 @@ public sealed class Spring(Visual owner, double response, double at = 0) {
     void Run() {
         if (_running || !Moving) return;
         if (TopLevel.GetTopLevel(owner) is not { } top) { Snap(Target); return; }   // not on screen: nothing to show
+        if (Manual) return;   // a test steps it
         _running = true;
         top.RequestAnimationFrame(Frame);
     }

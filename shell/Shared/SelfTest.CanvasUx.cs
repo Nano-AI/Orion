@@ -240,6 +240,11 @@ static partial class SelfTest {
         double on = sw.Elapsed.TotalMilliseconds;
         Frames(() => CompareState.Original?.PixelSize.Width >= CanvasNative.ImageSize.Width, 60);   // the sharp one, from its worker
         Commands.Run("compare");
+        // From a settled heap: the sharp original's worker has just allocated and
+        // closed an engine, and a gen-1 collection falling due inside the toggle
+        // added ~8 ms on two runs in three, which is the collector, not the toggle.
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
         sw.Restart();
         Commands.Run("compare");
         double again = sw.Elapsed.TotalMilliseconds;
