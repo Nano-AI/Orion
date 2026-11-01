@@ -183,9 +183,9 @@ it, so triage by hand before believing it.
   | Change | Pull request | Before it lands |
   |---|---|---|
   | **Docs only**: Markdown, `planning/`, `research/`, `feedback/`, `docs/` | No. Batch the session's doc edits into one commit and push it to `main`. | `check-decisions.py` if `DECISIONS.md` or a `#N` citation changed (a grep, seconds). No rebuild, no gates; CI skips these paths. |
-  | **Code**: everything else (`engine/`, `shell/`, `mcp/`, `tools/`, CMake, `.github/`) | Yes, from a branch, merged with `gh pr merge --squash` once CI is green. | Rebuild (engine, shim, shell) and run every gate in the Tests list through the guard. |
+  | **Code**: everything else (`engine/`, `shell/`, `mcp/`, `tools/`, CMake, `.github/`) | Yes, from a branch, opened with `tools/open-pr.sh BODY_FILE --base … --title …` and merged once CI is green. | The script rebuilds (engine, shim, shell), runs every gate in the Tests list under `ORION_GUARD`, and opens the PR only if all pass, with their lines in the body. Never `gh pr create` a code PR by hand: #30 went up at 8 selftest failures that way. |
   | **Site**: `web/` | No; `main` deploys it (`pages.yml`). | `check-site.py` and a headless look at 390 and 1440 px. No rebuild. |
 
   A code change's docs ride in its pull request; a doc fix pushed onto an open pull request skips the build (`build.yml`'s
-  `changes` job). GitHub enforces the rest: squash merges only, branches deleted on merge, and `main` refuses force-pushes.
+  `changes` job). GitHub allows merge commits and squash merges (not rebase), deletes branches on merge, and `main` refuses force-pushes. Squash is the default for a one-change PR, not a rule.
 - **Guard heavy runs.** A bench, gate or build that eats memory has crashed the laptop: one heavy run at a time, ≥30% memory free, load under ~8, `nice`d.
