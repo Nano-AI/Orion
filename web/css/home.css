@@ -9,7 +9,7 @@
    on it. The same rhythm here, scaled by the viewport below 1440. */
 .hero { position: relative; padding-top: calc(var(--nav-h) + clamp(28px, 3vw, 44px)); text-align: center; }
 .hero__copy { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; }
-.hero__mark { width: clamp(52px, 5.3vw, 76px); height: auto; margin-bottom: clamp(40px, 5vw, 72px); filter: drop-shadow(0 0 18px color-mix(in srgb, var(--accent) 70%, transparent)); }
+.hero__mark { width: clamp(64px, 6.7vw, 96px); height: auto; margin-bottom: clamp(32px, 4vw, 56px); filter: drop-shadow(0 0 18px rgba(242, 244, 251, 0.16)); }   /* the brand's glow; never the accent in the mark (#407) */
 /* the sky: two layers of stars (site.js places them), twinkling out of phase; faded out before the plate */
 .sky { position: absolute; inset: 0 0 auto 0; height: 720px; overflow: hidden; pointer-events: none; -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent); mask-image: linear-gradient(to bottom, #000 60%, transparent); }
 .sky i { position: absolute; left: calc(50% - 720px); top: 0; width: 1px; height: 1px; border-radius: 50%; background: transparent; color: #fff; animation: twinkle 5s ease-in-out infinite; }
