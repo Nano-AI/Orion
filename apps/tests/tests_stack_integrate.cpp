@@ -18,6 +18,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -310,4 +311,66 @@ void testStackSkyGroundBlend() {
     std::printf("    ground edge contrast %.3f of a single frame, star peak %.3f\n", edge, peak);
     CHECK(edge >= 0.9);
     CHECK(peak >= 0.7);
+}
+
+void testStackBandsEqualWhole() {
+    section("stack integrate: row bands give the whole stack's numbers, reading only the rows they name");
+    // Sky frames turned and tilted (a perspective row), ground frames shifted, a feathered matte, weights
+    // on: every warp the band arithmetic must bound. Each band's frames hold only rowsRead's rows; every
+    // other row is NaN, so a tap outside them shows in the result (#410).
+    constexpr int kN = 6;
+    std::vector<float> matte(std::size_t(kW) * kH, 0.0f);
+    std::fill(matte.begin(), matte.begin() + std::ptrdiff_t(kW * (kH / 2)), 1.0f);
+    for (std::uint32_t y = kH / 2; y < kH / 2 + 10; ++y)   // the seam: both warps at once
+        for (std::uint32_t x = 0; x < kW; ++x) matte[std::size_t(y) * kW + x] = float(kH / 2 + 10 - y) / 10.0f;
+    Stack s;
+    for (int i = 0; i < kN; ++i) {
+        persp::Matrix3 sky = stackfix::rotation(1.5f * float(i), kW / 2.0f, kH / 2.0f, 2.0f * float(i), -1.5f * float(i));
+        sky.m[7] = 2e-5f * float(i);   // w = 1 + 2e-5·i·y: a tilt
+        const auto f = stackfix::starField(9, 80, kW, kH, sky, 0.004f, 0.05f, 900u + unsigned(i));
+        s.add(f.rgb, sky, shift(float(i % 3), float(i % 2)));
+    }
+    Options o;
+    o.weightByNoise = true;
+    const auto whole = integrate(s.frames, 0, matte.data(), o);
+
+    const auto ref = orion::stack::measureReference(s.frames[0], matte.data());
+    std::vector<orion::stack::Norm> norms;
+    for (const Frame& f : s.frames) norms.push_back(orion::stack::measureFrame(f, ref, true));
+    orion::stack::capWeights(norms);
+    std::vector<float> banded(whole.rgb.size(), -1.0f);
+    const std::uint16_t nan = orion::util::floatToHalf(std::numeric_limits<float>::quiet_NaN());
+    std::vector<std::vector<std::uint16_t>> held(kN, std::vector<std::uint16_t>(std::size_t(kW) * kH * 3));
+    constexpr std::uint32_t kBand = 7;
+    std::size_t rowsHeld = 0, bands = 0;
+    for (std::uint32_t y0 = 0; y0 < kH; y0 += kBand, ++bands) {
+        const std::uint32_t y1 = std::min(kH, y0 + kBand);
+        std::vector<Frame> band = s.frames;
+        for (std::size_t i = 0; i < kN; ++i) {
+            auto r = orion::stack::rowsRead(band[i].refToSource, kW, kH, y0, y1);
+            const auto g = orion::stack::rowsRead(band[i].groundToSource, kW, kH, y0, y1);
+            r = {std::min(r.first, g.first), std::max(r.last, g.last)};
+            std::fill(held[i].begin(), held[i].end(), nan);
+            const auto row = [&](std::uint32_t y) { return std::ptrdiff_t(std::size_t(y) * kW * 3); };
+            std::copy(s.planes[i].begin() + row(r.first), s.planes[i].begin() + row(r.last), held[i].begin() + row(r.first));
+            band[i].firstRow = r.first;
+            band[i].rgb = held[i].data() + row(r.first);
+            rowsHeld += r.last - r.first;
+        }
+        orion::stack::integrateRows(band, 0, matte.data(), ref, norms, whole.used, y0, y1,
+                                    banded.data() + std::size_t(y0) * kW * 3);
+    }
+    std::size_t differ = 0;
+    for (std::size_t j = 0; j < banded.size(); ++j) differ += !(banded[j] == whole.rgb[j]);
+    const double perBand = double(rowsHeld) / double(kN * bands);
+    std::printf("    %zu of %zu values differ; a frame held %.1f rows a band of %u on average\n", differ, banded.size(),
+                perBand, kBand);
+    report(differ == 0, "banded integration equals whole integration, value for value");
+    report(perBand < kH / 4.0, "and a band reads a small part of each frame, not all of it");
+    const auto none = orion::stack::rowsRead(persp::identity(), kW, kH, 5, 5);
+    persp::Matrix3 fold = persp::identity();
+    fold.m[7] = -0.01f;   // w = 1 - 0.01·y: zero at row 100
+    const auto all = orion::stack::rowsRead(fold, kW, kH, 120, 127);
+    report(none.first == none.last && all.first == 0 && all.last == kH,
+           "an empty band reads nothing; a band where w is not positive reads the whole frame");
 }

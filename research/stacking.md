@@ -26,6 +26,8 @@ Every constant that is ours is in [`UNSOURCED.md`](UNSOURCED.md) §32, not here.
 | **[S87]** | Stetson — *DAOPHOT: A computer program for crowded-field stellar photometry*, PASP 99, 191, 1987 | ADS |
 | **[GN03]** | Grossberg & Nayar — *Determining the Camera Response from Images: What Is Knowable?*, IEEE TPAMI 25(11), 2003 | [PDF](https://www1.cs.columbia.edu/CAVE/publications/pdfs/Grossberg_PAMI03.pdf) |
 | **[SW13]** | Shen & Wang — *Sky Region Detection in a Single Image for Autonomous Ground Robot Navigation*, IJARS 10(10):362, 2013 | via [`sky-detection.md`](sky-detection.md) |
+| **[DSS]** | DeepSkyStacker — *User's Manual* (the stacking settings' folder "into which are created the temporary files needed by the stacking process"; intermediate files are uncompressed, "be sure to have enough free hard disk space") | [userguide.htm](https://raw.githubusercontent.com/deepskystacker/DSS/master/Help/english/userguide.htm) |
+| **[SIRIL-P]** | Siril documentation — *Preferences*, Performances: Siril "will limit itself to a ratio of the amount of free physical memory and will decrease the size of work tasks if needed" | [docs](https://siril.readthedocs.io/en/stable/preferences/preferences_gui.html) |
 | **[LR]** | Adobe — *Group photos into stacks* (Auto-Stack by Capture Time) | [Adobe Help](https://helpx.adobe.com/lightroom-classic/desktop/organize-photos-in-lightroom-classic/grouping-photos-stacks.html) |
 
 **Which one supports what:**
@@ -49,6 +51,8 @@ Every constant that is ours is in [`UNSOURCED.md`](UNSOURCED.md) §32, not here.
 | Star detection: background estimate, threshold above it, connected pixels, centroid | [BA96] |
 | Smooth before thresholding so single noisy pixels do not become stars | [S87] |
 | Group contiguous frames whose capture-time gaps are under a threshold | [LR] |
+| Spill the frames to temporary files on disk, and check the disk can hold them, rather than hold every frame in memory | [DSS] |
+| Size the work to the memory free, splitting it smaller when it would not fit | [SIRIL-P]; Orion's split is bands of rows (§9) |
 | Landscape split: a classical sky detector as the seed, the user paints the rest | [SW13] via `sky-detection.md` |
 
 ---
@@ -141,6 +145,10 @@ Astro tag: shutter ≥ 5 s and ISO ≥ 800 (and, when checked, a dark thumbnail)
 
 ---
 
+## 9. Memory: frames on disk, integration in bands (#410)
+
+Every frame's normalization reads the whole frame (the location grid, the star-core boxes, the noise), but each frame's own statistic only needs that frame and the reference's: so each registered frame is measured while it is in memory, its half planes are appended to one temporary file [DSS], and the combine, which needs every frame but only at one pixel, runs over bands of rows read back from that file, each frame read for just the source rows its warp reaches for the band [SIRIL-P]. The numbers are the same as integrating whole frames (`tests_stack_integrate`: banded equals whole, value for value, with turned, tilted and shifted frames and a feathered matte). The band rows a warp reaches come from the band's four corners: w is affine, so positive at the corners means positive over the band, whose image is then the convex hull of the corners' images (projective maps keep lines and convexity where w > 0 [HZ04]). The band size, its floor and the row margin are ours (UNSOURCED §32).
+
 ## Measured (2026-10-30)
 
 Synthetic data unless said; `orion-tests` 1567 checks, 0 failures. These are checks of the implementation against the published methods above, not a claim about real frames: the thresholds in UNSOURCED §32 are untuned on real star, flat and dark frames.
@@ -157,10 +165,11 @@ Synthetic data unless said; `orion-tests` 1567 checks, 0 failures. These are che
 | Satellite streak (rejection) | 0 of 480 pixels outside 4σ |
 | Fixed hot pixel (rejection) | 0 of 72 landings outside 4σ |
 | Calibration | tripod hot pixel 0.6807 → 0.0679 with darks; vignette corner/centre 0.846 → 0.995 with flats |
-| 24 MP (6000x4000), star mode, CPU on 10 cores, low priority | 10 frames 15.6 s; 20 frames 29.8 s; peak RSS 3.9 GB (half-float frames) |
+| 24 MP (6000x4000), star mode, CPU on 10 cores, low priority | 10 frames 15.6 s; 20 frames 29.8 s; peak RSS 3.9 GB (half-float frames). Streamed (#410, 2026-10-31): 10 frames 8.1 s, 20 frames 14.4 s, peak footprint 1.13 GB |
+| Real 42 MP night sequence, streamed (#410, 2026-10-31) | 19 frames, stars mode: 31.1 s, the stack's own peak 2.86 GB (noise mode 42.9 s, 2.33 GB); one frame (DSC08602) skipped in stars mode: the camera moved during it, every star is a streak |
 | Real raw (not synthetic) | `Orion --stack --mode noise` on three copies of a 24 MP Sony ARW (ILCE-7M3): 2.44 s, 145.7 MB DNG; `check-modes` runs it |
 
-Open: tune the sharpness 0.5, flat 0.1 and dark 0.15 thresholds on real frames; frames are held in memory as half floats; the stack's estimated peak memory (from the first frame's metadata, no decode) is checked against the memory available now: over it, the Stack sheet warns inline ("These 60 frames need about 8.6 GB of memory and about 5.1 GB is free. Close other apps to free memory, or proceed anyway.") with Proceed anyway and Cancel, re-checked on every press; the engine refuses with ORION_ERR_MEMORY unless forced (`force`, `--stack --force`) (UNSOURCED §32 has the estimate). Band streaming, frames spilled to disk and integrated in row bands as Siril and DeepSkyStacker do, is the follow-up that removes the limit.
+Open: tune the sharpness 0.5, flat 0.1 and dark 0.15 thresholds on real frames; one frame is held in memory at a time and the rest wait on disk (§9); the stack's estimated peak memory (from the first frame's metadata, no decode) is checked against the memory available now: over it, the Stack sheet warns inline ("These 60 frames need about 8.6 GB of memory and about 5.1 GB is free. Close other apps to free memory, or proceed anyway.") with Proceed anyway and Cancel, re-checked on every press; the engine refuses with ORION_ERR_MEMORY unless forced (`force`, `--stack --force`) (UNSOURCED §32 has the estimate, now flat in the frame count).
 
 ## ⚠ Patents
 

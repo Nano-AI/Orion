@@ -9,6 +9,7 @@
 #include "pipe/ShaderParams.h"
 #include "util/Half.h"
 
+#include <cstring>
 #include <utility>
 
 namespace orion::merge {
@@ -68,17 +69,22 @@ std::vector<float> MergeRender::demosaic(const raw::BayerImage& image) {
     pipeline_->render();
 
     // The final node is pinned structurally by Pipeline, so this readback is
-    // safe. fp16 out of the texture, widened to the floats the merge takes.
-    std::vector<std::uint16_t> half(std::size_t(width_) * height_ * 4);
+    // safe. fp16 RGBA out of the texture into the float RGB's own storage
+    // (8 bytes a pixel fit in its 12), then widened in place from the last
+    // pixel back: pixel p's halves sit at 8p, below the 12p its floats go
+    // to, and every half above it is already read. One full-frame buffer,
+    // not two (#410).
+    const std::size_t pixels = std::size_t(width_) * height_;
+    std::vector<float> out(pixels * 3);
+    auto* bytes = reinterpret_cast<unsigned char*>(out.data());
     pipeline_->nodeOutput(nRgb_).download(
-        half.data(), std::size_t(width_) * 4 * sizeof(std::uint16_t),
+        bytes, std::size_t(width_) * 4 * sizeof(std::uint16_t),
         width_, height_);
-
-    std::vector<float> out(std::size_t(width_) * height_ * 3);
-    for (std::size_t p = 0; p < std::size_t(width_) * height_; ++p) {
-        out[p * 3 + 0] = util::halfToFloat(half[p * 4 + 0]);
-        out[p * 3 + 1] = util::halfToFloat(half[p * 4 + 1]);
-        out[p * 3 + 2] = util::halfToFloat(half[p * 4 + 2]);
+    for (std::size_t p = pixels; p-- > 0;) {
+        std::uint16_t h[4];
+        std::memcpy(h, bytes + p * sizeof h, sizeof h);
+        const float rgb[3] = {util::halfToFloat(h[0]), util::halfToFloat(h[1]), util::halfToFloat(h[2])};
+        std::memcpy(bytes + p * sizeof rgb, rgb, sizeof rgb);
     }
     return out;
 }

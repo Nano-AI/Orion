@@ -28,7 +28,13 @@
  *  median cap on a noise weight, the matte >= 0.5 sky subset for the
  *  statistics, the 1e-6 noise floor.
  *
- *  Pure CPU, threaded over row bands; frames stay half floats throughout.
+ *  Pure CPU, threaded over rows; frames stay half floats throughout.
+ *
+ *  In pieces, so a stack need not hold every frame at once (#410): the
+ *  reference's statistics (measureReference) and each frame's normalization
+ *  (measureFrame) are taken while that frame is in memory; integrateRows then
+ *  combines any band of rows from frames that hold only the rows rowsRead
+ *  names. integrate() is the pieces in order over whole frames.
  */
 
 #pragma once
@@ -48,6 +54,7 @@ struct Frame {
     const std::uint16_t* rgb = nullptr;   ///< half-float RGB, packed, own-normalized (1.0 = clip)
     persp::Matrix3 refToSource;           ///< the sky's (or the whole frame's) warp; identity for the reference
     persp::Matrix3 groundToSource;        ///< used only where a sky matte is given and < 1
+    std::uint32_t firstRow = 0;           ///< rgb starts at this row (a band); every row a tap reads must be held
 };
 
 struct Options {
@@ -60,6 +67,38 @@ struct Result {
     Rejection used = Rejection::None;     ///< Auto resolved by frame count
     std::vector<float> scale;             ///< k_i per frame (v' = (v − L_i)/k_i + L_ref); 1 for the reference
 };
+
+/// v' = (v − L)/k + L_ref, weighted w.
+struct Norm { float L[3] = {0, 0, 0}; float k = 1.0f, weight = 1.0f; };
+
+/// What every frame is measured against: the reference's location, its statistics grid (sky only
+/// when a matte gives enough sky) and its star cores with their 7x7 box excess.
+struct Reference {
+    std::uint32_t width = 0, height = 0, step = 1;
+    float L[3] = {0, 0, 0};
+    std::vector<std::size_t> grid, pick;
+    std::vector<float> box;
+};
+
+/// The reference, whole (firstRow 0). Throws std::runtime_error on an empty one.
+[[nodiscard]] Reference measureReference(const Frame& reference, const float* skyMatte);
+/// One frame, whole, tapped through its refToSource at the reference's grid and cores.
+[[nodiscard]] Norm measureFrame(const Frame& frame, const Reference& reference, bool weightByNoise);
+/// No noise weight above 10x the median frame's (weightByNoise only).
+void capWeights(std::vector<Norm>& norms);
+
+/// Result rows [y0, y1) into `out` (row y0 first, 3 floats a pixel), every frame holding the rows
+/// rowsRead names for its warps (frames[reference] those rows themselves: its own value fills a pixel
+/// no frame covers).
+void integrateRows(const std::vector<Frame>& frames, int reference, const float* skyMatte,
+                   const Reference& ref, const std::vector<Norm>& norms, Rejection used,
+                   std::uint32_t y0, std::uint32_t y1, float* out);
+
+/// The source rows [first, last) that taps through `warp` read for result rows [y0, y1); the whole
+/// frame when the warp's w is not positive over the band.
+struct Rows { std::uint32_t first = 0, last = 0; };
+[[nodiscard]] Rows rowsRead(const persp::Matrix3& warp, std::uint32_t width, std::uint32_t height,
+                            std::uint32_t y0, std::uint32_t y1) noexcept;
 
 /// skyMatte: nullptr, or reference width*height in 0..1 (1 = sky, frame coordinates).
 /// Every frame must be the reference's size. A tap outside a frame contributes

@@ -20,6 +20,9 @@
 #ifndef _WIN32
 #include <sys/resource.h>
 #endif
+#if defined(__APPLE__)
+#include <sys/sysctl.h>
+#endif
 
 #include <algorithm>
 #include <chrono>
@@ -52,6 +55,18 @@ OrionStatus stackFiles(OrionEngine* e, const std::vector<std::string>& files, in
 
 void removeAll(const std::vector<std::string>& files) {
     for (const auto& f : files) std::remove(f.c_str());
+}
+
+/// The stack's spill files in the system temp directory (#410): there must be none left after a run.
+std::vector<std::string> spills() {
+    std::vector<std::string> out;
+    std::error_code ec;
+    for (const auto& e : fs::directory_iterator(fs::temp_directory_path(), ec)) {
+        const std::string name = e.path().filename().string();
+        if (name.rfind("orion-stack-", 0) == 0 && e.path().extension() == ".tmp") out.push_back(name);
+    }
+    std::sort(out.begin(), out.end());
+    return out;
 }
 
 /// Six 320x240 star frames, shifted a few pixels apart, for the refusals.
@@ -314,6 +329,7 @@ void testStackCancelIsAtomic() {
     const std::vector<std::string> files = {"/tmp/orion-stackc-a.dng", "/tmp/orion-stackc-b.dng"};
     const std::string out = "/tmp/orion-stackc-out.dng";
     std::remove(out.c_str());
+    const auto spillsBefore = spills();
     try {
         writeFrame(files[0], tiles(0, 0, 0.01f, 1), kTW, kTH);
         writeFrame(files[1], tiles(3, -2, 0.01f, 2), kTW, kTH);
@@ -345,11 +361,83 @@ void testStackCancelIsAtomic() {
         }
         CHECK(failed);
         report(!fs::exists("/tmp/orion-no-such-dir"), "no debris on a bad destination");
+        // That run failed at the write, after every frame had spilled.
+        report(spills() == spillsBefore, "and no spill file left in the temp directory, cancelled or failed");
+
+        rq.output = out;
+        std::remove(out.c_str());
+        rq.availableDisk = 1;
+        std::string why;
+        try {
+            stacker.run(rq);
+        } catch (const std::exception& e) {
+            why = e.what();
+        }
+        rq.availableDisk = 0;
+        report(why.find("temporary disk space") != std::string::npos && !fs::exists(out),
+               "a temp disk too small for the spill refuses, before any decode", why);
+        stacker.run(rq);
+        report(fs::exists(out) && spills() == spillsBefore, "a completed stack leaves its file and no spill");
     } catch (const std::exception& e) {
         report(false, "stack cancel fixture", e.what());
     }
     removeAll(files);
     std::remove(out.c_str());
+}
+
+void testStackBandsThroughStacker() {
+    section("stack: short bands read back from the spill give the one-band stack, stars and landscape");
+    // The Stacker's own band loop (#410): spill reads from row > 0, each frame's buffer sized for its widest
+    // band, Landscape's two warps. A turning sky over a still ground, stacked at the default band (one band
+    // at this size) and at a 1-byte budget (the shortest bands the reach allows), must write the same pixels.
+    constexpr std::uint32_t W = 320, H = 240;
+    std::vector<float> matte(std::size_t(W) * H, 0.0f);
+    std::fill(matte.begin(), matte.begin() + std::ptrdiff_t(W * (H / 2)), 1.0f);
+    std::vector<std::string> files;
+    const std::string one = "/tmp/orion-stack-band1.dng", many = "/tmp/orion-stack-band16.dng";
+    try {
+        for (int i = 0; i < 6; ++i) {
+            const auto m = stackfix::rotation(0.6f * float(i), W / 2.0f, H / 2.0f, float(i), -float(i));
+            auto f = stackfix::starField(31, 60, W, H, m, 0.004f, 0.08f, 700u + unsigned(i));
+            const auto ground = stackfix::starField(31, 0, W, H, persp::identity(), 0.004f, 0.08f, 800u + unsigned(i)).rgb;
+            for (std::size_t p = std::size_t(W) * (H / 2); p < std::size_t(W) * H; ++p)
+                for (int c = 0; c < 3; ++c) f.rgb[p * 3 + std::size_t(c)] = ground[p * 3 + std::size_t(c)];
+            files.push_back("/tmp/orion-stack-b" + std::to_string(i) + ".dng");
+            writeFrame(files.back(), f.rgb, W, H);
+        }
+        auto device = orion::gpu::Device::create();
+        orion::stack::Stacker stacker(*device, ORION_SHADER_DIR);
+        for (const auto mode : {orion::stack::Mode::Stars, orion::stack::Mode::Landscape}) {
+            std::remove(one.c_str());
+            std::remove(many.c_str());
+            orion::stack::Request rq;
+            rq.paths = files;
+            rq.mode = mode;
+            if (mode == orion::stack::Mode::Landscape) {
+                rq.skyMatte = matte;
+                rq.matteWidth = int(W);
+                rq.matteHeight = int(H);
+            }
+            rq.output = one;
+            stacker.run(rq);
+            rq.output = many;
+            rq.bandBytes = 1;
+            stacker.run(rq);
+            std::uint32_t w = 0, h = 0;
+            const auto a = reopen(one, w, h), b = reopen(many, w, h);
+            std::size_t differ = a.size() == b.size() ? 0 : a.size() + 1;
+            for (std::size_t j = 0; j < a.size() && j < b.size(); ++j) differ += !(a[j] == b[j]);
+            report(differ == 0 && stacker.skipped() == 0,
+                   std::string(mode == orion::stack::Mode::Stars ? "stars" : "landscape") +
+                       ": short bands (a 1-byte budget) write the one-band stack's pixels",
+                   std::to_string(differ) + " values differ, " + std::to_string(stacker.skipped()) + " skipped");
+        }
+    } catch (const std::exception& e) {
+        report(false, "band fixture", e.what());
+    }
+    removeAll(files);
+    std::remove(one.c_str());
+    std::remove(many.c_str());
 }
 
 void testStackBench() {
@@ -407,22 +495,25 @@ void testStackMemory() {
         for (const auto& f : files) p.push_back(f.c_str());
         const std::vector<const char*> many(21, files[0].c_str());
 
-        // The estimate is the formula on the first light's size: 320 x 240 x (max(12n, 4 max(d, f)) + 94).
+        // The estimate is the formula on the first light's size (#410): 320 x 240 x (78 + 4 (max(d, f) + 2)) + 320 x 240 x n / 10.
         std::uint64_t est = 0, cal = 0, avail = 0;
+        constexpr std::uint64_t px = 320ull * 240;
         CHECK(orion_stack_estimate(p.data(), 3, 0, 0, &est) == ORION_OK);
         CHECK(orion_stack_estimate(p.data(), 3, 21, 2, &cal) == ORION_OK);
-        report(est == 320ull * 240 * (12 * 3 + 94) && cal == 320ull * 240 * (4 * 21 + 94),
-               "the estimate is W x H x (max(12 lights, 4 max(darks, flats)) + 94)",
+        report(est == px * 78 + px * 3 / 10 && cal == px * (78 + 4 * (21 + 2)) + px * 3 / 10,
+               "the estimate is W x H x (78 + 4 (max(darks, flats) + 2)) + W x H x lights / 10",
                std::to_string(est) + ", " + std::to_string(cal));
         CHECK(orion_available_memory(&avail) == ORION_OK);
         std::printf("    available now: %.1f GB\n", double(avail) / 1e9);
         report(avail > 0, "this machine says how much memory is available");
 
-        // Through the facade: enough frames that the estimate passes 1.5x what is available. All but the first
-        // are missing, so any readInfo or decode would fail with another sentence.
-        const std::size_t n = std::size_t(1.5 * double(avail) / (320.0 * 240 * 12)) + 10;
+        // Through the facade, with the memory available overridden to half the estimate (which no longer grows
+        // with the frame count far enough to pass a real machine's). All but the first frame are missing, so any
+        // readInfo or decode would fail with another sentence.
+        const std::size_t n = 3;
         std::vector<std::string> lots(n, "/tmp/orion-stack-missing.dng");
         lots[0] = files[0];
+        orion_available_memory_override(est / 2);
         std::vector<const char*> lp;
         for (const auto& f : lots) lp.push_back(f.c_str());
         const OrionStatus refused = orion_engine_stack(engine, lp.data(), int32_t(n), 0, 1, -1, 0, nullptr, 0, nullptr, 0,
@@ -436,6 +527,7 @@ void testStackMemory() {
         report(forced != ORION_OK && forced != ORION_ERR_MEMORY &&
                    std::strstr(orion_last_error(engine), "orion-stack-missing") != nullptr,
                "with force it goes on, to the missing frames' own refusal", orion_last_error(engine));
+        orion_available_memory_override(0);
         report(!fs::exists(out), "no output after either");
 
         // The test seam: an override answers for the OS, in orion_available_memory and in the stack's own check.
@@ -446,6 +538,14 @@ void testStackMemory() {
         report(tiny == ORION_ERR_MEMORY && !fs::exists(out), "1000 bytes overridden refuses three small frames, unforced",
                orion_last_error(engine));
         CHECK(orion_available_memory(&seen) == ORION_OK && seen != 1000);
+#if defined(__APPLE__)
+        // The kernel's level x the machine's memory (#410): something, and never more than the machine has.
+        std::uint64_t memsize = 0;
+        std::size_t size = sizeof memsize;
+        sysctlbyname("hw.memsize", &memsize, &size, nullptr, 0);
+        report(seen > 0 && seen <= memsize, "macOS reports available memory within the machine's",
+               std::to_string(seen / 1000000) + " of " + std::to_string(memsize / 1000000) + " MB");
+#endif
 
         // A forced run over an injected budget writes the stack.
         auto device = orion::gpu::Device::create();
