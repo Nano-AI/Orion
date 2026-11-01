@@ -366,13 +366,22 @@ public sealed class CanvasPanel : Panel {
 
     protected override void OnPointerExited(PointerEventArgs e) => CanvasState.ClearHover();
 
-    /// Nothing open yet: the name, one line, and the way in.
+    /// The welcome mark's size and glow, as the brand sets them (#407): 112 points,
+    /// and a soft light of its own brightest star (Alnilam, read from the file) at 16%.
+    public const double WelcomeMark = 112;
+    static readonly Color Alnilam = BrandArt.Load("symbol-animatable.svg").Shapes.Single(s => s.Id == "star-mid").Fill!.Value;
+
+    /// Nothing open yet: the mark, the name, one line, and the way in, the one primary button.
     static StackPanel Welcome() => new() {
         HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Spacing = Space.Sm,
         Children = {
+            new Artwork("welcome-mark.svg", WelcomeMark) {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Effect = new DropShadowEffect { OffsetX = 0, OffsetY = 0, BlurRadius = 18, Color = Alnilam, Opacity = 0.16 },
+            },
             new TextBlock { Text = "Orion", FontSize = Faces.Display, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center },
             new TextBlock { Text = "A darkroom for raw files.", Foreground = Palette.Dim, HorizontalAlignment = HorizontalAlignment.Center },
-            new StateButton("folder", "Open a raw file", () => Commands.Run("open-photo")) {
+            new StateButton("folder", "Open a raw file", () => Commands.Run("open-photo"), ButtonKind.Primary) {
                 Height = 28, Margin = new Thickness(0, Space.Lg, 0, 0), HorizontalAlignment = HorizontalAlignment.Center,
             },
             new TextBlock { Text = "ARW, DNG, NEF, CR2, CR3, RAF, ORF, RW2. Sony is the tested one.", FontSize = Faces.Mark,

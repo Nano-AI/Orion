@@ -31,7 +31,8 @@ python "$root/tools/package-gates.py" windows "$app" "$app/licenses" "$build" "$
 # user, with no administrator prompt, into %LocalAppData%\Orion, with Start menu
 # and desktop shortcuts and an uninstaller in Settings; Portable.zip is the zip.
 # The version is the tag without its v, SemVer as vpk needs; --runtime, or vpk
-# takes the stubs and the feed for x86.
+# takes the stubs and the feed for x86. --icon is Setup.exe's, the brand's ICO (#407);
+# Orion.exe carries the same one from Orion.csproj's ApplicationIcon.
 "${VPK:-vpk}" pack --packId Orion --packVersion "${version#v}" --packDir "$app" --mainExe Orion.exe \
-    --runtime win-x64 --packTitle Orion --outputDir "$out/releases"
+    --runtime win-x64 --packTitle Orion --icon "$root/brand/windows/orion.ico" --outputDir "$out/releases"
 ls "$out/releases"

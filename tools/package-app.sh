@@ -78,6 +78,9 @@ mkdir -p "$RES/data" "$FW"
 cp -R "$BUILD/shaders" "$RES/shaders"
 cp -R "$ROOT/data/lensfun" "$RES/data/lensfun"
 echo "  shaders   $(ls "$RES/shaders" | wc -l | tr -d ' ') metallibs, data lensfun"
+# The brand's app icon (decision #407), every size in one .icns, 16 and 32 hand-hinted.
+# The plist declares no document types, so the brand's xmp.icns has no place here.
+cp "$ROOT/brand/macos/Orion.icns" "$RES/Orion.icns"
 
 # ── The MCP server ──────────────────────────────────────────────────────────
 #
@@ -152,6 +155,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
     <key>CFBundleExecutable</key><string>Orion</string>
     <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleIconFile</key><string>Orion</string>
     <key>CFBundleShortVersionString</key><string>$VERSION</string>
     <key>CFBundleVersion</key><string>$VERSION</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>

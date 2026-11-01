@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
@@ -147,5 +148,32 @@ static partial class SelfTest {
               && S(1, 7, 0, "full") == CanvasState.Scene.Loading && S(1, 0, 0, "") == CanvasState.Scene.Loading
               && S(1, 0, 1, "decoding…") == CanvasState.Scene.Picture && S(1, 0, 0, "could not open") == CanvasState.Scene.Failed && S(1, 7, 0, "render failed: x") == CanvasState.Scene.Failed,
               "the canvas shows this photo's picture, a calm blank while it decodes, or what failed");
+
+        BrandChecks();
+    }
+
+    /// The brand's files load as the brand drew them, and keep its rules (#407).
+    static void BrandChecks() {
+        var accent = ((ISolidColorBrush)Palette.Accent).Color;
+        foreach (var file in BrandArt.Files) {
+            var art = BrandArt.Load(file);   // throws on anything outside plain filled paths
+            var bounds = art.Shapes.Aggregate(art.Shapes[0].Data.Bounds, (b, s) => b.Union(s.Data.Bounds));
+            Check(art.Shapes.Count >= 4 && new Rect(art.ViewBox.Size).Contains(bounds) && bounds.Width > art.ViewBox.Width / 2,
+                  $"brand/app/{file} draws {art.Shapes.Count} shapes inside its artboard ({bounds})");
+            Check(art.Shapes.All(s => s.Fill != accent), $"brand/app/{file} has no accent in the mark");
+        }
+        var welcome = BrandArt.Load("welcome-mark.svg").Shapes;
+        Check(BrandArt.Load("toolbar-mark.svg").Shapes.All(s => s.Fill == null) && welcome.All(s => s.Fill != null),
+              "the toolbar mark takes its ink from the toolbar; the welcome mark keeps its colours");
+        // Alnilam, the middle star, is always the brightest point (the brand's "never make all stars equally bright").
+        static double Y(Color c) => 0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B;
+        Check(welcome.Count == 4 && Y(welcome[2].Fill!.Value) > Math.Max(Y(welcome[1].Fill!.Value), Y(welcome[3].Fill!.Value)),
+              "the welcome mark's middle star is its brightest");
+        var stars = BrandArt.Load("symbol-animatable.svg").Shapes.Where(s => s.Id?.StartsWith("star-") == true).Select(s => s.Id).ToList();
+        Check(stars.SequenceEqual(["star-left", "star-mid", "star-right"]), $"the loading symbol names its three stars ({string.Join(", ", stars)})");
+        // The brand's keyframes: dim at rest, full from 30% to 75% of the 1.6 s cycle, each star 0.2 s behind.
+        Check(BeltLoader.Star(-0.1) == 0.3 && BeltLoader.Star(0.1) == 0.3 && BeltLoader.Star(0.8) == 1 && BeltLoader.Star(0.8 + 1.6) == 1
+              && Math.Abs(BeltLoader.Star(1.6) - 0.3) < 1e-9 && BeltLoader.Star(0.36) > 0.3 && BeltLoader.Star(0.36) < 1,
+              "the loading stars follow the brand's keyframes");
     }
 }

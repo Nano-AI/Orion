@@ -5,6 +5,8 @@
     <AssemblyName>Orion</AssemblyName>
     <!-- UTF-8 as the process code page on Windows, for every char* path the engine opens (#376). -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Orion.exe's icon in Explorer, the taskbar and the Start menu (decision #407). -->
+    <ApplicationIcon>../brand/windows/orion.ico</ApplicationIcon>
     <RootNamespace>OrionShell</RootNamespace>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -21,6 +23,11 @@
           Condition="Exists('bin-native/liborion_shim.dylib')" />
     <!-- The numeral face (Shared/Design/Type.cs) and the SIL OFL 1.1 it travels with. -->
     <AvaloniaResource Include="Assets/Fonts/**" />
+    <!-- Orion's mark as the brand made it (decision #407): Shared/BrandArt.cs draws these
+         from the assembly, and the window icon is the brand's PNG or ICO, never a redraw. -->
+    <EmbeddedResource Include="../brand/app/*.svg" LogicalName="brand/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../brand/linux/hicolor/256x256/apps/orion.png" LogicalName="brand/window-icon.png" />
+    <EmbeddedResource Include="../brand/windows/orion.ico" LogicalName="brand/window-icon.ico" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.4" />

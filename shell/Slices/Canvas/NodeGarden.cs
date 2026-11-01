@@ -12,8 +12,7 @@ namespace OrionShell.CanvasSlice;
 /// NOTICE), tiled at near-zero contrast behind the welcome: what the window
 /// shows with no folder open (decision #383). Its licence allows it as part of
 /// a product and forbids handing it on as a pattern, so it lives only here, as
-/// part of this drawing, never as a file of its own. tools/make-og-card.py reads
-/// the same numbers for the social card.
+/// part of this drawing, never as a file of its own.
 sealed class NodeGarden : Control {
     /// The pattern's tile, 376 x 396, drawn at 1.5 so a node is about 3.6 px.
     const double W = 376, H = 396, Scale = 1.5, R = 2.4;

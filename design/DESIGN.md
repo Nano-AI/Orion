@@ -20,7 +20,7 @@ Controls and states boards). Committed 2026-10-27.
 | Axis | Choice | Why |
 |---|---|---|
 | Neutrals | `tokens.json` greys unchanged, near-perfectly neutral | A tinted grey is a color cast in a raw editor (tokens.json's own rule) |
-| Accent | `accent` role, cyan #4DB6C4 in both palettes, **interaction only**: edited value, slider fill, focus ring, pressed toggle, primary action, and the current selection (you are here). The edited dot is `status` | Cyan sits outside the indigo band and away from skin, and it is Orion's colour: H-beta, the nebula's blue-green line. ⚠ Measured 2026-10-30, it is 18° of OKLCH hue from a clear sky (#381). See Brand palette |
+| Accent | `accent` role, Periwinkle #8F9BC4 in `dusk` (cyan #4DB6C4 in `hubble` and `belt`), **interaction only**: edited value, slider fill, focus ring, pressed toggle, primary action, and the current selection (you are here). Words on it are Dusk ground #111B26. The edited dot is `status` | The brand identity's UI colour (#407), never in the mark. Low chroma (OKLCH C 0.062), so it reads as a quiet signal, not a brand flood. ⚠ It sits in the indigo band the cyan was chosen to avoid, and its lightness is the label grey's: see Brand identity |
 | Words | System face (SF Pro on macOS, Segoe UI on Windows) | Native controls read as native; Apple HIG. Deliberate override of the deslop skill's ban on system type |
 | Numbers | Barlow Semi Condensed 500, tabular | Every figure looks read off a dial; condensed fits five-digit Kelvin in a 54 px readout. SIL OFL 1.1, fine to bundle in a proprietary app |
 | Case | Sentence case everywhere; no tracked all-caps labels | Removes the most common generated-UI tell |
@@ -28,9 +28,9 @@ Controls and states boards). Committed 2026-10-27.
 
 ## Brand palette (2026-10-30, #383)
 
-**To swap:** set `activePalette` in `tokens.json` to `hubble` or `belt`, run `design/build-tokens.py`; the app (`Palette.g.cs`) and the site (`web/css/tokens.css`) both follow, and the build fails, writing nothing, if any palette misses a bar below.
+**To swap:** set `activePalette` in `tokens.json` to `dusk`, `hubble` or `belt`, run `design/build-tokens.py`; the app (`Palette.g.cs`) and the site (`web/css/tokens.css`) both follow, and the build fails, writing nothing, if any palette misses a bar below.
 
-"Hubble" is the active palette: Orion's colours as the nebula and its stars give them.
+"Dusk" is the active palette (#407): Hubble with the accent in the brand's Periwinkle and words on it in Dusk ground; every other role is Hubble's, so the table below still describes them. "Hubble" is Orion's colours as the nebula and its stars give them.
 
 | Slot | Hex | OKLCH | Role in `hubble` | Source |
 |---|---|---|---|---|
@@ -52,7 +52,60 @@ Controls and states boards). Committed 2026-10-27.
 
 **Never pair cyan with red or pink.** H-alpha (656.3 nm), the nebula's other line, renders #FF4356: TikTok's red (#FE2C55, OKLCH hue 17.7). The build refuses a palette with a slot in the red-to-pink band (hue ≥ 320 or ≤ 45, chroma > 0.08) beside a cyan; magenta #EF6DC9, hot pink #FF69B4 and the reverted bubblegum #FF6FB0 all fail it. The reject flag (#C4574D) and the histogram's red channel are data colours outside the palette and sit beside the cyan in the app; neither is a brand pair.
 
-The logo files (`web/img/orion-mark.svg`, `orion-icon.svg`) draw the mark in their own cyan gradients and do not follow `mark`: an SVG favicon cannot read the page's variables.
+The logo is artwork in `brand/` (#407) and follows no token: an SVG favicon cannot read the page's variables, and the brand forbids recolouring it. `mark` is a role nothing draws today.
+
+## Brand identity (2026-10-31, #407)
+
+The identity is the bleed-landscape app icon: layered ridges, a carved-tier fir, and Orion's Belt in swirl stars, in the Dusk mist palette.
+Every file is plain filled paths: no masks, clips, filters, live text or external references.
+The wordmark is Jost Medium, outlined.
+This section keeps the rules of the brand's own README, which was not committed.
+
+| Name | Hex | Role |
+|---|---|---|
+| Dusk ground | #111B26 | Icon ground, dark surfaces, the manifest's theme colour; words on the accent (`onAccent` in `dusk`) |
+| Slate rock | #323F52 | Back ridge |
+| Shadow slate | #585F73 | Front ridge |
+| Mist | #A3ABC5 | The fir; the brand's one colour on dark |
+| Haze | #C2C6DD | Outer stars; the wordmark on dark |
+| Alnilam | #F2F4FB | The middle star, always the brightest point; the welcome mark's glow |
+| Periwinkle | #8F9BC4 | UI accent only (`accent` in `dusk`) |
+| Night ink | #1B2430 | The wordmark on light |
+| Slate ink | #3B414F | The fir on light; the brand's one colour on light |
+
+| Rule | Value |
+|---|---|
+| Clear space | 0.25 × the symbol's height on every side |
+| Minimum size | App icon 16 px. Symbol 16 px, from the hand-hinted file below 24 px. Horizontal lockup 96 px wide (stacked 56 px); below that, the symbol alone |
+| 16 and 32 px | Always the hand-hinted files (and the ICO, ICNS and hicolor entries built from them), never the large master scaled down |
+| Sizes | Each file at the size it was made for. A missing size is scaled down from the matching SVG master; a PNG is never scaled up |
+| Never | Redraw, recolour, crop, stretch or rotate the mark; put Periwinkle in the mark; make all stars equally bright; add gloss or heavy glows |
+
+| Where | File | How |
+|---|---|---|
+| Toolbar | `brand/app/toolbar-mark.svg` | 20 pt, in `markInk` #C9CACC (the file is `currentColor`), before the word Orion. The 16 px hinted file is for exactly 16 px, which the toolbar does not use |
+| Welcome | `brand/app/welcome-mark.svg` | 112 pt, centred, glow `drop-shadow(0 0 18px rgba(242,244,251,0.16))` (Alnilam at 16%), over the one primary button |
+| Loading | `brand/app/symbol-animatable.svg` | 48 pt (`BeltLoader`). Each star 0.3 at rest, up to 1 from 15% to 30% of a 1.6 s cycle, held to 75%, back by the end, ease-in-out, each 0.2 s behind the last. Reduced motion: the middle star lit, the outer two at 0.3 |
+| About / splash | `about-lockup.svg` in the brand's zip | Not shipped: the app has no About surface. The version would be live text, never baked in |
+| macOS | `brand/macos/Orion.icns` | `CFBundleIconFile` (`tools/package-app.sh`). macOS 26's Liquid Glass `.icon` is built in Icon Composer from `brand/macos/icon-composer/`; the `.icns` stays the fallback |
+| Windows | `brand/windows/orion.ico` | `ApplicationIcon` in `Orion.csproj`, `vpk --icon` for Setup.exe, the window icon |
+| Linux | `brand/linux/hicolor/` | `usr/share/icons/hicolor` in the AppDir with `Icon=orion`; the tile, not the freeform symbol, at the root and as `.DirIcon`; `orion-symbolic.svg` for GNOME panels; the 256 px tile is the X11 window icon |
+| Web | `web/favicon.*`, `apple-touch-icon.png`, `icon-*.png`, `site.webmanifest`, `img/og-image.png`, `img/orion-symbol.svg` | Served from the site root, paths relative because the site lives under `/Orion/`. The symbol in the nav (32 px), hero and footer (26 px), with the welcome glow |
+| GitHub | `brand/social/github-social-preview.png`, `avatar-400.png` | Uploaded by hand in the repository's settings and on social profiles |
+
+Measured for `dusk`, by `build-tokens.py`'s formulas:
+
+| Pair | Contrast |
+|---|---|
+| Accent as text on ground, panel, raised | 6.71, 6.27, 5.71:1 (cyan was 7.71, 7.21, 6.57) |
+| Accent on the site's ground #0B0B0C | 7.17:1 |
+| Dusk ground on the accent (primary button) | 6.33:1 |
+| Dusk ground on the hovered primary (`AccentLift`, a quarter of the way to text: #A5AECD) | 7.89:1 |
+| Accent against dim, label | 1.25, 1.05:1; OKLab distance 0.080, 0.055 (cyan: 0.129, 0.097) |
+
+⚠ The last row is the cost of the brand's colour.
+Periwinkle has the lightness of the label grey and little chroma, so an edited value or a lit control is told from its neighbours by hue alone, and less strongly than the cyan was.
+Every enforced bar still passes; nothing enforces accent-against-grey, because the cyan never came near it.
 
 ## Proposed token changes (stage 2 applies these through `build-tokens.py`)
 
@@ -93,7 +146,7 @@ Nothing in `shell/` sets a colour, spacing, radius, font size, shadow or icon si
 | Focus | Two-ring box-shadow (ground, then accent) on buttons; outline on range thumbs |
 | Motion | Critically damped springs for what the hand moves, ease-out under 200 ms for state marks; a cross-fade under reduced motion; nothing animates on the arrow-key path. See Motion |
 | Shortcuts | Shown as keycaps in the footer, not as tooltips only |
-| Imagery | Only real engine renders of the sample RAWs. The one pattern: Book of Shapes' Node Garden, at near-zero contrast behind the empty window and on the social card (#383) |
+| Imagery | Only real engine renders of the sample RAWs. The one pattern: Book of Shapes' Node Garden, at near-zero contrast behind the empty window (#383). The social card is the brand's `og-image.png` (#407) |
 
 ## Motion (2026-10-28)
 
@@ -159,5 +212,5 @@ the buttons animate `RenderTransform` and `Opacity`.
 | Focus by outline on rounded buttons | Fixed: box-shadow rings |
 | No designed error state | Fixed: couldn't-open state added |
 | Caps eyebrows, middle-dot meta strings, `→` links, gradient text, glows | None present |
-| Indigo / cream / acid-green defaults | None: neutral greys plus cyan, gold for status |
+| Indigo / cream / acid-green defaults | Neutral greys plus gold for status; the accent is the brand's Periwinkle (#407), a desaturated indigo chosen by the developer, not a default |
 | System font as primary face | Kept on purpose, see Commitments |
