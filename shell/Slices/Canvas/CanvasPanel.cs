@@ -95,7 +95,7 @@ public sealed class CanvasPanel : Panel {
     /// rises in and its garden starts drifting; the loader starts its light.
     /// Both stop when their scene goes. Under Reduce Motion, Motion.Run runs a
     /// frame or two and stops, so everything simply appears.
-    void Arrive(CanvasState.Scene scene) {
+    internal void Arrive(CanvasState.Scene scene) {
         _was = scene;
         if (scene == CanvasState.Scene.Loading) {
             _loader.Reset();
@@ -103,17 +103,19 @@ public sealed class CanvasPanel : Panel {
         }
         if (scene != CanvasState.Scene.Welcome) return;
         Motion.Run(_garden, dt => { _garden.Advance(dt); return CanvasState.Now == CanvasState.Scene.Welcome; });
+        // The rows fade in turn; the rise is the column's, whose transform is ours alone. A row's own
+        // transform is not: the Open button animates it for its press, and casting it crashed the app.
         var rows = _welcome.Children.ToArray();
-        foreach (var row in rows) { row.Opacity = 0; row.RenderTransform = new TranslateTransform(0, 10); }
-        double t = 0;
+        var rise = new TranslateTransform(0, 10);
+        _welcome.RenderTransform = rise;
+        foreach (var row in rows) row.Opacity = 0;
+        double t = 0, length = 0.5 + rows.Length * 0.07;
         Motion.Run(_welcome, dt => {
             t += dt;
-            for (int i = 0; i < rows.Length; i++) {
-                double e = OrionShell.Motion.EaseOut.Ease(Math.Clamp((t - i * 0.07) / 0.5, 0, 1));
-                rows[i].Opacity = e;
-                ((TranslateTransform)rows[i].RenderTransform!).Y = 10 * (1 - e);
-            }
-            return t < 0.5 + rows.Length * 0.07;
+            for (int i = 0; i < rows.Length; i++)
+                rows[i].Opacity = OrionShell.Motion.EaseOut.Ease(Math.Clamp((t - i * 0.07) / 0.5, 0, 1));
+            rise.Y = 10 * (1 - OrionShell.Motion.EaseOut.Ease(Math.Clamp(t / length, 0, 1)));
+            return t < length;
         });
     }
 
@@ -270,6 +272,13 @@ public sealed class CanvasPanel : Panel {
     void Wheel(object? sender, PointerWheelEventArgs e) {
         var d = e.Delta;
         var (precise, points) = Scroll.Read(e);   // a wheel zooms, a touchpad pans
+        bool zoomKey = e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        // At fit there is nothing to pan: a two-finger sideways swipe steps photos, as Photos does.
+        if (precise && !zoomKey && CanvasState.Viewport.IsFit && Math.Abs(d.X) > Math.Abs(d.Y)) {
+            Swipe(d.X * points);
+            e.Handled = true;
+            return;
+        }
         var vp = Hold();
         if (!precise || e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control))
             vp.ZoomBy(Math.Exp(0.01 * d.Y * points), Anchor(e.GetPosition(this)));
@@ -277,6 +286,30 @@ public sealed class CanvasPanel : Panel {
             vp.Pan(new Vector(d.X * points / Math.Max(Bounds.Width, 1), d.Y * points / Math.Max(Bounds.Height, 1)));
         Rest();
         e.Handled = true;
+    }
+
+    /// Points of sideways travel that make a swipe, and the pause that starts a new one where
+    /// AppKit gives no gesture phase (Windows, Linux).
+    const double SwipeStep = 80, SwipeGapMs = 300;
+    double _swipe;
+    bool _swiped;
+    long _swipeAt;
+    /// Photo steps a swipe has made: the selftest's count (one a gesture, however far it goes).
+    internal static int Swiped;
+
+    /// One step a gesture: fingers left (content moving left, natural scrolling) is the next photo.
+    /// The momentum glide after the fingers lift is not a second swipe.
+    void Swipe(double dx) {
+        if (CanvasNative.Momentum()) return;
+        long now = Environment.TickCount64;
+        if (now - _swipeAt > SwipeGapMs) (_swipe, _swiped) = (0, false);
+        _swipeAt = now;
+        if (!_swiped && Math.Abs(_swipe += dx) >= SwipeStep) {
+            _swiped = true;
+            Swiped++;
+            Commands.Run(_swipe < 0 ? "next-photo" : "previous-photo");
+        }
+        if (CanvasNative.GestureEnded() == true) (_swipe, _swiped) = (0, false);
     }
 
     /// ImageCanvas.swift `handleMagnify`: the trackpad pinch (NSEvent magnify,

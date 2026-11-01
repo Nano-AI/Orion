@@ -81,27 +81,35 @@ public sealed class HdrMergePanel : Border {
     async void Merge() {
         if (_merging || Ineligibility(_candidates) != null) return;
         _merging = true;
-        var paths = _candidates.Select(c => c.Path).ToList();
-        int reference = _reference;
-        string output = HdrMerge.OutputPath(paths[reference]);
-        Console.Error.WriteLine($"orion merge: start ref={reference} -> {output}");
-        Autosave.Shared.Flush();
-        var bar = new ProgressBar { Minimum = 0, Maximum = 1, Width = 300, MinHeight = 0, Height = 4, VerticalAlignment = VerticalAlignment.Center };
-        _actions.Children.Clear();
-        _actions.Children.AddRange([bar, SheetKit.Button("Stop", HdrMerge.Cancel)]);
-        using var poll = Avalonia.Threading.DispatcherTimer.Run(() => { bar.Value = HdrMerge.Progress ?? bar.Value; return true; },
-                                                                TimeSpan.FromMilliseconds(150));
-        string? failed = await HdrMerge.Run(paths, reference, output);
-        _merging = false;
-        Dismiss?.Invoke();
-        if (failed != null) {
-            Console.Error.WriteLine($"orion merge: failed: {failed}");
-            EngineModel.Shared.Say(failed);
-            return;
+        // async void: an exception escaping here would end the process, so every path lands in the catch.
+        try {
+            var paths = _candidates.Select(c => c.Path).ToList();
+            int reference = _reference;
+            string output = HdrMerge.OutputPath(paths[reference]);
+            Console.Error.WriteLine($"orion merge: start ref={reference} -> {output}");
+            Autosave.Shared.Flush();
+            var bar = new ProgressBar { Minimum = 0, Maximum = 1, Width = 300, MinHeight = 0, Height = 4, VerticalAlignment = VerticalAlignment.Center };
+            _actions.Children.Clear();
+            _actions.Children.AddRange([bar, SheetKit.Button("Stop", HdrMerge.Cancel)]);
+            using var poll = Avalonia.Threading.DispatcherTimer.Run(() => { bar.Value = HdrMerge.Progress ?? bar.Value; return true; },
+                                                                    TimeSpan.FromMilliseconds(150));
+            string? failed = await HdrMerge.Run(paths, reference, output);
+            Dismiss?.Invoke();
+            if (failed != null) {
+                Console.Error.WriteLine($"orion merge: failed: {failed}");
+                EngineModel.Shared.Say(failed);
+                return;
+            }
+            Console.Error.WriteLine($"orion merge: wrote {output}");
+            Library.LibraryFiles.OpenPhoto(output);
+            EngineModel.Shared.Say($"Merged {paths.Count} exposures into {System.IO.Path.GetFileName(output)}");
+        } catch (Exception e) {
+            Console.Error.WriteLine($"orion merge: {e}");
+            EngineModel.Shared.Say(e.Message);
+            Idle();
+        } finally {
+            _merging = false;
         }
-        Console.Error.WriteLine($"orion merge: wrote {output}");
-        Library.LibraryFiles.OpenPhoto(output);
-        EngineModel.Shared.Say($"Merged {paths.Count} exposures into {System.IO.Path.GetFileName(output)}");
     }
 
     internal static Candidate Read(string path) =>

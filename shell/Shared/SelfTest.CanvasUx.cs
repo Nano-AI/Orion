@@ -26,12 +26,30 @@ static partial class SelfTest {
         var overlay = new CompareOverlay();
         var window = Show(new Grid { Children = { canvas, overlay } });
         try {
+            WelcomeChecks();
             ZoomChecks(window, canvas);
             PanChecks(window, canvas);
             CompareUxChecks(window, canvas, overlay);
         } finally {
             CompareState.Clear();
             CanvasState.Viewport.Reset();
+            window.Close();
+        }
+    }
+
+    /// The welcome's entrance with its Open button mid-press: the button animates its own transform
+    /// (a TransformOperations), which the entrance once cast to TranslateTransform and crashed on.
+    static void WelcomeChecks() {
+        var canvas = new CanvasPanel();
+        var window = Show(canvas);
+        try {
+            canvas.Arrive(CanvasState.Scene.Welcome);
+            foreach (var b in canvas.GetVisualDescendants().OfType<StateButton>())
+                b.RenderTransform = Avalonia.Media.Transformation.TransformOperations.Parse("scale(0.97)");
+            string? threw = null;
+            try { Frames(); } catch (InvalidCastException e) { threw = e.Message; }
+            Check(threw == null, $"the welcome's entrance survives its button's press transform{(threw == null ? "" : $" ({threw})")}");
+        } finally {
             window.Close();
         }
     }
@@ -130,6 +148,19 @@ static partial class SelfTest {
         var c = vp.Center;
         window.MouseWheel(At(window, canvas, p), new Vector(0.4, 0.3), RawInputModifiers.None);
         Check(vp.Zoom == z && vp.Center.X < c.X && vp.Center.Y < c.Y, "a trackpad's two-finger scroll pans and does not zoom");
+
+        // At fit, a two-finger sideways swipe steps photos: once a gesture, with no viewport work.
+        vp.Reset();
+        window.UpdateLayout();
+        Frames(() => !vp.Live, 1);   // the pan above rests first (#401 holds the view until it does): CI's Macs were still in it
+        int swiped = CanvasPanel.Swiped;
+        for (int i = 0; i < 6; i++) window.MouseWheel(At(window, canvas, p), new Vector(-0.6, 0.05), RawInputModifiers.None);   // 180 points, one gesture
+        Check(CanvasPanel.Swiped == swiped + 1 && vp.IsFit && !vp.Live,
+              $"at fit a sideways trackpad swipe steps one photo, once a gesture, and leaves the view alone ({CanvasPanel.Swiped - swiped} steps, fit {vp.IsFit}, live {vp.Live})");
+        Thread.Sleep(350);   // a pause is a new gesture where there is no AppKit phase: swipe back, to the photo the checks below expect
+        for (int i = 0; i < 6; i++) window.MouseWheel(At(window, canvas, p), new Vector(0.6, 0.05), RawInputModifiers.None);
+        Check(CanvasPanel.Swiped == swiped + 2, $"after a pause the next swipe is a new gesture and steps again ({CanvasPanel.Swiped - swiped} steps)");
+        vp.Reset();
 
         // Rubber band below fit, and back: the pinch out past fit shrinks the picture, then springs to fit.
         vp.Reset();
