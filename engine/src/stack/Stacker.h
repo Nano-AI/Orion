@@ -10,11 +10,15 @@
  *  fails, it is identity), an existing output is a refusal, and a stack of
  *  fewer than two registered frames is an error rather than a copy.
  *
- *  Memory: frames are held as half floats (6 bytes a pixel, 144 MB at
- *  24 MP); each frame's float RGB lives only while it registers. Noise mode
- *  keeps the reference's float until every frame is aligned. Before any
- *  decode, a run whose estimateBytes exceeds the memory available now is
- *  refused with NotEnoughMemory, unless forced.
+ *  Memory (#410): one frame is held at a time. Each registered frame is
+ *  measured against the reference (Integrate.h's pieces) while its half
+ *  floats are in memory, then spilled to one file in the system temp
+ *  directory (6 bytes a pixel a frame, deleted on every exit); integration
+ *  reads it back in bands of rows, each frame only the rows its warp
+ *  reaches. Peak memory is flat in the frame count. Before any decode, a
+ *  run whose estimateBytes exceeds the memory available now is refused with
+ *  NotEnoughMemory, unless forced, and one whose spill exceeds the temp
+ *  volume's free space is refused outright.
  *
  *  Cancellation is polled between frames and before integration and the
  *  write, and leaves nothing behind (the writer lands the file by rename).
@@ -50,6 +54,10 @@ struct Request {
     bool force = false;
     /// Test seam: the available memory to compare against; 0 asks the OS (util::availableMemory).
     std::uint64_t availableBytes = 0;
+    /// Test seam: the free space on the temp volume the frames spill to; 0 asks the OS.
+    std::uint64_t availableDisk = 0;
+    /// Test seam: the memory a band of every frame aims for; 0 is the default (128 MB).
+    std::uint64_t bandBytes = 0;
 };
 
 /// The refusal a forced run would not make: the facade returns it as ORION_ERR_MEMORY.
@@ -58,9 +66,13 @@ struct NotEnoughMemory : std::runtime_error {
 };
 
 /// Estimated peak bytes of a stack of `lights` frames of `pixels` each, with `darks` and `flats`
-/// (research/UNSOURCED.md §32, measured): pixels · (max(12·lights, 4·max(darks, flats)) + 94).
+/// (research/UNSOURCED.md §32, measured): pixels · (78 + calibration) + pixels · lights / 10, calibration
+/// 4·(max(darks, flats) + 2) when there is any.
 [[nodiscard]] std::uint64_t estimateBytes(std::uint64_t pixels, std::size_t lights, std::size_t darks,
                                           std::size_t flats) noexcept;
+
+/// Bytes of the system temp directory the registered frames spill to: their half planes, 6 a pixel.
+[[nodiscard]] std::uint64_t spillBytes(std::uint64_t pixels, std::size_t lights) noexcept;
 
 /// estimateBytes with `pixels` from one light's metadata alone (no decode). Throws if it will not read.
 [[nodiscard]] std::uint64_t estimateBytes(const std::string& light, std::size_t lights, std::size_t darks, std::size_t flats);

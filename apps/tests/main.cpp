@@ -155,12 +155,14 @@ int main() {
     testStackRemovesHotPixel();
     testStackNormalizesAndWeights();
     testStackSkyGroundBlend();
+    testStackBandsEqualWhole();
     testSkySplitOrientation();
     testStackFacadeNoise();
     testStackFacadeStars();
     testStackFacadeLandscape();
     testStackFacadeRefuses();
     testStackCancelIsAtomic();
+    testStackBandsThroughStacker();
     testStackMemory();
     testStackMasterDark();
     testStackFlatGain();

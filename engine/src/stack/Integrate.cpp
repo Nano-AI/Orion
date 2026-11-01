@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <thread>
 
@@ -32,10 +33,12 @@ bool tap(const Frame& f, const persp::Matrix3& h, float x, float y, float out[3]
     const auto x0 = std::uint32_t(x), y0 = std::uint32_t(y);
     const std::uint32_t x1 = std::min(x0 + 1, f.width - 1), y1 = std::min(y0 + 1, f.height - 1);
     const float fx = x - float(x0), fy = y - float(y0);
-    const std::uint16_t* p00 = f.rgb + (std::size_t(y0) * f.width + x0) * 3;
-    const std::uint16_t* p10 = f.rgb + (std::size_t(y0) * f.width + x1) * 3;
-    const std::uint16_t* p01 = f.rgb + (std::size_t(y1) * f.width + x0) * 3;
-    const std::uint16_t* p11 = f.rgb + (std::size_t(y1) * f.width + x1) * 3;
+    // A band holds rows from firstRow on, and rowsRead promised these two.
+    const std::size_t r0 = y0 - f.firstRow, r1 = y1 - f.firstRow;
+    const std::uint16_t* p00 = f.rgb + (r0 * f.width + x0) * 3;
+    const std::uint16_t* p10 = f.rgb + (r0 * f.width + x1) * 3;
+    const std::uint16_t* p01 = f.rgb + (r1 * f.width + x0) * 3;
+    const std::uint16_t* p11 = f.rgb + (r1 * f.width + x1) * 3;
     for (int c = 0; c < 3; ++c) {
         const float a = util::halfToFloat(p00[c]), b = util::halfToFloat(p10[c]);
         const float d = util::halfToFloat(p01[c]), e = util::halfToFloat(p11[c]);
@@ -88,28 +91,21 @@ float noiseSigma(const Frame& f, std::uint32_t step) {
     return std::max(1.4826f * median(d, 0.0f) / std::sqrt(2.0f), kNoiseFloor);
 }
 
-/// v' = (v − L)/k + L_ref, weighted w.
-struct Norm { float L[3] = {0, 0, 0}; float k = 1.0f, weight = 1.0f; };
-
 }  // namespace
 
-Result integrate(const std::vector<Frame>& frames, int reference, const float* skyMatte, const Options& options) {
-    if (frames.empty()) throw std::runtime_error("stack: no frames");
-    if (reference < 0 || std::size_t(reference) >= frames.size()) throw std::runtime_error("stack: bad reference");
-    const Frame& ref = frames[std::size_t(reference)];
+Reference measureReference(const Frame& ref, const float* skyMatte) {
     const std::uint32_t W = ref.width, H = ref.height;
-    if (W < 2 || H < 1) throw std::runtime_error("stack: empty reference");
-    for (const Frame& f : frames)
-        if (f.width != W || f.height != H || !f.rgb) throw std::runtime_error("stack: frame size mismatch");
-    const int n = int(frames.size());
-
-    Result result;
-    result.used = options.rejection == Rejection::Auto ? autoRejection(n) : options.rejection;
+    if (W < 2 || H < 1 || !ref.rgb) throw std::runtime_error("stack: empty reference");
+    Reference out;
+    out.width = W;
+    out.height = H;
 
     // The statistics grid: ~50k reference texels; with a matte, its sky when that is big enough
     // (the ground is static and would otherwise dominate the sky's location and scale).
     const auto step = std::uint32_t(std::max(1.0, std::floor(std::sqrt(double(W) * H / kGridSamples))));
-    std::vector<std::size_t> grid, sky;
+    out.step = step;
+    std::vector<std::size_t>& grid = out.grid;
+    std::vector<std::size_t> sky;
     for (std::uint32_t y = 0; y < H; y += step)
         for (std::uint32_t x = 0; x < W; x += step) {
             const std::size_t p = std::size_t(y) * W + x;
@@ -120,8 +116,8 @@ Result integrate(const std::vector<Frame>& frames, int reference, const float* s
     if (skyOnly) grid.swap(sky);
 
     // The reference's location from its own pixels, its noise for the bright floor.
-    float Lref[3];
-    std::vector<float> a, ratios;
+    float* Lref = out.L;
+    std::vector<float> a;
     for (int c = 0; c < 3; ++c) {
         a.clear();
         for (std::size_t p : grid) a.push_back(util::halfToFloat(ref.rgb[p * 3 + std::size_t(c)]));
@@ -155,66 +151,92 @@ Result integrate(const std::vector<Frame>& frames, int reference, const float* s
             if (peak) bright.push_back(p);
         }
     const std::size_t stride = bright.size() / std::size_t(kGridSamples) + 1;
-    std::vector<std::size_t> pick;
-    std::vector<float> refBox;
     for (std::size_t j = 0; j < bright.size(); j += stride) {
         float s;
         if (!boxLuma(ref, persp::identity(), std::uint32_t(bright[j] % W), std::uint32_t(bright[j] / W), s)) continue;
         // The ratio's denominator: a core whose box holds no real excess (a lone noise peak)
         // would hand the median noise/noise.
         if (!(s - kBoxArea * lumaLref > kBrightSigmas * sigmaRef)) continue;
-        pick.push_back(bright[j]);
-        refBox.push_back(s - kBoxArea * lumaLref);
+        out.pick.push_back(bright[j]);
+        out.box.push_back(s - kBoxArea * lumaLref);
     }
+    return out;
+}
 
-    // Per frame: location on the grid and scale on the bright boxes, both on registered pairs.
-    std::vector<Norm> norm(frames.size());
-    std::vector<float> ch[3];
-    for (std::size_t i = 0; i < frames.size(); ++i) {
-        const Frame& f = frames[i];
-        for (auto& v : ch) v.clear();
-        for (std::size_t p : grid) {
-            float t[3];
-            if (!tap(f, f.refToSource, float(p % W), float(p / W), t)) continue;
-            for (int c = 0; c < 3; ++c) ch[c].push_back(t[c]);
-        }
-        Norm& nm = norm[i];
-        for (int c = 0; c < 3; ++c) nm.L[c] = median(ch[c], Lref[c]);
-        const float lumaL = (nm.L[0] + nm.L[1] + nm.L[2]) / 3.0f;
-        ratios.clear();
-        for (std::size_t j = 0; j < pick.size(); ++j) {
-            float s;
-            if (!boxLuma(f, f.refToSource, std::uint32_t(pick[j] % W), std::uint32_t(pick[j] / W), s)) continue;
-            const float r = (s - kBoxArea * lumaL) / refBox[j];
-            if (std::isfinite(r)) ratios.push_back(r);   // a NaN breaks nth_element's ordering
-        }
-        if (ratios.size() >= kMinCores) nm.k = median(ratios, 1.0f);
-        if (!(nm.k >= kMinScale && nm.k <= kMaxScale)) nm.k = 1.0f;   // NaN included
-        if (options.weightByNoise) {
-            const float s = noiseSigma(f, step);
-            nm.weight = (nm.k / s) * (nm.k / s);
-        }
+Norm measureFrame(const Frame& f, const Reference& ref, bool weightByNoise) {
+    // Location on the grid and scale on the bright boxes, both on registered pairs.
+    const std::uint32_t W = ref.width;
+    std::vector<float> ch[3], ratios;
+    for (std::size_t p : ref.grid) {
+        float t[3];
+        if (!tap(f, f.refToSource, float(p % W), float(p / W), t)) continue;
+        for (int c = 0; c < 3; ++c) ch[c].push_back(t[c]);
     }
-    if (options.weightByNoise) {   // a frame whose MAD collapsed must not take the stack over
-        a.clear();
-        for (const Norm& nm : norm) a.push_back(nm.weight);
-        const float cap = kMaxWeightRatio * median(a, 1.0f);
-        for (Norm& nm : norm) nm.weight = std::min(nm.weight, cap);
+    Norm nm;
+    for (int c = 0; c < 3; ++c) nm.L[c] = median(ch[c], ref.L[c]);
+    const float lumaL = (nm.L[0] + nm.L[1] + nm.L[2]) / 3.0f;
+    for (std::size_t j = 0; j < ref.pick.size(); ++j) {
+        float s;
+        if (!boxLuma(f, f.refToSource, std::uint32_t(ref.pick[j] % W), std::uint32_t(ref.pick[j] / W), s)) continue;
+        const float r = (s - kBoxArea * lumaL) / ref.box[j];
+        if (std::isfinite(r)) ratios.push_back(r);   // a NaN breaks nth_element's ordering
     }
+    if (ratios.size() >= kMinCores) nm.k = median(ratios, 1.0f);
+    if (!(nm.k >= kMinScale && nm.k <= kMaxScale)) nm.k = 1.0f;   // NaN included
+    if (weightByNoise) {
+        const float s = noiseSigma(f, ref.step);
+        nm.weight = (nm.k / s) * (nm.k / s);
+    }
+    return nm;
+}
 
-    for (const Norm& nm : norm) result.scale.push_back(nm.k);
+void capWeights(std::vector<Norm>& norms) {
+    // A frame whose MAD collapsed must not take the stack over.
+    std::vector<float> a;
+    for (const Norm& nm : norms) a.push_back(nm.weight);
+    const float cap = kMaxWeightRatio * median(a, 1.0f);
+    for (Norm& nm : norms) nm.weight = std::min(nm.weight, cap);
+}
 
-    // The pixel loop, rows split into one contiguous band per hardware thread.
-    result.rgb.resize(std::size_t(W) * H * 3);
-    const unsigned threads = std::max(1u, std::min(std::thread::hardware_concurrency(), H));
-    std::vector<std::vector<float>> scratch(threads, std::vector<float>(std::size_t(n) * 6));
-    const std::size_t sn = std::size_t(n);
+Rows rowsRead(const persp::Matrix3& h, std::uint32_t width, std::uint32_t height, std::uint32_t y0,
+              std::uint32_t y1) noexcept {
+    if (y1 <= y0 || width == 0 || height == 0) return {0, 0};
+    // w is affine in (x, y), so positive at the band's four corners means positive over the band, and
+    // the band then maps onto the convex hull of its corners' images: their y range bounds every tap.
+    float lo = std::numeric_limits<float>::infinity(), hi = -lo;
+    for (const float x : {0.0f, float(width - 1)})
+        for (const float y : {float(y0), float(y1 - 1)}) {
+            const float w = h.m[6] * x + h.m[7] * y + h.m[8];
+            float sx = x, sy = y;
+            persp::apply(h, sx, sy);
+            if (!(w > 0.0f) || !std::isfinite(sy)) return {0, height};
+            lo = std::min(lo, sy);
+            hi = std::max(hi, sy);
+        }
+    // A tap reads floor(y) and the row below; one more row each side for rounding.
+    const auto clampRow = [&](float r) { return std::uint32_t(std::clamp(r, 0.0f, float(height))); };
+    const std::uint32_t first = clampRow(std::floor(lo) - 1.0f), last = clampRow(std::floor(hi) + 3.0f);
+    return {std::min(first, last), last};
+}
 
-    auto band = [&](unsigned t) {
+void integrateRows(const std::vector<Frame>& frames, int reference, const float* skyMatte, const Reference& refStats,
+                   const std::vector<Norm>& norm, Rejection used, std::uint32_t y0, std::uint32_t y1, float* out) {
+    const Frame& ref = frames[std::size_t(reference)];
+    const std::uint32_t W = refStats.width;
+    const float* Lref = refStats.L;
+    const std::size_t sn = frames.size();
+    if (y1 <= y0) return;
+    const std::uint32_t rows = y1 - y0;
+
+    // The rows split into one contiguous run per hardware thread.
+    const unsigned threads = std::max(1u, std::min(std::thread::hardware_concurrency(), rows));
+    std::vector<std::vector<float>> scratch(threads, std::vector<float>(sn * 6));
+
+    auto run = [&](unsigned t) {
         float* v = scratch[t].data();
         float* w = v + 3 * sn;
         // One part (sky or ground) of one pixel: tap every frame through `warp`, normalize, combine.
-        auto part = [&](persp::Matrix3 Frame::*warp, std::uint32_t x, std::uint32_t y, float out[3]) {
+        auto part = [&](persp::Matrix3 Frame::*warp, std::uint32_t x, std::uint32_t y, float o[3]) {
             std::size_t k = 0;
             for (std::size_t i = 0; i < sn; ++i) {
                 float s[3];
@@ -225,14 +247,14 @@ Result integrate(const std::vector<Frame>& frames, int reference, const float* s
                 }
                 ++k;
             }
-            const std::size_t p = std::size_t(y) * W + x;
+            const std::uint16_t* own = ref.rgb + ((std::size_t(y) - ref.firstRow) * W + x) * 3;
             for (int c = 0; c < 3; ++c)
-                out[c] = k ? combine(v + std::size_t(c) * sn, w + std::size_t(c) * sn, int(k), result.used)
-                           : util::halfToFloat(ref.rgb[p * 3 + std::size_t(c)]);
+                o[c] = k ? combine(v + std::size_t(c) * sn, w + std::size_t(c) * sn, int(k), used)
+                         : util::halfToFloat(own[c]);
         };
-        const std::uint32_t y0 = std::uint32_t(std::uint64_t(H) * t / threads);
-        const std::uint32_t y1 = std::uint32_t(std::uint64_t(H) * (t + 1) / threads);
-        for (std::uint32_t y = y0; y < y1; ++y)
+        const std::uint32_t r0 = y0 + std::uint32_t(std::uint64_t(rows) * t / threads);
+        const std::uint32_t r1 = y0 + std::uint32_t(std::uint64_t(rows) * (t + 1) / threads);
+        for (std::uint32_t y = r0; y < r1; ++y)
             for (std::uint32_t x = 0; x < W; ++x) {
                 const std::size_t p = std::size_t(y) * W + x;
                 // A NaN matte value fails both tests below and the pixel comes out 0 (the matte is our own output).
@@ -240,19 +262,40 @@ Result integrate(const std::vector<Frame>& frames, int reference, const float* s
                 float s[3] = {0, 0, 0}, g[3] = {0, 0, 0};
                 if (m > 0.0f) part(&Frame::refToSource, x, y, s);
                 if (m < 1.0f) part(&Frame::groundToSource, x, y, g);
-                for (int c = 0; c < 3; ++c)
-                    result.rgb[p * 3 + std::size_t(c)] = std::max(0.0f, m * s[c] + (1.0f - m) * g[c]);
+                float* o = out + ((std::size_t(y) - y0) * W + x) * 3;
+                for (int c = 0; c < 3; ++c) o[c] = std::max(0.0f, m * s[c] + (1.0f - m) * g[c]);
             }
     };
     std::vector<std::thread> pool;
     try {
-        for (unsigned t = 1; t < threads; ++t) pool.emplace_back(band, t);
+        for (unsigned t = 1; t < threads; ++t) pool.emplace_back(run, t);
     } catch (...) {   // a joinable thread's destructor would terminate the process
         for (auto& th : pool) th.join();
         throw;
     }
-    band(0);
+    run(0);
     for (auto& th : pool) th.join();
+}
+
+Result integrate(const std::vector<Frame>& frames, int reference, const float* skyMatte, const Options& options) {
+    if (frames.empty()) throw std::runtime_error("stack: no frames");
+    if (reference < 0 || std::size_t(reference) >= frames.size()) throw std::runtime_error("stack: bad reference");
+    const Frame& ref = frames[std::size_t(reference)];
+    const std::uint32_t W = ref.width, H = ref.height;
+    if (W < 2 || H < 1) throw std::runtime_error("stack: empty reference");
+    for (const Frame& f : frames)
+        if (f.width != W || f.height != H || !f.rgb || f.firstRow) throw std::runtime_error("stack: frame size mismatch");
+
+    Result result;
+    result.used = options.rejection == Rejection::Auto ? autoRejection(int(frames.size())) : options.rejection;
+    const Reference stats = measureReference(ref, skyMatte);
+    std::vector<Norm> norm;
+    for (const Frame& f : frames) norm.push_back(measureFrame(f, stats, options.weightByNoise));
+    if (options.weightByNoise) capWeights(norm);
+    for (const Norm& nm : norm) result.scale.push_back(nm.k);
+
+    result.rgb.resize(std::size_t(W) * H * 3);
+    integrateRows(frames, reference, skyMatte, stats, norm, result.used, 0, H, result.rgb.data());
     return result;
 }
 

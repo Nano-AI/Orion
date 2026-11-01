@@ -25,6 +25,9 @@
 
 #include "merge/Merge.h"
 
+#include <cstdint>
+#include <vector>
+
 namespace orion::merge {
 
 struct AlignResult {
@@ -39,5 +42,16 @@ struct AlignResult {
 /// and the exposure difference is normalized away before any feature is
 /// looked for. `refToSource` on the inputs is ignored.
 [[nodiscard]] AlignResult align(const Frame& frame, const Frame& reference);
+
+/// The reference's log-luma proxy, so a stack can align many frames to one
+/// reference without keeping the reference's full float image (#410).
+struct RefProxy {
+    std::vector<std::uint8_t> pixels;   ///< width*height, row-major; empty = no reference
+    int width = 0, height = 0, scale = 1;
+};
+[[nodiscard]] RefProxy referenceProxy(const Frame& reference);
+
+/// align(frame, reference) with the reference's proxy made once: the same result.
+[[nodiscard]] AlignResult align(const Frame& frame, const RefProxy& reference);
 
 }  // namespace orion::merge

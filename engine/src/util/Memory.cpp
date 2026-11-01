@@ -4,6 +4,7 @@
 
 #if defined(__APPLE__)
 #include <mach/mach.h>
+#include <sys/sysctl.h>
 #elif defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -26,8 +27,18 @@ void setAvailableMemoryOverride(std::uint64_t bytes) noexcept { override_.store(
 std::uint64_t availableMemory() noexcept {
     if (const std::uint64_t o = override_.load(std::memory_order_relaxed)) return o;
 #if defined(__APPLE__)
-    // Inactive and purgeable pages are given up on demand, so they count as free, as Activity Monitor's
-    // "memory available" does.
+    // The kernel's own measure (research/UNSOURCED.md §32): kern.memorystatus_level is the percentage of
+    // memory neither wired nor in the compressor (XNU osfmk/vm/vm_page.h, AVAILABLE_NON_COMPRESSED_MEMORY:
+    // active + inactive + free + speculative pages), what memory_pressure(1) prints as "free percentage" and
+    // what the kernel's pressure levels are set against. It counts other apps' pages the compressor would
+    // squeeze, so it is the ceiling, not a promise; free + inactive + purgeable read half of it on a 24 GB Mac.
+    int level = 0;
+    std::uint64_t total = 0;
+    std::size_t levelSize = sizeof level, totalSize = sizeof total;
+    if (sysctlbyname("kern.memorystatus_level", &level, &levelSize, nullptr, 0) == 0 &&
+        sysctlbyname("hw.memsize", &total, &totalSize, nullptr, 0) == 0 && level > 0 && level <= 100)
+        return total / 100 * std::uint64_t(level);
+    // Fallback: inactive and purgeable pages are given up on demand, so they count as free.
     vm_statistics64_data_t vm{};
     mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
     const mach_port_t host = mach_host_self();

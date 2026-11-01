@@ -126,17 +126,37 @@ bool debugAlign() {
 
 }  // namespace
 
+RefProxy referenceProxy(const Frame& reference) {
+    RefProxy out;
+    if (reference.rgb == nullptr) return out;
+    out.scale = proxyScaleFor(reference);
+    const cv::Mat proxy = proxyOf(reference, out.scale);   // continuous: allocated whole above
+    out.width = proxy.cols;
+    out.height = proxy.rows;
+    out.pixels.assign(proxy.datastart, proxy.dataend);
+    return out;
+}
+
 AlignResult align(const Frame& frame, const Frame& reference) {
-    AlignResult result;
     if (frame.rgb == nullptr || reference.rgb == nullptr ||
+        frame.width < 64 || frame.height < 64) {
+        return {};
+    }
+    return align(frame, referenceProxy(reference));
+}
+
+AlignResult align(const Frame& frame, const RefProxy& reference) {
+    AlignResult result;
+    if (frame.rgb == nullptr || reference.pixels.empty() ||
         frame.width < 64 || frame.height < 64) {
         return result;
     }
 
     // One scale for both proxies — the conjugation below assumes it, and a
     // bracket's frames share a sensor anyway.
-    const int scale = proxyScaleFor(reference);
-    const cv::Mat refProxy   = proxyOf(reference, scale);
+    const int scale = reference.scale;
+    const cv::Mat refProxy(reference.height, reference.width, CV_8UC1,
+                           const_cast<std::uint8_t*>(reference.pixels.data()));
     const cv::Mat frameProxy = proxyOf(frame, scale);
 
     // ORB over the proxies. 4000 features is generous for a quarter-res

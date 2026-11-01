@@ -1,9 +1,11 @@
 /*  Stacker — see the header for the contract and the policy decisions.
  *
- *  Memory shape at 24 MP, 20 frames: the held half planes (144 MB each,
- *  2.9 GB), plus one frame in flight — its decoded image (192 MB as a linear
- *  DNG's RGBA halves), its float RGB (288 MB), detectStars' transients
- *  (~310 MB) — plus, in Noise mode, the reference's float (288 MB).
+ *  Memory shape, any frame count: one frame in flight — its decoded mosaic,
+ *  the GPU demosaic pool (26 B/px), its float RGB (12), its halves (6),
+ *  detectStars' transients (~13) — then, integrating, the result (12) and a
+ *  band of every frame (128 MB plus the rows a warp reaches past it). On
+ *  macOS a freed large block stays in malloc's cache and in the footprint
+ *  (UNSOURCED §32), so the shapes are kept few and the same every frame.
  *
  *  Calibration (Calibrate.h) comes first: a master is a median, so every
  *  dark (then every flat) is held at once as floats — 96 MB a mosaic at
@@ -30,8 +32,10 @@
 #include <array>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <limits>
 #include <optional>
+#include <random>
 #include <stdexcept>
 #include <utility>
 #include <variant>
@@ -119,23 +123,71 @@ std::vector<float> decodeFrame(const std::string& path, merge::MergeRender& rend
     return rgb;
 }
 
-std::vector<std::uint16_t> toHalf(const std::vector<float>& rgb) {
-    std::vector<std::uint16_t> half(rgb.size());
-    for (std::size_t p = 0; p < rgb.size(); ++p) half[p] = util::floatToHalf(rgb[p]);
-    return half;
-}
+/// What a band aims to hold across every frame, and its shortest height (#410, UNSOURCED §32): 128 MB is
+/// small beside the in-flight frame and big enough that a band's reads are long and few.
+constexpr std::uint64_t kBandBytes = 128ull << 20;
+constexpr std::uint32_t kMinBandRows = 16;
+
+/// The registered frames' half planes on disk, frame after frame, in the system temp directory; the
+/// file goes with this object, on success, failure and cancel alike.
+class Spill {
+public:
+    Spill(const std::filesystem::path& dir, std::uint32_t width, std::uint32_t height)
+        : row_(std::uint64_t(width) * 3), values_(row_ * height) {
+        std::random_device rd;
+        char name[64];
+        std::snprintf(name, sizeof name, "orion-stack-%08x%08x.tmp", rd(), rd());
+        path_ = dir / name;
+        file_.open(path_, std::ios::binary | std::ios::in | std::ios::out | std::ios::trunc);
+        if (!file_) throw std::runtime_error("could not create the stack's temporary file in " + util::utf8String(dir));
+#ifndef _WIN32
+        // Unlinked while open: the system reclaims it even if the process dies. (Windows cannot; the destructor does.)
+        std::error_code ec;
+        std::filesystem::remove(path_, ec);
+#endif
+    }
+    Spill(const Spill&) = delete;
+    Spill& operator=(const Spill&) = delete;
+    ~Spill() {
+        file_.close();
+        std::error_code ec;
+        std::filesystem::remove(path_, ec);
+    }
+
+    void write(std::size_t frame, const std::vector<std::uint16_t>& halves) {
+        file_.seekp(std::streamoff(frame * values_ * 2));
+        file_.write(reinterpret_cast<const char*>(halves.data()), std::streamsize(halves.size() * 2));
+        if (!file_) throw std::runtime_error("could not write the stack's temporary file (is the disk full?)");
+    }
+
+    /// `rows` rows of `frame` from `firstRow`, width*3 halves a row, into dst.
+    void read(std::size_t frame, std::uint32_t firstRow, std::uint32_t rows, std::uint16_t* dst) {
+        file_.seekg(std::streamoff((frame * values_ + firstRow * row_) * 2));
+        file_.read(reinterpret_cast<char*>(dst), std::streamsize(rows * row_ * 2));
+        if (!file_) throw std::runtime_error("could not read back the stack's temporary file");
+    }
+
+private:
+    std::filesystem::path path_;
+    std::fstream file_;
+    std::uint64_t row_, values_;   // halves a row, a frame
+};
 
 }  // namespace
 
 std::uint64_t estimateBytes(std::uint64_t pixels, std::size_t lights, std::size_t darks, std::size_t flats) noexcept {
-    // Bytes a pixel, measured (research/UNSOURCED.md §32): peak footprint of `Orion --stack --force` on 2, 3,
-    // 5 and 7 links to one real 24 MP ARW (6024x4024) is 12.0 per light plus 85.4 fixed, to 0.1 B/px across
-    // all four. 12, not the half planes' 6: something in the raw path grows ~6 B/px a frame (unexplained;
-    // a linear DNG stack grows 6). Fixed x 1.1 = 94. Calibration frames: 4 each, as float mosaics while
-    // their median is taken (from the code, unmeasured; a linear DNG's RGB is 12).
-    constexpr std::uint64_t kLight = 12, kCalibration = 4, kFixed = 94;
-    return pixels * (std::max(kLight * lights, kCalibration * std::max(darks, flats)) + kFixed);
+    // Bytes a pixel, measured (research/UNSOURCED.md §32): the stack's own peak footprint, frames streamed
+    // (#410), is flat in the frame count: 54.7 at 42 MP noise (2 to 19 frames alike), 67 stars, and 62.2
+    // and 70.6 on 24 MP links, whose daylight frames the memory compressor cannot shrink. 70.6 x 1.1 = 78.
+    // A light adds the rows its warp reaches past each band, 0.1 (64 rows of a 4000-row frame, 6 B each).
+    // Calibration frames: 4 each of the longer list while its median is taken, and the two masters (from
+    // the code, unmeasured; a linear DNG's RGB is 12).
+    constexpr std::uint64_t kFixed = 78, kCalibration = 4;
+    const std::uint64_t calibration = darks + flats > 0 ? kCalibration * (std::max(darks, flats) + 2) : 0;
+    return pixels * (kFixed + calibration) + pixels * lights / 10;
 }
+
+std::uint64_t spillBytes(std::uint64_t pixels, std::size_t lights) noexcept { return pixels * 6 * lights; }
 
 std::uint64_t estimateBytes(const std::string& light, std::size_t lights, std::size_t darks, std::size_t flats) {
     const raw::RawInfo info = raw::readInfo(light);
@@ -181,6 +233,21 @@ void Stacker::run(const Request& rq) {
             throw NotEnoughMemory(sentence);
         }
     }
+    // And the disk the frames spill to, which forcing does not conjure up.
+    const std::filesystem::path tempDir = std::filesystem::temp_directory_path();
+    {
+        const std::uint64_t need = spillBytes(std::uint64_t(refInfo.width) * refInfo.height, n);
+        std::error_code ec;
+        const std::uint64_t have = rq.availableDisk ? rq.availableDisk : std::filesystem::space(tempDir, ec).available;
+        if (!ec && need > have) {
+            char sentence[300];
+            std::snprintf(sentence, sizeof sentence,
+                          "These %zu frames need about %.1f GB of temporary disk space and about %.1f GB is free on "
+                          "the disk that holds %s. Free some space there, or stack fewer frames.",
+                          n, double(need) / 1e9, double(have) / 1e9, util::utf8String(tempDir).c_str());
+            throw std::runtime_error(sentence);
+        }
+    }
     const auto named = [](const std::string& c) { return c.find_first_not_of(' ') != std::string::npos; };
     const auto otherCamera = [&](const raw::RawInfo& info) {
         return named(info.camera) && named(refInfo.camera) && info.camera != refInfo.camera;
@@ -222,16 +289,20 @@ void Stacker::run(const Request& rq) {
     if (!rq.flats.empty()) masters.gain = flatGain(median(rq.flats, true), masters.dark, channel);
 
     // ── Decode and register, one frame at a time, the reference first ─────
-    // Scoped to the loop: its GPU demosaic pool (~22-26 B/px) is freed before integration (on Apple silicon
-    // it comes out of the memory availableMemory reports).
+    // Each registered frame is measured against the reference while its halves are in memory, then
+    // spilled to disk; only one frame is ever held whole. Scoped to the loop: the GPU demosaic pool
+    // (26 B/px) is freed before integration (on Apple silicon it is the memory availableMemory reports).
+    std::optional<Spill> spill;      // made once the first frame's sensor size is known
     std::optional<merge::MergeRender> render;
     render.emplace(device_, shaderDir_);
     Meta refMeta;
-    std::vector<float> refFloat;     // Noise mode: kept until every frame is aligned
+    merge::RefProxy refProxy;        // Noise mode: the reference as the aligner sees it, not its full float
     std::vector<Star> refStars;      // Stars and Landscape
     std::vector<float> matte;        // Landscape: the sky on the sensor frame
-    std::vector<std::vector<std::uint16_t>> planes;
-    std::vector<Frame> frames;
+    std::vector<std::uint16_t> halves;   // the frame in flight, one buffer for all of them
+    Reference refStats;
+    std::vector<Norm> norms;
+    std::vector<Frame> frames;       // their warps; the pixels are in the spill
 
     for (std::size_t k = 0; k < n; ++k) {
         step(0.05f + 0.70f * float(k) / float(n));
@@ -244,24 +315,22 @@ void Stacker::run(const Request& rq) {
             throw std::runtime_error("the frames are different sizes — a stack comes from one camera");
         }
         const std::uint32_t W = meta.width, H = meta.height;
+        merge::Frame mf;   // the aligner's view of this frame
+        mf.width = W;
+        mf.height = H;
+        mf.rgb = rgb.data();
 
         Frame f{W, H, nullptr, persp::identity(), persp::identity()};
         if (k == 0) {
+            spill.emplace(tempDir, W, H);
             if (landscape) matte = skyMatteToFrame(rq.skyMatte.data(), rq.matteWidth, rq.matteHeight, W, H, meta.flip);
-            if (rq.mode == Mode::Noise) refFloat = std::move(rgb);
+            if (rq.mode == Mode::Noise) refProxy = merge::referenceProxy(mf);
             else refStars = detectStars(rgb.data(), W, H, landscape ? matte.data() : nullptr);
         } else {
-            merge::AlignResult a;
-            if (rq.mode == Mode::Noise) {
-                merge::Frame mf, mr;
-                mf.width = mr.width = W;
-                mf.height = mr.height = H;
-                mf.rgb = rgb.data();
-                mr.rgb = refFloat.data();
-                a = merge::align(mf, mr);
-            } else {
-                a = alignStars(detectStars(rgb.data(), W, H, landscape ? matte.data() : nullptr), refStars, W, H);
-            }
+            const merge::AlignResult a =
+                rq.mode == Mode::Noise
+                    ? merge::align(mf, refProxy)
+                    : alignStars(detectStars(rgb.data(), W, H, landscape ? matte.data() : nullptr), refStars, W, H);
             if (!a.ok) {
                 std::fprintf(stderr, "orion stack: skipped %s: did not register (%d inliers)\n",
                              rq.paths[i].c_str(), a.inliers);
@@ -271,45 +340,113 @@ void Stacker::run(const Request& rq) {
             f.refToSource = a.refToSource;   // the ground (Landscape) stays identity: the camera did not move
         }
 
-        // Halves only for a frame that registered; the Noise reference's float now lives in refFloat.
-        planes.push_back(toHalf(k == 0 && rq.mode == Mode::Noise ? refFloat : rgb));
+        // Halves only for a frame that registered: measured, spilled, and the buffer reused.
+        halves.resize(rgb.size());
+        for (std::size_t p = 0; p < rgb.size(); ++p) halves[p] = util::floatToHalf(rgb[p]);
+        f.rgb = halves.data();
+        if (k == 0) refStats = measureReference(f, landscape ? matte.data() : nullptr);
+        norms.push_back(measureFrame(f, refStats, rq.options.weightByNoise));
+        spill->write(frames.size(), halves);
+        f.rgb = nullptr;
         frames.push_back(f);
     }
-    refFloat = {};
+    refProxy = {};
+    halves = {};
     render.reset();
     if (frames.size() < 2) throw std::runtime_error("no frame registered against the reference — nothing to stack");
-    for (std::size_t j = 0; j < frames.size(); ++j) frames[j].rgb = planes[j].data();
+    const Rejection used = rq.options.rejection == Rejection::Auto ? autoRejection(int(frames.size())) : rq.options.rejection;
+    if (rq.options.weightByNoise) capWeights(norms);
 
-    step(0.8f);
-    const Result result = integrate(frames, 0, landscape ? matte.data() : nullptr, rq.options);
-    frames = {};   // they point into planes
-    planes = {};
+    // ── Integrate in bands of rows, each frame read for just the rows its warp reaches ──
+    const std::uint32_t W = refMeta.width, H = refMeta.height;
+    const std::size_t m = frames.size();
+    const auto reads = [&](const Frame& f, std::uint32_t y0, std::uint32_t y1) {
+        Rows r = rowsRead(f.refToSource, W, H, y0, y1);
+        if (landscape) {
+            const Rows g = rowsRead(f.groundToSource, W, H, y0, y1);
+            r = {std::min(r.first, g.first), std::max(r.last, g.last)};
+        }
+        return r;
+    };
+    // The rows a frame holds for bands of `rows`: its widest band's, the band plus the warp's reach past it.
+    const auto mostRows = [&](const Frame& f, std::uint32_t rows) {
+        std::uint32_t most = 0;
+        for (std::uint32_t y0 = 0; y0 < H; y0 += rows) {
+            const Rows r = reads(f, y0, std::min(H, y0 + rows));
+            most = std::max(most, r.last - r.first);
+        }
+        return most;
+    };
+    const auto heldBytes = [&](std::uint32_t rows) {
+        std::uint64_t bytes = 0;
+        for (const Frame& f : frames) bytes += std::uint64_t(mostRows(f, rows)) * W * 6;
+        return bytes;
+    };
+    // The tallest band (16 rows doubled) whose holdings fit the band budget, or twice what the shortest band
+    // holds when a turned field's reach dominates: taller bands then re-read each row under twice, for at most
+    // twice the memory, where short ones would re-read the reach once a band.
+    std::uint32_t bandRows = std::min(kMinBandRows, H);
+    const std::uint64_t budget = std::max(rq.bandBytes ? rq.bandBytes : kBandBytes, 2 * heldBytes(bandRows));
+    while (bandRows < H && heldBytes(std::min(H, bandRows * 2)) <= budget) bandRows = std::min(H, bandRows * 2);
+    // The estimate could not know the warps: a field turned far enough holds more than it allowed for.
+    const std::uint64_t holding = heldBytes(bandRows);
+    if (!rq.force && holding > kBandBytes) {
+        const std::uint64_t have = rq.availableBytes ? rq.availableBytes : util::availableMemory();
+        const std::uint64_t need = holding + std::uint64_t(W) * H * 12;   // and the result
+        if (have > 0 && need > have) {
+            char sentence[200];
+            std::snprintf(sentence, sizeof sentence,
+                          "These %zu frames need about %.1f GB of memory and about %.1f GB is free. "
+                          "Close other apps to free memory, or proceed anyway.",
+                          n, double(need) / 1e9, double(have) / 1e9);
+            throw NotEnoughMemory(sentence);
+        }
+    }
+    // One buffer a frame, sized for its widest band, so the band loop allocates nothing.
+    std::vector<std::vector<std::uint16_t>> held(m);
+    for (std::size_t j = 0; j < m; ++j) held[j].resize(std::size_t(mostRows(frames[j], bandRows)) * W * 3);
+    std::vector<float> out(std::size_t(W) * H * 3);
+    for (std::uint32_t y0 = 0; y0 < H; y0 += bandRows) {
+        step(0.8f + 0.15f * float(y0) / float(H));
+        const std::uint32_t y1 = std::min(H, y0 + bandRows);
+        for (std::size_t j = 0; j < m; ++j) {
+            const Rows r = reads(frames[j], y0, y1);
+            spill->read(j, r.first, r.last - r.first, held[j].data());
+            frames[j].firstRow = r.first;
+            frames[j].rgb = held[j].data();
+        }
+        integrateRows(frames, 0, landscape ? matte.data() : nullptr, refStats, norms, used, y0, y1,
+                      out.data() + std::size_t(y0) * W * 3);
+    }
+    frames = {};   // they point into held
+    held = {};
+    spill.reset();   // its disk back before the DNG is written
 
     // ── The container, as HdrMerge's ──────────────────────────────────────
     step(0.95f);
-    util::DngLinearImage out;
-    out.width = refMeta.width;
-    out.height = refMeta.height;
-    out.rgb = result.rgb.data();
-    out.xyzToCam = refMeta.camToXyz;
+    util::DngLinearImage dng;
+    dng.width = refMeta.width;
+    dng.height = refMeta.height;
+    dng.rgb = out.data();
+    dng.xyzToCam = refMeta.camToXyz;
     // AsShotNeutral: the reciprocals of the gains, normalized so green is 1.
     const float g = refMeta.camMul[1] != 0.0f ? refMeta.camMul[1] : 1.0f;
     for (std::size_t c = 0; c < 3; ++c)
-        out.asShotNeutral[c] = refMeta.camMul[c] != 0.0f ? g / refMeta.camMul[c] : 1.0f;
-    out.baselineExposureEv = 0.0f;   // a stack is normalized to the reference: no headroom bought
-    out.camera = refMeta.camera;
-    out.flip = refMeta.flip;
+        dng.asShotNeutral[c] = refMeta.camMul[c] != 0.0f ? g / refMeta.camMul[c] : 1.0f;
+    dng.baselineExposureEv = 0.0f;   // a stack is normalized to the reference: no headroom bought
+    dng.camera = refMeta.camera;
+    dng.flip = refMeta.flip;
 
     // Allowed to fail: a DNG without a preview is inconvenient, not wrong.
-    const merge::Preview preview = merge::buildPreview(result.rgb, refMeta.width, refMeta.height, 0.0f,
+    const merge::Preview preview = merge::buildPreview(out, refMeta.width, refMeta.height, 0.0f,
                                                        refMeta.camMul, refMeta.camToXyz, refMeta.flip);
     if (!preview.jpeg.empty()) {
-        out.previewJpeg = preview.jpeg.data();
-        out.previewJpegBytes = preview.jpeg.size();
-        out.previewWidth = preview.width;
-        out.previewHeight = preview.height;
+        dng.previewJpeg = preview.jpeg.data();
+        dng.previewJpegBytes = preview.jpeg.size();
+        dng.previewWidth = preview.width;
+        dng.previewHeight = preview.height;
     }
-    util::writeDngLinear(rq.output, out);
+    util::writeDngLinear(rq.output, dng);
     progress_.store(1.0f, std::memory_order_relaxed);
 }
 

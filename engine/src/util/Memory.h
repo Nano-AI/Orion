@@ -1,6 +1,7 @@
 /*  Available memory — what this machine could hand out now without swapping,
  *  for the stack's memory check (#391). One call, one #if per OS:
- *    macOS    host_statistics64(HOST_VM_INFO64): (free + inactive + purgeable) pages
+ *    macOS    kern.memorystatus_level (% neither wired nor compressed) x hw.memsize;
+ *             host_statistics64 free + inactive + purgeable pages if that will not read
  *    Windows  GlobalMemoryStatusEx: ullAvailPhys
  *    Linux    /proc/meminfo: MemAvailable
  */
