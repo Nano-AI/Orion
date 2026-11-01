@@ -22,6 +22,7 @@ sealed class ProposalWatcher {
     JsonObject? _committed;
     byte[]? _lastSeen;
     FileSystemWatcher? _watch;
+    string? _folder;   // what _watch watches, links resolved
     int _debounce;   // the latest pending check; an older one finds it moved and stands down
 
     static EngineModel E => EngineModel.Shared;
@@ -49,11 +50,22 @@ sealed class ProposalWatcher {
     public void Attach(string? photo) {
         if (photo == _photo && _watch != null) return;
         if (IsLive) Fire(new(Proposal.EventKind.SwitchedAway));
-        Stop();
+        _debounce++;   // a check still queued for the photo before is dropped
         (_photo, _committed, _lastSeen) = (photo, null, null);
+        // Null between photos: the watch stays, because the next photo is nearly always in the same
+        // folder, and a new FileSystemWatcher cost ~54 ms of every arrow key on macOS (FSEvents).
         if (photo == null) return;
+        string folder = RealPath(Path.GetDirectoryName(photo)!);
+        if (_watch == null || _folder != folder) WatchFolder(folder);
+        // One already on disk counts as just appeared: the agent may have written it while Orion was elsewhere.
+        Check();
+    }
+
+    void WatchFolder(string folder) {
+        Stop();
         try {
-            _watch = new FileSystemWatcher(RealPath(Path.GetDirectoryName(photo)!)) { NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size };
+            _watch = new FileSystemWatcher(folder) { NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size };
+            _folder = folder;
             FileSystemEventHandler seen = (_, _) => Dispatcher.UIThread.Post(Debounced);
             _watch.Created += seen;
             _watch.Changed += seen;
@@ -61,10 +73,8 @@ sealed class ProposalWatcher {
             _watch.Renamed += (_, _) => Dispatcher.UIThread.Post(Debounced);
             _watch.EnableRaisingEvents = true;
         } catch (Exception e) when (e is IOException or ArgumentException or UnauthorizedAccessException or PlatformNotSupportedException) {
-            Console.Error.WriteLine($"orion: proposals not watched in {Path.GetDirectoryName(photo)} ({e.Message})");
+            Console.Error.WriteLine($"orion: proposals not watched in {folder} ({e.Message})");
         }
-        // One already on disk counts as just appeared: the agent may have written it while Orion was elsewhere.
-        Check();
     }
 
     /// The folder with every symbolic link resolved. macOS reports file events under
@@ -85,6 +95,7 @@ sealed class ProposalWatcher {
     void Stop() {
         _watch?.Dispose();
         _watch = null;
+        _folder = null;
         _debounce++;
     }
 

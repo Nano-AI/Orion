@@ -69,6 +69,10 @@ static partial class CanvasNative {
 
     const ulong ScrollWheel = 22, Magnify = 30, Ended = 8, Cancelled = 16;   // NSEventType, NSEventPhase
 
+    /// The scroll being handled is the momentum glide after the fingers lifted. False off AppKit.
+    public static bool Momentum() =>
+        Current() is var (e, type) && type == ScrollWheel && SendWord(e, sel_registerName("momentumPhase")) != 0;
+
     static (nint Event, ulong Type)? Current() {
         if (!Cocoa) return null;
         nint e = Send(Shared("NSApplication", "sharedApplication"), sel_registerName("currentEvent"));

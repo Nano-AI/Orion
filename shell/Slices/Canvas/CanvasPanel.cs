@@ -270,6 +270,13 @@ public sealed class CanvasPanel : Panel {
     void Wheel(object? sender, PointerWheelEventArgs e) {
         var d = e.Delta;
         var (precise, points) = Scroll.Read(e);   // a wheel zooms, a touchpad pans
+        bool zoomKey = e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        // At fit there is nothing to pan: a two-finger sideways swipe steps photos, as Photos does.
+        if (precise && !zoomKey && CanvasState.Viewport.IsFit && Math.Abs(d.X) > Math.Abs(d.Y)) {
+            Swipe(d.X * points);
+            e.Handled = true;
+            return;
+        }
         var vp = Hold();
         if (!precise || e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control))
             vp.ZoomBy(Math.Exp(0.01 * d.Y * points), Anchor(e.GetPosition(this)));
@@ -277,6 +284,30 @@ public sealed class CanvasPanel : Panel {
             vp.Pan(new Vector(d.X * points / Math.Max(Bounds.Width, 1), d.Y * points / Math.Max(Bounds.Height, 1)));
         Rest();
         e.Handled = true;
+    }
+
+    /// Points of sideways travel that make a swipe, and the pause that starts a new one where
+    /// AppKit gives no gesture phase (Windows, Linux).
+    const double SwipeStep = 80, SwipeGapMs = 300;
+    double _swipe;
+    bool _swiped;
+    long _swipeAt;
+    /// Photo steps a swipe has made: the selftest's count (one a gesture, however far it goes).
+    internal static int Swiped;
+
+    /// One step a gesture: fingers left (content moving left, natural scrolling) is the next photo.
+    /// The momentum glide after the fingers lift is not a second swipe.
+    void Swipe(double dx) {
+        if (CanvasNative.Momentum()) return;
+        long now = Environment.TickCount64;
+        if (now - _swipeAt > SwipeGapMs) (_swipe, _swiped) = (0, false);
+        _swipeAt = now;
+        if (!_swiped && Math.Abs(_swipe += dx) >= SwipeStep) {
+            _swiped = true;
+            Swiped++;
+            Commands.Run(_swipe < 0 ? "next-photo" : "previous-photo");
+        }
+        if (CanvasNative.GestureEnded() == true) (_swipe, _swiped) = (0, false);
     }
 
     /// ImageCanvas.swift `handleMagnify`: the trackpad pinch (NSEvent magnify,
