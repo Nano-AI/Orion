@@ -20,7 +20,9 @@ public static class StackGroups {
     /// (an intervalometer ramp) splits into several groups. Compare to the previous gap if that proves too strict.
     public static List<StackGroup> Find(IReadOnlyList<Shot> shots, Func<string, bool>? dark = null) {
         // Unknown exposure (shutter or ISO unread) is no evidence of a stack: left out of every group.
-        var timed = shots.Where(s => s.Captured != null && s.Shutter > 0 && s.Iso > 0).OrderBy(s => s.Captured).ThenBy(s => s.Path, StringComparer.Ordinal).ToList();
+        // So is a stack Orion wrote: it carries its reference's capture time and settings, and in the
+        // run it would split the group it came from.
+        var timed = shots.Where(s => s.Captured != null && s.Shutter > 0 && s.Iso > 0 && Output(s.Path) == null).OrderBy(s => s.Captured).ThenBy(s => s.Path, StringComparer.Ordinal).ToList();
         var groups = new List<StackGroup>();
         var run = new List<Shot>();
         double c0 = 0;
@@ -51,6 +53,18 @@ public static class StackGroups {
         && Near(a.Aperture, b.Aperture) && Near(a.Focal, b.Focal);
 
     static bool Near(float a, float b) => Math.Abs(a - b) <= 0.001f * Math.Max(Math.Abs(a), Math.Abs(b));
+
+    /// The reference stem of a stack Orion wrote (Stack.OutputPath: `<stem>-stack.dng`, `-stack-2.dng`, …), else null.
+    public static string? Output(string path) =>
+        System.Text.RegularExpressions.Regex.Match(System.IO.Path.GetFileName(path), @"^(.+)-stack(-\d+)?\.dng$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase) is { Success: true } m ? m.Groups[1].Value : null;
+
+    /// The group holding `path`, or, for a stack Orion wrote, the group holding its reference frame.
+    public static StackGroup? Holding(IReadOnlyList<StackGroup> groups, string path) {
+        var stem = Output(path);
+        return groups.FirstOrDefault(g => stem == null ? g.Paths.Contains(path)
+            : g.Paths.Any(p => System.IO.Path.GetFileNameWithoutExtension(p) == stem && System.IO.Path.GetDirectoryName(p) == System.IO.Path.GetDirectoryName(path)));
+    }
 
     public static string Suggestion(StackGroup g) => $"{g.Paths.Count} frames look like a stack. Stack them?";
 

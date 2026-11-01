@@ -54,7 +54,7 @@ public sealed class StackSheet : Border {
 
     static StackGroup? OpenGroup(IReadOnlyList<StackGroup>? groups) =>
         groups != null && EngineModel.Shared.Current is var i and >= 0
-            ? groups.FirstOrDefault(g => g.Paths.Contains(EngineModel.Shared.Photos[i])) : null;
+            ? StackGroups.Holding(groups, EngineModel.Shared.Photos[i]) : null;
 
     public StackSheet() {
         Background = Palette.Panel;

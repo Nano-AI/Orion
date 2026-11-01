@@ -43,6 +43,16 @@ static partial class SelfTest {
 
         Check(StackGroups.Find(Frames(4, 20, 3200, 25)).Count == 0, "four frames are not a stack");
 
+        // A stack Orion wrote beside its frames carries the reference's time and settings: it must not split the run,
+        // and opened, it belongs to the group it came from.
+        var written = Frames(14, 20, 3200, 25);
+        written.Add(written[6] with { Path = "f07-stack.dng" });
+        written.Add(written[6] with { Path = "f07-stack-2.DNG" });
+        var kept = StackGroups.Find(written);
+        Check(Sizes(kept) == "14" && StackGroups.Holding(kept, "f07-stack-2.DNG") == kept[0] && StackGroups.Holding(kept, "f07-stacked.dng") == null
+              && StackGroups.Output("f07-stack.dng") == "f07" && StackGroups.Output("f07.dng") == null,
+              $"Orion's own stacks stay out of the run, and opening one finds its frames ({Sizes(kept)})");
+
         var burst = StackGroups.Find(Frames(8, 0.005f, 100, 0));
         Check(burst.Count == 1 && !burst[0].Astro && burst[0].Paths.Count == 8, $"a handheld burst in one second is a stack, not astro ({Sizes(burst)})");
         var steady = StackGroups.Find(Frames(8, 0.005f, 100, 0, (i, s) => s with { Captured = T0.AddSeconds(i / 3) }));
