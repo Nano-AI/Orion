@@ -26,12 +26,30 @@ static partial class SelfTest {
         var overlay = new CompareOverlay();
         var window = Show(new Grid { Children = { canvas, overlay } });
         try {
+            WelcomeChecks();
             ZoomChecks(window, canvas);
             PanChecks(window, canvas);
             CompareUxChecks(window, canvas, overlay);
         } finally {
             CompareState.Clear();
             CanvasState.Viewport.Reset();
+            window.Close();
+        }
+    }
+
+    /// The welcome's entrance with its Open button mid-press: the button animates its own transform
+    /// (a TransformOperations), which the entrance once cast to TranslateTransform and crashed on.
+    static void WelcomeChecks() {
+        var canvas = new CanvasPanel();
+        var window = Show(canvas);
+        try {
+            canvas.Arrive(CanvasState.Scene.Welcome);
+            foreach (var b in canvas.GetVisualDescendants().OfType<StateButton>())
+                b.RenderTransform = Avalonia.Media.Transformation.TransformOperations.Parse("scale(0.97)");
+            string? threw = null;
+            try { Frames(); } catch (InvalidCastException e) { threw = e.Message; }
+            Check(threw == null, $"the welcome's entrance survives its button's press transform{(threw == null ? "" : $" ({threw})")}");
+        } finally {
             window.Close();
         }
     }
