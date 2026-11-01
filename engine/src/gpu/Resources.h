@@ -54,9 +54,10 @@ public:
     void upload(const void* src, std::size_t bytesPerRow);
     void download(void* dst, std::size_t bytesPerRow) const;
 
-    /// Reads only the top-left width x height rectangle. The orientation node
-    /// allocates square so a rotation needs no recompile, so most of its
-    /// texture is never written — copying all of it would emit a black band.
+    /// Reads only the top-left width x height rectangle. The orientation node's
+    /// texture can be larger than the frame it writes (it grows with room to
+    /// spare and shrinks only past twice the pixels, #399): the rest is never
+    /// written, so copying all of it would emit a band of whatever it held.
     void download(void* dst, std::size_t bytesPerRow,
                   std::uint32_t width, std::uint32_t height) const;
 
