@@ -8,6 +8,22 @@
 
 
 /* ---------- the download ---------- */
+/* The visitor's system is a class on <html>, set in the <head> before the
+ * first paint (os-mac, os-windows, os-linux, os-phone; download.js swaps in
+ * os-intel, and adds no-build when the release list has nothing for a Windows
+ * or Linux visitor). It picks the words and the branch, so download.js never
+ * redraws the page under the reader. Without scripts: the Mac page. */
+.only-windows, .only-linux, .only-phone,
+.os-windows .only-mac, .os-linux .only-mac, .os-phone .only-mac { display: none; }
+.os-windows .only-windows, .os-linux .only-linux, .os-phone .only-phone { display: revert; }
+:root:not(.os-mac):not(.os-windows):not(.os-linux) [data-chosen] { display: none; }   /* "Chosen for ..." only when there was something to choose from */
+.dl__branch:not([data-for="ready"]),
+:is(.os-phone, .os-intel, .no-build) .dl__branch[data-for="ready"] { display: none; }
+.os-phone .dl__branch[data-for="phone"], .os-intel .dl__branch[data-for="intel"], .no-build .dl__branch[data-for="soon"] { display: flex; }
+:is(.os-windows, .os-linux):not(.no-build) :is([data-fact="runs"], [data-steps]) { display: none; }   /* written for the Mac build only */
+.dl__here { display: none; }
+.os-mac [data-row="mac"] .dl__here, .os-windows [data-row="windows"] .dl__here, .os-linux [data-row="linux"] .dl__here,
+.os-intel [data-row="intel"] .dl__here, .os-phone [data-row="phone"] .dl__here { display: revert; }
 .dl {
   display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--s-7) var(--s-8); align-items: start;
   padding-block: calc(var(--nav-h) + clamp(var(--s-7), 6vw, var(--s-9))) var(--section-tight);
@@ -32,6 +48,13 @@
  * than pop, which says they were just looked up. */
 .dl__facts dt, .dl__facts dd { transition: opacity var(--dur-2) var(--ease-out); }
 @starting-style { .dl__facts dt, .dl__facts dd { opacity: 0; } }
+/* The release's rows are in the page from the first paint, invisible, so
+ * nothing below them moves when GitHub answers; download.js fills them (they
+ * fade in) or, if the lookup fails, removes them. Without scripts there is
+ * no lookup, so no rows. */
+.dl__facts [data-pending] > * { visibility: hidden; opacity: 0; }
+html:not(.js) .dl__facts [data-pending] { display: none; }
+.dl__facts:not(:has(> :not([hidden]))) { display: none; }   /* nothing to say (a Windows or Linux build, and no answer from GitHub): no empty rule either */
 
 .dl__photo { margin-top: var(--s-7); }
 .dl__photo img { width: 100%; border-radius: var(--r-lg); outline: 1px solid rgba(255, 255, 255, 0.1); outline-offset: -1px; }

@@ -27,6 +27,16 @@
 <link rel="apple-touch-icon" href="../apple-touch-icon.png">
 <link rel="manifest" href="../site.webmanifest">
 <link rel="preload" as="font" type="font/woff2" crossorigin href="../fonts/Archivo-var.woff2">
+<script>   /* before the first paint, so nothing is redrawn when the scripts arrive: html.js lays out the controls they drive, and html.os-mac, os-windows, os-linux or os-phone (?os= to preview one) picks the words and the download for this visitor. The same block is in both pages. */
+(function (html, nav, asked) {
+  var platform = (nav.userAgentData && nav.userAgentData.platform) || nav.platform || '';
+  var os = /^(mac|intel|windows|linux|phone)$/.test(asked) ? asked
+    : /iPhone|iPad|iPod|Android/i.test(nav.userAgent) || (/Mac/i.test(platform) && nav.maxTouchPoints > 1) ? 'phone'   // iPadOS reports a Mac, with touch
+    : /Mac/i.test(platform) ? 'mac' : /Win/i.test(platform) ? 'windows' : /Linux|X11/i.test(platform) ? 'linux' : '';
+  html.classList.add('js');
+  if (os) html.classList.add('os-' + os);
+})(document.documentElement, navigator, new URLSearchParams(location.search).get('os'));
+</script>
 <link rel="stylesheet" href="../css/tokens.css">
 <link rel="stylesheet" href="../css/base.css">
 <link rel="stylesheet" href="../css/home.css">
@@ -82,21 +92,26 @@
 <main id="main">
 
 <!-- Without scripts this is the Mac page, its buttons on the release list.
-     download.js picks the visitor's system and fills in the newest build. -->
+     The visitor's system, from the class the <head> sets, picks the words and
+     the branch below (download.css); download.js fills in the newest build. -->
 <section class="wrap dl" aria-labelledby="dl-title">
   <div class="dl__copy">
-    <h1 class="h1" id="dl-title" data-title>Orion for macOS</h1>
+    <h1 class="h1" id="dl-title" data-title><span class="only-mac">Orion for macOS</span><span class="only-windows">Orion for Windows</span><span class="only-linux">Orion for Linux</span><span class="only-phone">Orion is a desktop app</span></h1>
 
     <div class="dl__branch" data-for="ready">
-      <p class="lede" data-lede>The alpha for Macs with Apple silicon. Free to download, with no account to make.</p>
+      <p class="lede only-mac">The alpha for Macs with Apple silicon. Free to download, with no account to make.</p>
+      <p class="lede only-windows">The alpha for Windows. Free to download, with no account to make.</p>
+      <p class="lede only-linux">The alpha for Linux. Free to download, with no account to make.</p>
       <p class="dl__cta">
-        <a class="btn btn--lg" data-file="visitor" href="https://github.com/Nano-AI/Orion/releases"><span data-label>Download for macOS</span></a>
+        <a class="btn btn--lg" data-file="visitor" href="https://github.com/Nano-AI/Orion/releases"><span class="only-mac">Download for macOS</span><span class="only-windows">Download for Windows</span><span class="only-linux">Download for Linux</span></a>
         <a class="btn btn--lg btn--ghost" data-notes href="https://github.com/Nano-AI/Orion/releases">Release notes</a>
       </p>
-      <p class="small" data-for="ready" hidden>Chosen for <span data-name>macOS</span> from what your browser reports. Other systems are <a class="link" href="#platforms">listed below</a>.</p>
+      <p class="small only-mac" data-chosen>Chosen for macOS from what your browser reports. Other systems are <a class="link" href="#platforms">listed below</a>.</p>
+      <p class="small only-windows" data-chosen>Chosen for Windows from what your browser reports. Other systems are <a class="link" href="#platforms">listed below</a>.</p>
+      <p class="small only-linux" data-chosen>Chosen for Linux from what your browser reports. Other systems are <a class="link" href="#platforms">listed below</a>.</p>
     </div>
 
-    <div class="dl__branch" data-for="intel" hidden>
+    <div class="dl__branch" data-for="intel">
       <div class="dl__note">
         <p><strong>This looks like an Intel Mac.</strong></p>
         <p class="small">Orion is built only for Apple silicon (M1 and later), so it won't open here. There is no Intel build.</p>
@@ -105,33 +120,39 @@
       <p class="small">Downloading for another Mac? That button is the right file.</p>
     </div>
 
-    <div class="dl__branch" data-for="soon" hidden>
-      <p class="lede">Not yet. Orion runs on Macs today. The <span data-name>Windows</span> version is in testing and has no download yet.</p>
+    <div class="dl__branch" data-for="soon">
+      <p class="lede only-windows">Not yet. Orion runs on Macs today. The Windows version is in testing and has no download yet.</p>
+      <p class="lede only-linux">Not yet. Orion runs on Macs today. The Linux version is in testing and has no download yet.</p>
       <p class="dl__cta">
         <a class="btn btn--lg" href="https://github.com/Nano-AI/Orion">Watch Orion on GitHub</a>
         <a class="btn btn--lg btn--ghost" data-file="mac" href="https://github.com/Nano-AI/Orion/releases">Download for macOS</a>
       </p>
-      <p class="small">On GitHub, choose Watch, then Custom, then Releases, to hear when a <span data-name>Windows</span> build ships.</p>
+      <p class="small only-windows">On GitHub, choose Watch, then Custom, then Releases, to hear when a Windows build ships.</p>
+      <p class="small only-linux">On GitHub, choose Watch, then Custom, then Releases, to hear when a Linux build ships.</p>
     </div>
 
-    <div class="dl__branch" data-for="phone" hidden>
-      <p class="lede" data-phone>It runs on Macs with Apple silicon. Open this page on your Mac to download it, or share the link to send it there.</p>
+    <div class="dl__branch" data-for="phone">
+      <p class="lede" data-phone>It runs on macOS, Windows, Linux. Open this page on your computer to download it, or share the link to send it there.</p>
       <p class="dl__cta"><button class="btn btn--lg" type="button" data-share>Share link</button></p>
     </div>
 
     <dl class="dl__facts">
-      <div data-fact="file" hidden><dt>File</dt><dd></dd></div>
-      <div data-fact="size" hidden><dt>Size</dt><dd></dd></div>
-      <div data-fact="date" hidden><dt>Released</dt><dd></dd></div>
+      <!-- the release's rows hold their place, invisible, until download.js fills them from GitHub (the SHA's 64 zeros wrap as a hash does) -->
+      <div data-fact="file" data-pending><dt>File</dt><dd>0</dd></div>
+      <div data-fact="size" data-pending><dt>Size</dt><dd>0</dd></div>
+      <div data-fact="date" data-pending><dt>Released</dt><dd>0</dd></div>
       <div data-fact="runs"><dt>Runs on</dt><dd>macOS 14 or later, Apple silicon</dd></div>
-      <div data-fact="sha" hidden><dt>SHA-256</dt><dd></dd></div>
+      <div data-fact="sha" data-pending><dt>SHA-256</dt><dd>0000000000000000000000000000000000000000000000000000000000000000</dd></div>
     </dl>
   </div>
 
   <figure class="dl__photo">
-    <img src="../img/app-ev3-1200.jpg" srcset="../img/app-ev3-1200.jpg 1200w, ../img/app-ev3-1800.jpg 1800w"
-         sizes="(max-width: 900px) 100vw, 42vw" width="1800" height="1125" decoding="async"
-         alt="Orion's window: a night photograph of cars outside a showroom, with the Light panel's sliders beside it.">
+    <picture>
+      <source type="image/avif" srcset="../img/app-ev3-1200.avif 1200w, ../img/app-ev3-1800.avif 1800w" sizes="(max-width: 900px) 100vw, 42vw">
+      <img src="../img/app-ev3-1200.jpg" srcset="../img/app-ev3-1200.jpg 1200w, ../img/app-ev3-1800.jpg 1800w"
+           sizes="(max-width: 900px) 100vw, 42vw" width="1800" height="1125" fetchpriority="high" decoding="async"
+           alt="Orion's window: a night photograph of cars outside a showroom, with the Light panel's sliders beside it.">
+    </picture>
     <figcaption class="mono">The alpha, developing a Sony ARW.</figcaption>
   </figure>
 </section>
@@ -171,30 +192,30 @@
     </div>
     <ul class="platforms">
       <li data-row="mac">
-        <p class="h3">macOS<span class="dl__here" hidden>This computer</span></p>
+        <p class="h3">macOS<span class="dl__here">This computer</span></p>
         <p class="needs">Apple silicon (M1 or later), macOS 14 Sonoma or later</p>
         <p class="status is-ready">Alpha, available now</p>
         <a class="btn btn--ghost" data-file="mac" href="https://github.com/Nano-AI/Orion/releases">Download</a>
       </li>
       <li data-row="windows">
-        <p class="h3">Windows<span class="dl__here" hidden>This computer</span></p>
+        <p class="h3">Windows<span class="dl__here">This computer</span></p>
         <p class="needs">Windows 10 or later, x64, a Direct3D 12 GPU</p>
         <p class="status">In testing, not released yet</p>
         <a class="btn btn--ghost" data-file="windows" href="https://github.com/Nano-AI/Orion/releases" hidden>Download</a>
       </li>
       <li data-row="linux">
-        <p class="h3">Linux<span class="dl__here" hidden>This computer</span></p>
+        <p class="h3">Linux<span class="dl__here">This computer</span></p>
         <p class="needs">x86-64 AppImage, a Vulkan driver, glibc 2.39 or later (Ubuntu 24.04)</p>
         <p class="status">In testing, not released yet</p>
         <a class="btn btn--ghost" data-file="linux" href="https://github.com/Nano-AI/Orion/releases" hidden>Download</a>
       </li>
       <li data-row="intel">
-        <p class="h3">Intel Macs<span class="dl__here" hidden>This computer</span></p>
+        <p class="h3">Intel Macs<span class="dl__here">This computer</span></p>
         <p class="needs">x86-64</p>
         <p class="status">Not built</p>
       </li>
       <li data-row="phone">
-        <p class="h3">iPhone, iPad, Android<span class="dl__here" hidden>This computer</span></p>
+        <p class="h3">iPhone, iPad, Android<span class="dl__here">This computer</span></p>
         <p class="needs">Phones and tablets</p>
         <p class="status">No app: Orion is a desktop editor</p>
       </li>

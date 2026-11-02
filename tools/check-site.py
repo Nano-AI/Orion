@@ -256,6 +256,7 @@ def main():
     markers = {
         ".jpg": [(b"Exif\x00\x00", "EXIF"), (b"ns.adobe.com/xap/1.0/", "XMP"), (b"Photoshop 3.0\x00", "IPTC")],
         ".png": [(b"eXIf", "EXIF"), (b"XML:com.adobe.xmp", "XMP")],
+        ".avif": [(b"Exif", "EXIF"), (b"application/rdf+xml", "XMP")],   # the Exif item's type, the XMP item's content type
     }
     markers[".jpeg"] = markers[".jpg"]
     blobs = [(f.name, f.suffix.lower(), f.read_bytes()) for f in sorted(WEB.rglob("*"))

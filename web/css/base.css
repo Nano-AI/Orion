@@ -22,6 +22,49 @@
   font-stretch: 75% 112.5%;
   font-display: swap;
 }
+/* Fallbacks shaped like the webfonts, so the page does not reflow when they
+ * arrive. Arial (Liberation Sans is metric-compatible with it), regular or
+ * bold as the weight would pick, scaled per weight to Archivo's width over the
+ * site's own text (measured in Chrome, kerning included), with Archivo's
+ * ascent and descent (0.878 and 0.210 em, from its hhea and OS/2 tables)
+ * divided by that scale. Menlo and DejaVu Sans Mono share one advance
+ * (0.602 em, Martian Mono's is 0.700), Consolas has its own (0.550), so it is
+ * a family of its own: a family whose local() fonts are all missing is
+ * skipped, and the next one in the stack is tried. */
+@font-face {   /* Archivo 400 */
+  font-family: "Archivo Fallback";
+  src: local("Arial"), local("ArialMT"), local("Helvetica Neue"), local("Liberation Sans");
+  font-weight: 100 449;
+  size-adjust: 98.34%; ascent-override: 89.28%; descent-override: 21.35%; line-gap-override: 0%;
+}
+@font-face {   /* Archivo 500 */
+  font-family: "Archivo Fallback";
+  src: local("Arial"), local("ArialMT"), local("Helvetica Neue"), local("Liberation Sans");
+  font-weight: 450 549;
+  size-adjust: 100.05%; ascent-override: 87.76%; descent-override: 20.99%; line-gap-override: 0%;
+}
+@font-face {   /* Archivo 600 */
+  font-family: "Archivo Fallback";
+  src: local("Arial Bold"), local("Arial-BoldMT"), local("Helvetica Neue Bold"), local("Liberation Sans Bold");
+  font-weight: 550 649;
+  size-adjust: 94.91%; ascent-override: 92.51%; descent-override: 22.13%; line-gap-override: 0%;
+}
+@font-face {   /* Archivo 700 */
+  font-family: "Archivo Fallback";
+  src: local("Arial Bold"), local("Arial-BoldMT"), local("Helvetica Neue Bold"), local("Liberation Sans Bold");
+  font-weight: 650 900;
+  size-adjust: 98.03%; ascent-override: 89.56%; descent-override: 21.42%; line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Martian Mono Fallback";
+  src: local("Menlo"), local("Menlo-Regular"), local("DejaVu Sans Mono");
+  size-adjust: 116.27%; ascent-override: 86.01%; descent-override: 17.20%; line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Martian Mono Fallback Consolas";
+  src: local("Consolas");
+  size-adjust: 127.32%; ascent-override: 78.54%; descent-override: 15.71%; line-gap-override: 0%;
+}
 
 :root {
   --ground:  #0b0b0c;
@@ -37,8 +80,8 @@
   --veil:    rgba(11, 11, 12, 0.72);
   --accent-hi: color-mix(in srgb, var(--accent) 85%, #fff);
 
-  --sans: "Archivo", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
-  --mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --sans: "Archivo", "Archivo Fallback", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --mono: "Martian Mono", "Martian Mono Fallback", "Martian Mono Fallback Consolas", ui-monospace, "SF Mono", Menlo, monospace;
 
   --fs-xs: 0.75rem;     /* 12: mono facts */
   --fs-sm: 0.875rem;    /* 14: nav, labels */
