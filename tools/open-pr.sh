@@ -48,7 +48,7 @@ step "orion-tests"      ./build/apps/tests/orion-tests
 # Held to the same stated skip list as CI (#376): a known failure passes with its reason, any other fails.
 step "selftest"         python3 tools/ci-selftest.py macos shell/bin/Release/net10.0/Orion "$raw"
 step "present_test"     shell/bin-native/present_test "$raw"
-for gate in decisions gestures screens modes wiring agent site; do
+for gate in gestures screens modes wiring agent site; do
     step "check-$gate" "./tools/check-$gate.py"
 done
 step "mcp tests"        bash -c 'cd mcp && npm test'

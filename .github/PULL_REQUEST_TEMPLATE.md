@@ -1,14 +1,17 @@
 ## What this changes
 
-<!-- One or two sentences. Link the issue: "Closes #N". -->
+<!-- One paragraph: the behaviour before, the behaviour after, and why. Link the issue: "Closes #N". -->
+
+## Why this way
+
+<!-- Only when an alternative was considered and rejected: what it was, and the evidence against it. Delete otherwise. -->
 
 ## How it was checked
 
-<!-- Which gates you ran, and anything you looked at by hand (screenshots welcome). -->
+<!-- The exact commands and the last line of each. Screenshots at 390 and 1440 px for a web/ change; before and after tools/bench.py numbers for a performance change. Then the three test lines: tests added, tests pruned and why, the mutation check result. tools/open-pr.sh appends the gate lines. -->
 
-## Checklist
+## Not done
 
-- [ ] I ran the gates in `CLAUDE.md` that this touches, and they pass
-- [ ] A new filter cites its source in `research/`; no GPL code was copied
-- [ ] A settled choice is logged in `planning/DECISIONS.md`
+<!-- What a reader might expect that is deliberately absent, and the follow-ups with their issues. -->
+
 - [ ] I agree my contribution is licensed to the project under additional permission 2 of [`LICENSE`](../LICENSE)

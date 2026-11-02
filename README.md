@@ -277,7 +277,7 @@ way and fails on one that is blank, unchanged from another, or unstable.
 - [ ] X-Trans sensors
 - [ ] Tethering
 
-See [`planning/ROADMAP.md`](planning/ROADMAP.md) for the milestones and
+See the [issues](https://github.com/Nano-AI/Orion/issues) for the work in progress and
 [`planning/FEATURES.md`](planning/FEATURES.md) for every feature and its target.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -285,9 +285,8 @@ See [`planning/ROADMAP.md`](planning/ROADMAP.md) for the milestones and
 ## Contributing
 
 Contributions are welcome. Read [`CONTRIBUTING.md`](.github/CONTRIBUTING.md)
-and [`CLAUDE.md`](CLAUDE.md) first: its hard constraints (no GPL code, every
-non-trivial filter cited in `research/`) apply to every change, and [`planning/DECISIONS.md`](planning/DECISIONS.md)
-records the choices already settled.
+and [`AGENTS.md`](AGENTS.md) first: its hard constraints (no GPL code, every
+non-trivial filter cited in `research/`) apply to every change.
 
 1. Fork the project
 2. Create a branch (`git checkout -b feature/your-change`)

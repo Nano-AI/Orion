@@ -5,7 +5,7 @@
 Avalonia app's checks are its `--selftest`. These files stay as the written
 record of each regression and its oracle — engine comments and `research/` cite
 them — and a scenario worth keeping alive is ported into the selftest, not run
-from here. `planning/repro-retired.md` maps each one to what covers it now,
+from here. `git show 2b39a54:planning/repro-retired.md` maps each one to what covers it now,
 or says it is uncovered and why. Everything below describes them as they were.
 
 One file per reported bug, run by the app itself:

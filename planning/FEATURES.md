@@ -156,7 +156,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 
 From the Lightroom audit. Each of these is real but either large, patent-gated
 (#174: **a citation is not clearance**), or in tension with a settled design.
-None gets code before a `DECISIONS.md` row settles it.
+None gets code before the developer settles it on an issue.
 
 | Feature | Why it waits |
 |---|---|

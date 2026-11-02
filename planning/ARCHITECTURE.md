@@ -103,7 +103,7 @@ The engine ships as a standalone C++ library with a narrow C API. The UI is a *c
 
 ## UI shell: Avalonia 12 on .NET 10 (#315, #316, #380)
 
-`shell/`, one C# app for macOS, Windows and Linux; it replaced the SwiftUI app, whose history is in git (`UI-DECISION.md` has the original evaluation). It ships as `Orion.app` on macOS; Windows and Linux packages are CI artifacts (#376).
+`shell/`, one C# app for macOS, Windows and Linux; it replaced the SwiftUI app, whose history is in git (`git show 2b39a54:planning/UI-DECISION.md` has the original evaluation). It ships as `Orion.app` on macOS; Windows and Linux packages are CI artifacts (#376).
 
 | Piece | How |
 |---|---|

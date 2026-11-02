@@ -14,10 +14,8 @@ to use, change, relicense and distribute your contribution as part of Orion**
 
 ## Before you write code
 
-- Read [`CLAUDE.md`](../CLAUDE.md). Its hard constraints apply to every change:
-  no GPL code, every non-trivial filter cited in `research/`, small files.
-- [`planning/DECISIONS.md`](../planning/DECISIONS.md) records what is settled
-  and why. Don't reopen a decision in a pull request; open an issue.
+- Read [`AGENTS.md`](../AGENTS.md). Its rules apply to every change: no GPL
+  code, every non-trivial filter cited in `research/`, small files, headless tests.
 - Work is tracked in [issues](https://github.com/Nano-AI/Orion/issues). Say on
   one that you're taking it, so two people don't build the same thing.
 - A new filter needs a published, dated source. A citation is not patent
@@ -25,10 +23,12 @@ to use, change, relicense and distribute your contribution as part of Orion**
 
 ## Making the change
 
-1. Fork, then branch: `git checkout -b fix/short-name`
-2. Build and run the gates listed under **Tests** in `CLAUDE.md`. They are
-   headless; the GPU tests matter most.
-3. A settled choice gets a row in `planning/DECISIONS.md` with its reason.
-4. Open the pull request against `main` and fill in the template.
+1. Fork, then branch: `git checkout -b <area>/<topic>`.
+2. Write the test with the change and prune it:
+   [`.claude/skills/testing/SKILL.md`](../.claude/skills/testing/SKILL.md).
+3. Build and run the gates listed under **Tests and gates** in `AGENTS.md`.
+4. Squash to one commit and write the description as
+   [`.claude/skills/pull-request/SKILL.md`](../.claude/skills/pull-request/SKILL.md)
+   says; the template has its sections.
 
-Small pull requests get reviewed fastest. One change per pull request.
+One change per pull request; small ones get reviewed fastest.

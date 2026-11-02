@@ -6,17 +6,17 @@ name: Build (macOS, Windows, Linux)
 # web/js/download.js offers a build, and an installed Orion updates to one, only
 # once a release carries it, and making one is the developer's call.
 
-# Documentation builds nothing (#409): Markdown, planning/, research/, feedback/,
-# docs/ and web/ (which pages.yml deploys). paths-ignore skips a push or pull
+# Documentation builds nothing (#409): Markdown, planning/, research/
+# and web/ (which pages.yml deploys). paths-ignore skips a push or pull
 # request that is all documentation; the `changes` job below skips the builds
 # when only this push is, e.g. a doc fix pushed onto a pull request whose code
 # has already built. Keep the two lists the same.
 on:
   push:
     branches: [main, 'ci/**']
-    paths-ignore: ['**/*.md', 'planning/**', 'research/**', 'feedback/**', 'docs/**', 'web/**']
+    paths-ignore: ['**/*.md', 'planning/**', 'research/**', 'web/**']
   pull_request:
-    paths-ignore: ['**/*.md', 'planning/**', 'research/**', 'feedback/**', 'docs/**', 'web/**']
+    paths-ignore: ['**/*.md', 'planning/**', 'research/**', 'web/**']
   workflow_dispatch:
 
 permissions:
@@ -57,7 +57,7 @@ jobs:
         run: |
           code=true
           if [ -n "$BEFORE" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-            git diff --name-only "$BEFORE" "$AFTER" | grep -vE '\.md$|^(planning|research|feedback|docs|web)/' | grep -q . || code=false
+            git diff --name-only "$BEFORE" "$AFTER" | grep -vE '\.md$|^(planning|research|web)/' | grep -q . || code=false
           fi
           echo "code=$code" | tee -a "$GITHUB_OUTPUT"
 
