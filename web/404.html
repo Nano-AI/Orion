@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Page not found, Orion</title>
+<meta name="description" content="This page is not on the Orion site. Orion is a free RAW photo editor for Apple silicon Macs.">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0b0b0c">
+<!-- GitHub Pages serves this file for any missing path under /Orion/, at any
+     depth, so every shared file is named from the site root, never relative. -->
+<link rel="icon" href="/Orion/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/Orion/favicon.ico" sizes="16x16 32x32 48x48">
+<link rel="apple-touch-icon" href="/Orion/apple-touch-icon.png">
+<script>document.documentElement.classList.add('js');   /* before the first paint, as on the other pages: the phone menu is laid out closed from the start, not open until site.js arrives */</script>
+<link rel="stylesheet" href="/Orion/css/tokens.css">
+<link rel="stylesheet" href="/Orion/css/base.css">
+<link rel="stylesheet" href="/Orion/css/download.css">
+<style>
+  /* The page is short: keep the footer at the bottom of the window. */
+  body { display: flex; flex-direction: column; min-height: 100svh; }
+  main { flex: 1; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav">
+  <div class="wrap nav__in">
+    <a class="nav__mark" href="/Orion/" aria-label="Orion, home"><img src="/Orion/img/orion-symbol.svg" width="32" height="32" alt="" aria-hidden="true">Orion</a>
+    <nav class="nav__nav" aria-label="Sections">
+      <ul class="nav__links" id="nav-links">
+        <li><a href="/Orion/#raw">RAW</a></li>
+        <li><a href="/Orion/#files">Your files</a></li>
+        <li><a href="/Orion/#build">Features</a></li>
+      </ul>
+    </nav>
+    <a class="btn btn--ghost nav__cta" href="/Orion/download/">Download</a>
+    <button class="nav__toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Menu"><span></span></button>
+  </div>
+</header>
+
+<main id="main">
+
+<section class="wrap dl" aria-labelledby="nf-title">
+  <div class="dl__copy">
+    <h1 class="h1" id="nf-title">Page not found</h1>
+    <p class="lede">Nothing lives at this address. It may have moved, or the link may be mistyped.</p>
+    <p class="dl__cta">
+      <a class="btn btn--lg" href="/Orion/">Go to the home page</a>
+      <a class="btn btn--lg btn--ghost" href="/Orion/download/">Download Orion</a>
+    </p>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap footer__in">
+    <div>
+      <span class="footer__mark"><img src="/Orion/img/orion-symbol.svg" width="26" height="26" alt="" aria-hidden="true">Orion</span>
+      <p class="small">A RAW editor for macOS. &copy; 2026 Nano-AI</p>
+    </div>
+    <ul class="footer__links">
+      <li><a href="https://github.com/Nano-AI/Orion">Source</a></li>
+      <li><a href="https://github.com/Nano-AI/Orion/releases">Releases</a></li>
+      <li><a href="https://github.com/Nano-AI/Orion/tree/main/research">Research</a></li>
+      <li><a href="mailto:alpha@bankoti.dev?subject=Orion">Contact</a></li>
+    </ul>
+  </div>
+</footer>
+
+<script src="/Orion/js/site.js" defer></script>
+</body>
+</html>
