@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Download Orion</title>
-<meta name="description" content="Download Orion, a RAW photo editor for Macs with Apple silicon. The newest alpha build, how to open it the first time, and where Windows and Linux stand.">
+<meta name="description" content="Download Orion, a RAW photo editor. The newest alpha for macOS, Windows and Linux, and how to open an unsigned build the first time.">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0b0b0c">
 <meta property="og:title" content="Download Orion">
-<meta property="og:description" content="The newest alpha of Orion, a RAW editor for Macs with Apple silicon.">
+<meta property="og:description" content="The newest alpha of Orion, a RAW editor for macOS, Windows and Linux.">
 <meta property="og:image" content="https://bankoti.dev/Orion/img/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -75,16 +75,16 @@
     </div>
 
     <div class="dl__branch" data-for="soon" hidden>
-      <p class="lede">Not yet. Orion runs on Macs today. The <span data-name>Windows</span> version is in testing and has no download yet.</p>
+      <p class="lede">The <span data-name>Windows</span> alpha is on GitHub Releases. It is unsigned, and so far it has run only on GitHub's test machines.</p>
       <p class="dl__cta">
-        <a class="btn btn--lg" href="https://github.com/Nano-AI/Orion">Watch Orion on GitHub</a>
+        <a class="btn btn--lg" href="https://github.com/Nano-AI/Orion/releases">Open GitHub Releases</a>
         <a class="btn btn--lg btn--ghost" data-file="mac" href="https://github.com/Nano-AI/Orion/releases">Download for macOS</a>
       </p>
-      <p class="small">On GitHub, choose Watch, then Custom, then Releases, to hear when a <span data-name>Windows</span> build ships.</p>
+      <p class="small">If you try it, say what happened in a <a class="link" href="https://github.com/Nano-AI/Orion/issues">GitHub issue</a>: the GPU, the driver and what you saw.</p>
     </div>
 
     <div class="dl__branch" data-for="phone" hidden>
-      <p class="lede" data-phone>It runs on Macs with Apple silicon. Open this page on your Mac to download it, or share the link to send it there.</p>
+      <p class="lede" data-phone>It runs on macOS, Windows and Linux. Open this page on your computer to download it, or share the link to send it there.</p>
       <p class="dl__cta"><button class="btn btn--lg" type="button" data-share>Share link</button></p>
     </div>
 
@@ -105,28 +105,32 @@
   </figure>
 </section>
 
-<section class="band" aria-labelledby="first-title" data-steps>
+<section class="band" aria-labelledby="first-title">
   <div class="wrap band__in">
     <div>
       <h2 class="h2" id="first-title">Opening it the first time</h2>
-      <p class="small band__sub">macOS stops the first launch because this alpha is signed ad hoc and isn't notarized. The app is the same either way; the warning is about who vouched for it.</p>
+      <p class="small band__sub">No alpha build carries a developer signature: the Mac one is signed ad hoc and isn't notarized, the Windows one isn't signed at all. So both systems stop the first launch. The app is the same either way; the warning is about who vouched for it. Linux needs only <code>chmod +x</code> on the AppImage.</p>
     </div>
     <ol class="steps">
       <li><div>
-        <p class="h3">Drag Orion to Applications</p>
+        <p class="h3">macOS: drag Orion to Applications</p>
         <p class="small">Open the downloaded disk image and drag Orion onto the Applications folder beside it.</p>
       </div></li>
       <li><div>
-        <p class="h3">Open it from the right-click menu</p>
+        <p class="h3">macOS: "can't be opened"? Right-click, Open</p>
         <p class="small">Right-click Orion in Applications, choose Open, then Open again. You do this once.</p>
       </div></li>
       <li><div>
-        <p class="h3">No Open button? Use Terminal</p>
+        <p class="h3">macOS: no Open button? Use Terminal</p>
         <p class="small">This clears the download flag macOS put on the app. It also lets Claude and other agents start Orion's MCP server.</p>
         <div class="cmd">
           <code>xattr -dr com.apple.quarantine /Applications/Orion.app</code>
           <button class="btn btn--ghost" type="button" data-copy="xattr -dr com.apple.quarantine /Applications/Orion.app" hidden>Copy</button>
         </div>
+      </div></li>
+      <li><div>
+        <p class="h3">Windows: SmartScreen? More info, Run anyway</p>
+        <p class="small">SmartScreen says the publisher is unknown. Choose More info, then Run anyway. You do this once.</p>
       </div></li>
     </ol>
   </div>
@@ -136,26 +140,26 @@
   <div class="wrap band__in band__in--wide">
     <div class="band__head">
       <h2 class="h2" id="platforms-title">Every platform</h2>
-      <p class="small" data-only>Orion is Mac only today.</p>
+      <p class="small">macOS is the tested one. Windows and Linux are new, and testers with real GPUs are wanted.</p>
     </div>
     <ul class="platforms">
       <li data-row="mac">
         <p class="h3">macOS<span class="dl__here" hidden>This computer</span></p>
         <p class="needs">Apple silicon (M1 or later), macOS 14 Sonoma or later</p>
-        <p class="status is-ready">Alpha, available now</p>
+        <p class="status is-ready">Alpha, unsigned</p>
         <a class="btn btn--ghost" data-file="mac" href="https://github.com/Nano-AI/Orion/releases">Download</a>
       </li>
       <li data-row="windows">
         <p class="h3">Windows<span class="dl__here" hidden>This computer</span></p>
         <p class="needs">Windows 10 or later, x64, a Direct3D 12 GPU</p>
-        <p class="status">In testing, not released yet</p>
-        <a class="btn btn--ghost" data-file="windows" href="https://github.com/Nano-AI/Orion/releases" hidden>Download</a>
+        <p class="status is-ready">Alpha, unsigned. Has run only in CI, on a software renderer</p>
+        <a class="btn btn--ghost" data-file="windows" href="https://github.com/Nano-AI/Orion/releases">Download</a>
       </li>
       <li data-row="linux">
         <p class="h3">Linux<span class="dl__here" hidden>This computer</span></p>
         <p class="needs">x86-64 AppImage, a Vulkan driver, glibc 2.39 or later (Ubuntu 24.04)</p>
-        <p class="status">In testing, not released yet</p>
-        <a class="btn btn--ghost" data-file="linux" href="https://github.com/Nano-AI/Orion/releases" hidden>Download</a>
+        <p class="status is-ready">Alpha, unsigned. Tested only on NVIDIA; AMD, Intel and Wayland untested</p>
+        <a class="btn btn--ghost" data-file="linux" href="https://github.com/Nano-AI/Orion/releases">Download</a>
       </li>
       <li data-row="intel">
         <p class="h3">Intel Macs<span class="dl__here" hidden>This computer</span></p>
@@ -194,7 +198,7 @@
   <div class="wrap footer__in">
     <div>
       <span class="footer__mark"><img src="../img/orion-symbol.svg" width="26" height="26" alt="" aria-hidden="true">Orion</span>
-      <p class="small">A RAW editor for macOS. &copy; 2026 Nano-AI</p>
+      <p class="small">A RAW editor for macOS, Windows and Linux. &copy; 2026 Nano-AI</p>
     </div>
     <ul class="footer__links">
       <li><a href="https://github.com/Nano-AI/Orion">Source</a></li>
