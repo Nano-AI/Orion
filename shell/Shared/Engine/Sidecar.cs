@@ -299,8 +299,13 @@ public sealed class Sidecar {
         // Top-level nodes as they were, the whitespace between them and a final newline
         // included (#405: the foreign file keeps its bytes); the declaration, if there
         // was one, says UTF-8 because that is what is written.
-        var nodes = x.Doc.Nodes().Select(n => n.ToString(SaveOptions.DisableFormatting));
-        return (x.Doc.Declaration != null ? "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" : "") + string.Concat(nodes);
+        // ⚠ Not XNode.ToString: its writer's NewLineChars is Environment.NewLine, so on
+        // Windows every "\n" of the foreign file's whitespace came back "\r\n" (#37).
+        var sw = new StringWriter(CultureInfo.InvariantCulture);
+        using (var w = XmlWriter.Create(sw, new XmlWriterSettings {
+                   OmitXmlDeclaration = true, ConformanceLevel = ConformanceLevel.Fragment, NewLineChars = "\n" }))
+            foreach (var n in x.Doc.Nodes()) n.WriteTo(w);
+        return (x.Doc.Declaration != null ? "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" : "") + sw;
     }
 
     /// Atomic: a temporary file beside it, then a rename over it, so a crash
