@@ -232,20 +232,27 @@ static partial class SelfTest {
         var mid = At(window, canvas, new Point(size.Width / 2, size.Height / 2));
         CanvasState.Viewport.ZoomBy(1, new Point(0.5, 0.5));   // 3× from PanChecks, centred
         Frames(() => false, 0.5);   // at rest: this view's render
-        void Drag(double dx, bool hold) {
+        // Diagonal: at 3× the axis the picture fills at fit shows a third of it, so a pan
+        // along it leaves the margin. The other axis may not: a portrait photo in a wide
+        // window shows 81% of its width there, and the region's margin, cut at the
+        // picture's edges, already holds all of it (issue 37, #413: _PIC8095.ARW, where a sideways
+        // pan rightly rendered nothing).
+        void Drag(Vector d, bool hold) {
             window.MouseDown(mid, MouseButton.Left);
-            for (int i = 1; i <= 20; i++) window.MouseMove(mid + new Vector(dx * i / 20, 0));
+            for (int i = 1; i <= 20; i++) window.MouseMove(mid + d * i / 20);
             if (hold) Frames(() => false, 0.4);   // held still, the button down, past the 150 ms rest
             Thread.Sleep(60);   // placed, not thrown: no flick carries it on
-            window.MouseUp(mid + new Vector(dx, 0), MouseButton.Left);
-            Frames(() => false, 0.5);
+            window.MouseUp(mid + d, MouseButton.Left);
+            Frames();   // until it rests: a pan past the picture's edge springs back first
+            Frames(() => false, 0.5);   // then the 150 ms rest and its render
         }
+        var margin = new Vector(size.Width, size.Height) * ViewRegion.Margin;
         int before = Session.Renders;
-        Drag(-size.Width * ViewRegion.Margin / 2, hold: true);
+        Drag(-margin / 2, hold: true);
         int inside = Session.Renders - before;
         Check(inside == 0, $"a pan held still and let go inside the rendered margin renders nothing ({inside} renders, {engine.Shown.Graph})");
         before = Session.Renders;
-        Drag(size.Width * ViewRegion.Margin * 3, hold: false);
+        Drag(margin * 3, hold: false);
         int past = Session.Renders - before;
         bool region = engine.Shown.Graph == Graph.Region;
         Check(region ? past > 0 && engine.View is { } seen && engine.Shown.Uv.Contains(seen.Uv) : past == 0,
