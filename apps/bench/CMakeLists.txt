@@ -13,6 +13,7 @@ add_executable(orion-bench
     bench_metrics.cpp
     bench_profile.cpp
     bench_roi.cpp
+    bench_stages.cpp
 )
 
 # The bench tool exercises engine internals directly rather than going through

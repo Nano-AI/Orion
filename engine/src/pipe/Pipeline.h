@@ -235,6 +235,8 @@ public:
     [[nodiscard]] const gpu::Texture& sourceTexture() const;
 
     [[nodiscard]] std::size_t nodeCount() const noexcept { return nodes_.size(); }
+    /// The name a node was built with — what `lastRun()` reports it as.
+    [[nodiscard]] const std::string& nodeName(int id) const { return nodes_.at(std::size_t(id)).name; }
     [[nodiscard]] std::size_t intermediateBytes() const noexcept;
     /// All owned texture payloads, including idle pool entries and auxiliary
     /// plates. Excludes driver overhead; use process footprint for total RAM.

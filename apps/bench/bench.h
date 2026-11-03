@@ -40,6 +40,9 @@ bool memoryCycle(const std::string& path);
 /// Issue #22: drag and settled cost at fit and at 100%. `--roi`.
 bool roiBench(const std::string& path);
 
+/// One PNG per stage plus per-node timings, for docs/pipeline-graph.
+bool stages(const std::string& path, const std::string& outDir, bool demo);
+
 /// The developed output as 16-bit unsigned; see the definition for why it has
 /// to be format-aware.
 std::vector<std::uint16_t> output16(const orion::pipe::DevelopPipeline& d,

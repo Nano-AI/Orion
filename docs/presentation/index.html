@@ -1,0 +1,986 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orion Walkthrough</title>
+<style>
+/* Orion's own palette (design/tokens.json): neutral greys, the accent (Periwinkle,
+   decision #407) for what you touched, amber for what re-runs. A rail of
+   steps, one interactive thing per slide, arrow keys to move. */
+@font-face{font-family:"Archivo";src:url("../../web/fonts/Archivo-var.woff2") format("woff2");font-weight:100 900;font-stretch:62% 125%;font-display:swap}
+@font-face{font-family:"Martian Mono";src:url("../../web/fonts/MartianMono-var.woff2") format("woff2");font-weight:100 800;font-display:swap}
+:root{
+  --ground:#141416;--panel:#1b1b1d;--raised:#232326;--line:#313135;--edge:#4a4a50;
+  --text:#ececee;--dim:#9a9aa0;--faint:#5a5a60;--accent:#8f9bc4;--dirty:#f0c674;
+  --cap:#6fb08f;--loc:#b896d6;--msk:#d4a067;--out:#7ea3d8;--src:#9a9aa0;
+  --sans:"Archivo",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+  --mono:"Martian Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%}
+body{background:var(--ground);color:var(--text);font:17px/1.5 var(--sans);overflow:hidden;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+code,.mono{font-family:var(--mono);font-size:.8em}
+
+.shell{display:grid;grid-template-columns:220px 1fr;height:100vh}
+.rail{border-right:1px solid var(--line);padding:28px 18px;display:flex;flex-direction:column;gap:4px;background:var(--panel)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-stretch:125%;font-size:22px;margin-bottom:24px}
+.rail button{all:unset;cursor:pointer;display:grid;grid-template-columns:24px 1fr;align-items:center;padding:9px 10px;border-radius:8px;color:var(--dim);font-size:15px}
+.rail button span:first-child{font:500 11px var(--mono)}
+.rail button:hover{background:var(--raised)}
+.rail button[aria-current=true]{background:var(--raised);color:var(--text);box-shadow:inset 3px 0 0 var(--accent)}
+.rail button:focus-visible{outline:3px solid var(--accent)}
+.rail .hint{margin-top:auto;font-size:13px;color:var(--dim)}
+kbd{font:11px var(--mono);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:1px 6px}
+
+main{position:relative;overflow:hidden}
+.slide{position:absolute;inset:0;overflow:auto;padding:44px 52px 96px;opacity:0;visibility:hidden;transform:translateX(24px);transition:opacity .35s,transform .35s,visibility .35s}
+.slide:not(.on){transition-duration:.12s}
+.slide.on{transition-delay:.1s;opacity:1;visibility:visible;transform:none}
+h1{font-size:clamp(40px,5.2vw,74px);line-height:.98;font-weight:800;font-stretch:118%;letter-spacing:-.025em;margin:0 0 18px;max-width:13ch;text-wrap:balance}
+h2{font-size:clamp(28px,3.2vw,44px);line-height:1.05;font-weight:800;font-stretch:112%;letter-spacing:-.02em;margin:0 0 8px;max-width:24ch;text-wrap:balance}
+.lede{color:var(--dim);max-width:58ch;margin:0 0 22px;font-size:18px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{border:0;background:var(--accent);color:#0b1214;border-radius:8px;padding:10px 16px;font-weight:650}
+.btn:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.4;cursor:default;filter:none}
+.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+.btn.ghost[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
+.nav{position:fixed;right:20px;bottom:16px;display:flex;gap:8px;align-items:center;z-index:5;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px 5px 5px 16px}
+.nav button{border:1px solid var(--line);background:var(--raised);border-radius:999px;width:42px;height:42px;font-size:17px}
+.nav .count{font:12px var(--mono);color:var(--dim);margin-right:6px}
+
+/* shared graph look */
+svg text{font-family:var(--sans)}
+.s-node rect{fill:var(--panel);stroke:var(--c);stroke-width:1.5;transition:fill .3s,stroke-width .3s}
+.s-node text{fill:var(--text);font-size:13px;font-weight:600;pointer-events:none}
+.s-node .sub{fill:var(--dim);font:10px var(--mono);font-weight:400}
+.s-node{cursor:pointer}
+.s-node:hover rect{fill:var(--raised)}
+.s-node.sel rect{fill:var(--accent);stroke:var(--accent)}
+.s-node.sel text,.s-node.sel .sub{fill:#0b1214}
+.s-node.hot rect{fill:rgba(240,198,116,.18);stroke:var(--dirty);stroke-width:3}
+.s-node.lit rect{stroke-width:3.5;fill:var(--raised)}
+.s-node.cold{opacity:.38}
+.s-node.off rect{stroke-dasharray:5 4;stroke:var(--dirty)}
+.s-node.off{opacity:.7}
+.s-edge{stroke:var(--edge);stroke-width:1.6;fill:none;transition:stroke .3s,opacity .3s}
+.s-edge.hot{stroke:var(--dirty);stroke-width:2.6}
+.s-edge.lit{stroke:var(--accent);stroke-width:2.6;stroke-dasharray:8 6;animation:flow .6s linear infinite}
+.s-edge.cold{opacity:.25}
+@keyframes flow{to{stroke-dashoffset:-14}}
+.region{font:500 12px var(--sans);fill:var(--dim)}
+
+/* 0 hero */
+.hero{display:grid;grid-template-columns:1fr 1.05fr;gap:44px;align-items:center;min-height:100%}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
+
+/* 1-2 pipeline */
+.pipe{position:relative;max-width:calc((100vh - 370px) * 1000 / 560)}
+.stageCard{position:absolute;left:1.5%;top:33%;width:48%;padding:18px 20px;background:var(--panel);border:1px solid var(--line);border-radius:12px;min-height:120px}
+.stageCard h3{margin:0 0 6px;font-size:22px;font-weight:750;font-stretch:110%}
+.stageCard p{margin:0;color:var(--dim)}
+.stageCard .meta{margin-top:10px;font:12px var(--mono);color:var(--faint)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.chips button{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 14px;font-size:15px}
+.chips button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#0b1214;font-weight:650}
+.tally{display:flex;gap:28px;align-items:baseline}
+.tally b{font-size:48px;font-weight:800;font-stretch:118%;font-variant-numeric:tabular-nums}
+.tally .hotN{color:var(--dirty)}
+.tally small{display:block;color:var(--dim);font-size:14px}
+
+.tip{position:fixed;pointer-events:none;background:var(--raised);border:1px solid var(--edge);border-radius:8px;padding:8px 10px;font-size:13px;z-index:9;max-width:280px}
+.tip b{font-family:var(--mono);font-size:12px}
+.tip span{display:block;color:var(--dim);font-size:12px}
+
+
+
+.mapWrap{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;overflow-x:auto}
+.m-edge{stroke:var(--line);stroke-width:.7}
+.m-node{stroke:var(--ground);stroke-width:.8;cursor:pointer;transition:opacity .3s}
+.m-node.cold{opacity:.14}
+
+/* 0 */
+.pulse{fill:var(--accent);filter:drop-shadow(0 0 6px var(--accent))}
+/* 3 */
+.bar{display:flex;height:46px;border-radius:10px;overflow:hidden;gap:2px;margin-bottom:18px}
+.bar button{all:unset;cursor:pointer;background:var(--c);opacity:.5;position:relative;min-width:6px;transition:opacity .2s}
+.bar button:hover,.bar button[aria-pressed=true]{opacity:1}
+.bar button span{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:13px;font-weight:650;color:#0b1214;white-space:nowrap;pointer-events:none}
+.bar button:focus-visible{outline:3px solid var(--text);outline-offset:-3px}
+.zoom{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:18px;align-items:start}
+.why h3{margin:0;font-size:30px;font-weight:800;font-stretch:115%}
+.why .n{font-size:15px;color:var(--dim);margin:2px 0 12px}
+.why p{margin:0;color:var(--text)}
+.why .m{margin-top:12px;font-size:13px;color:var(--dim)}
+.ribbon{margin-top:14px;padding:8px 12px}
+.cap{color:var(--dim);font-size:14px;margin:8px 0 0}
+.sn rect{fill:var(--raised);stroke:var(--c);stroke-width:1.4}
+.sn text{fill:var(--text);font:9.5px var(--mono);pointer-events:none}
+.sn.ext rect{fill:none;stroke:var(--faint);stroke-dasharray:4 3}
+.sn.ext text{fill:var(--dim)}
+.sn{cursor:default}
+/* 4 */
+.tick-top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:6px 0 10px}
+.stepper4{display:flex;gap:6px;flex-wrap:wrap}
+.stepper4 button{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 12px;font-size:13.5px;color:var(--dim)}
+.stepper4 button b{font:600 11px var(--mono);color:var(--accent);margin-right:6px}
+.stepper4 button[aria-current=true]{border-color:var(--accent);color:var(--text);background:var(--raised)}
+.lane{fill:var(--panel);stroke:var(--line)}
+.laneT{font:600 12px var(--sans);fill:var(--dim)}
+.fbox rect{fill:var(--raised);stroke:var(--edge);stroke-width:1.4;transition:all .3s}
+.fbox text{fill:var(--text);font-size:14px;font-weight:600}
+.fbox .s{fill:var(--dim);font:10.5px var(--mono);font-weight:400}
+.fbox.on rect{stroke:var(--accent);stroke-width:2.6;fill:#1d2d30}
+.fbox.done rect{stroke:#3b6e74}
+.fbox .todo{font:11px var(--mono);font-weight:400;fill:var(--faint);transition:fill .3s}
+.fbox .todo.on{fill:var(--dirty)}
+.fbox .shd{fill:var(--raised);stroke:var(--out);stroke-width:1.4;transition:fill .2s}
+.fbox .shd.on{fill:var(--dirty);stroke:var(--dirty)}
+.cache rect{fill:#26262a;stroke:#34343a}
+.tex{fill:#1f2a2c;stroke:var(--accent);stroke-width:1.5;transition:all .5s}
+.tex.on{fill:var(--accent)}
+.noback{opacity:0;transition:opacity .4s}
+.noback.on{opacity:1}
+.screenGlow{fill:#0d0d0f;transition:fill .5s}
+.screenGlow.on{fill:url(#sky)}
+.fwire{stroke:var(--edge);stroke-width:2;fill:none}
+.explain{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.3fr);gap:20px;margin-top:12px;align-items:start}
+.say4 h3{margin:0 0 6px;font-size:24px;font-weight:750;font-stretch:110%}
+.say4 p{margin:0;color:var(--text);max-width:52ch}
+.code{background:#0e0e10;border:1px solid var(--line);border-radius:12px;padding:12px 16px;overflow-x:auto}
+.code .file{font:11px var(--mono);color:var(--faint);margin-bottom:8px}
+.code pre{margin:0;font:12.5px/1.75 var(--mono);color:#d8d8dc}
+.tk{color:#c792ea}.tt{color:#82aaff}.tf{color:#4db6c4}.tn{color:#f0c674}.tc{color:#6a6a72;font-style:italic}
+.say4 p code{color:var(--accent)}
+#t4extra{margin-top:14px}
+.etab{display:grid;gap:2px;max-width:440px;font:12.5px var(--mono)}
+.er{display:grid;grid-template-columns:1.2fr 1fr .7fr;gap:10px;padding:6px 10px;background:var(--panel);border-radius:6px;color:var(--dim)}
+.jobs .er{grid-template-columns:24px 1.4fr 1fr}
+.er.hot{background:rgba(240,198,116,.14);color:var(--dirty)}
+.er.dim{opacity:.6}
+.er code{color:var(--accent);font-size:12px}
+.exs{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;max-width:440px;font-size:14px}
+.trk{position:relative;height:4px;background:var(--line);border-radius:2px}
+.trk i{position:absolute;top:-6px;width:16px;height:16px;margin-left:-8px;border-radius:50%}
+.trk .old{background:var(--faint)}.trk .new{background:var(--accent);box-shadow:0 0 10px var(--accent)}
+.exs b{font:13px var(--mono);color:var(--dirty)}
+.chain{display:flex;align-items:center;flex-wrap:wrap;gap:4px}
+.chain b{font-size:13px;padding:6px 10px;border-radius:6px;background:rgba(240,198,116,.16);border:1.5px solid var(--dirty);color:var(--text)}
+.chain b.off{border-style:dashed;opacity:.6;background:none}
+.chain i{width:12px;height:2px;background:var(--dirty)}
+.clean{display:flex;flex-wrap:wrap;gap:3px;align-items:center;margin-top:10px;max-width:440px}
+.clean span{font-size:12.5px;color:var(--dim);margin-right:8px}
+.clean i{width:8px;height:8px;border-radius:2px;background:#2c2c30}
+.evdemo{display:grid;grid-template-columns:auto 1fr;gap:10px 14px;align-items:center;font-size:14px;max-width:440px}
+.evdemo input{width:100%;accent-color:var(--accent)}
+.swatches{display:flex;gap:10px;align-items:center;font:12px var(--mono);color:var(--dim)}
+.swatches i{display:inline-block;width:44px;height:44px;border-radius:8px;border:1px solid var(--line)}
+.exwin{width:220px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel)}
+.exwin div{height:110px;background:linear-gradient(180deg,#3d5a78,#8aa7c2 55%,#4b4a3a 56%,#2c2e25)}
+.exwin span{display:block;padding:5px 9px;font:11px var(--mono);color:var(--dim)}
+/* 5 */
+.ab rect{fill:var(--panel);stroke:var(--edge);stroke-width:1.4;transition:all .3s}
+.ab text{fill:var(--text);font-size:14px;font-weight:650}
+.ab .s{fill:var(--dim);font:10.5px var(--mono);font-weight:400}
+.ab.on rect{stroke:var(--accent);stroke-width:2.6;fill:#1d2d30}
+.al{stroke:var(--edge);stroke-width:2;fill:none;transition:stroke .3s}
+.al.on{stroke:var(--accent);stroke-width:3;stroke-dasharray:8 6;animation:flow .6s linear infinite}
+.alT{font:10.5px var(--mono);fill:var(--dim)}
+.mcp{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;margin-top:14px;align-items:start}
+.steps{list-style:none;margin:0;padding:0;counter-reset:s}
+.steps li{display:grid;grid-template-columns:28px 1fr;gap:8px;padding:8px 0;border-top:1px solid var(--line);opacity:.28;transition:opacity .3s;font-size:15px}
+.steps li::before{counter-increment:s;content:counter(s);font:600 12px var(--mono);color:var(--accent);padding-top:3px}
+.steps li.on{opacity:1}
+.steps code{display:block;color:var(--dim);margin-top:2px;font-size:11.5px}
+.appwin{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.appbar{display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid var(--line);font-size:13px;color:var(--dim)}
+.appbar i{width:10px;height:10px;border-radius:50%;background:var(--faint)}
+.appbar span{margin-left:8px}
+.compare{display:grid;grid-template-columns:1fr 1fr;aspect-ratio:16/9;gap:2px;background:var(--ground)}
+.half{position:relative;background:linear-gradient(180deg,#3d5a78 0%,#8aa7c2 45%,#c9b48f 62%,#4b4a3a 63%,#2c2e25 100%);transition:filter .8s}
+.half span{position:absolute;left:8px;bottom:8px;font-size:12px;background:rgba(0,0,0,.6);padding:2px 8px;border-radius:4px}
+.compare.idle .after{filter:grayscale(1) brightness(.5)}
+.compare.live .after{filter:sepia(.35) saturate(1.25) hue-rotate(-8deg)}
+.compare.done .before{filter:sepia(.35) saturate(1.25) hue-rotate(-8deg)}
+.compare.done .after{filter:sepia(.35) saturate(1.25) hue-rotate(-8deg)}
+.appfoot{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;font-size:14px;color:var(--dim)}
+
+/* measured/estimated tags, metrics tabs */
+.tag{display:inline-block;font:600 10px var(--mono);padding:1px 6px;border-radius:4px;vertical-align:middle;margin:0 2px}
+.tag.m{background:rgba(111,176,143,.18);color:#8fd0ad}.tag.e{background:rgba(240,198,116,.16);color:var(--dirty)}
+.tabs{display:flex;gap:6px;margin-bottom:16px}
+.tabs button{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:8px 16px;font-size:15px}
+.tabs button[aria-selected=true]{background:var(--text);color:var(--ground);border-color:var(--text)}
+.mgrid{display:grid;grid-template-columns:1.4fr 1fr;gap:18px;align-items:stretch}
+.mgrid h4,.card h4,.checks h4{margin:0 0 12px;font-size:16px;font-weight:650}
+.axis{position:relative;height:56px;margin:34px 10px 0;border-bottom:2px solid var(--edge)}
+.axis .pt{position:absolute;bottom:-7px;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:var(--accent)}
+.axis .pt.warn{background:#ff7a59}
+.axis .pt span{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);white-space:nowrap;font:12px var(--mono);color:var(--text)}
+.axis .pt.warn span{color:#ff9a7f;left:14px;transform:none;bottom:-4px}
+.axis .pt.low span{bottom:auto;top:18px}
+.axis .pt.low2 span{bottom:38px}
+.axis .band{position:absolute;bottom:-3px;height:6px;background:rgba(143,155,196,.25);border-radius:3px}
+.axis .pt{width:10px;height:10px;margin-left:-5px;bottom:-6px}
+.axis{margin-bottom:26px;margin-top:56px}
+.axis .target{position:absolute;top:-20px;bottom:-2px;border-left:2px dashed var(--dirty)}
+.axis .target span{position:absolute;top:-16px;left:6px;white-space:nowrap;font:11px var(--mono);color:var(--dirty)}
+.ticks{position:relative;height:18px;margin:22px 10px 0;font:11px var(--mono);color:var(--faint)}
+.ticks span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.note2{color:var(--dim);font-size:14px;margin:12px 0 0}
+.kv{display:flex;flex-direction:column;padding:8px 0;border-top:1px solid var(--line)}
+.kv:first-child{border-top:0}
+.kv b{font-size:26px;font-weight:800;font-stretch:112%;font-variant-numeric:tabular-nums}
+.kv span{color:var(--dim);font-size:13.5px}
+.hbar{display:grid;grid-template-columns:90px 1fr auto;gap:10px;align-items:center;margin:10px 0;font-size:13px}
+.hbar span{color:var(--dim);font-family:var(--mono);font-size:12px}
+.hbar i{display:block;height:14px;border-radius:4px;background:#ff7a59}
+.hbar i.ok{background:var(--cap)}
+.hbar b{font-variant-numeric:tabular-nums}
+.src{color:var(--faint);font-size:12.5px;margin:12px 0 0}
+.stageCard .src{margin-top:10px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}
+.card.small{padding:14px 18px}.card.small p{margin:0;color:var(--dim);font-size:14px}
+.card.small ul{margin:0;padding-left:18px;color:var(--text);font-size:14px}
+.card.next{border-color:var(--dirty)}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:10px;align-items:start}
+.gates{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.gate{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;transition:border-color .3s}
+.gate b{font:500 12px var(--mono)}
+.gate .res{display:block;margin-top:4px;font-size:13px;color:var(--faint);transition:color .3s}
+.gate.ok{border-color:var(--cap)}.gate.ok .res{color:var(--text)}.gate.ok b::before{content:"\2713  ";color:var(--cap)}
+.gate.run{border-color:var(--dirty)}
+.checks .compare{aspect-ratio:16/7}
+.checks .steps li{padding:6px 0;font-size:14px}
+.jd{width:100%;border-collapse:collapse;font-size:14.5px;max-width:1200px}
+.jd th{text-align:left;color:var(--dim);font-weight:600;font-size:13px;padding:8px 12px;border-bottom:1px solid var(--edge)}
+.jd td{padding:12px;border-top:1px solid var(--line);vertical-align:top}
+.jd tr[data-i]{cursor:pointer}.jd tr[data-i]:hover td{background:var(--panel)}
+.jd td.ev{font:12.5px var(--mono);color:var(--accent)}
+.jd tr.more td{border-top:0;color:var(--dim);font-size:14px;padding-top:0;background:var(--panel)}
+
+.life{display:flex;flex-direction:column;gap:5px}
+.lrow{display:grid;grid-template-columns:92px 1fr;gap:10px;align-items:center;font-size:13px}
+.lrow span{color:var(--dim)}
+.ltrack{position:relative;height:16px;background:#1a1a1d;border-radius:4px}
+.ltrack i{position:absolute;top:2px;height:12px;border-radius:3px;transition:left .3s,width .3s}
+.ltrack i.all{background:#ff7a59}.ltrack i.tmp{background:var(--cap)}.ltrack i.pin{background:var(--accent)}.ltrack i.out{background:var(--out)}
+.ltrack em{position:absolute;right:4px;top:0;font:10px/16px var(--mono);color:#0b1214;font-style:normal}
+.ltrack b{position:absolute;top:0;margin-left:6px;font:10px/16px var(--mono);font-weight:400;color:var(--faint);white-space:nowrap}
+.ltrack b.in{margin:0 4px 0 0;color:#0b1214}
+.lsteps{margin-left:102px;font:11px var(--mono);color:var(--faint)}
+.lpeak{font:12px var(--mono);color:var(--dirty);margin-left:8px}
+.pinEx{margin-top:14px;padding:12px 14px;border-left:3px solid var(--accent);background:var(--raised);border-radius:0 8px 8px 0}
+.pinEx h4{margin:0 0 6px;font-size:14px}
+.pinEx p{margin:0;font-size:13.5px;color:var(--text)}
+.pinEx code{color:var(--accent)}
+.rules{margin:10px 0 0;padding-left:18px;font-size:13.5px;color:var(--dim)}
+.rules li{margin:4px 0}.rules b{color:var(--text);font-weight:600}
+
+.lifeWrap{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:14px;align-items:start}
+.ltrack i em{position:absolute;left:6px;top:0;font:10px/12px var(--mono);font-style:normal;color:#0b1214;white-space:nowrap;overflow:hidden;max-width:calc(100% - 8px)}
+.ltrack i.s0{background:var(--cap)}.ltrack i.s1{background:#c9a0e8}.ltrack i.s2{background:#e8c27a}.ltrack i.s3{background:#e88f7a}
+.rack{display:flex;flex-direction:column;gap:8px}
+.rack .slot{border:2px solid var(--c);border-radius:8px;padding:8px 10px}
+.rack .slot b{display:block;font:700 20px var(--sans);color:var(--c)}
+.rack .slot span{font:11px var(--mono);color:var(--dim)}
+.rack .s0{--c:var(--cap)}.rack .s1{--c:#c9a0e8}.rack .s2{--c:#e8c27a}.rack .s3{--c:#e88f7a}
+.rack p{margin:0;font-size:12px;color:var(--faint)}
+
+@media (max-width:900px){
+  body{overflow:auto}
+  .shell{grid-template-columns:1fr;height:auto}
+  .rail{flex-direction:row;overflow-x:auto;padding:12px 16px;position:sticky;top:0;z-index:4}
+  .rail .brand{margin:0 10px 0 0}.rail .hint{display:none}
+  .rail button{grid-template-columns:20px auto;white-space:nowrap}
+  main{min-height:calc(100vh - 64px)}
+  .slide{position:relative;inset:auto;padding:28px 16px 96px;display:none}
+  .slide.on{display:block}
+  .hero,.zoom,.mcp,.mgrid,.two,.checks,.gates,.lifeWrap{grid-template-columns:1fr}
+  .stageCard{position:static;width:auto;margin-top:12px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.brand .repo{margin-left:auto;font-size:12px;font-weight:600;font-stretch:100%;letter-spacing:0;color:inherit;opacity:.7;text-decoration:none;border:1px solid currentColor;border-radius:4px;padding:2px 8px}.brand .repo:hover{opacity:1}.brand{white-space:nowrap;flex-wrap:wrap;row-gap:8px}.brand>svg{flex-shrink:0}
+</style>
+</head>
+<body>
+<div class="shell">
+  <nav class="rail" aria-label="Walkthrough steps">
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="13" fill="none" stroke="#4db6c4" stroke-width="2"/><circle cx="14" cy="14" r="5" fill="#4db6c4"/></svg>
+      Orion
+    <a class="repo" href="https://github.com/Nano-AI/Orion" target="_blank" rel="noopener">GitHub</a></div>
+    <div id="railBtns"></div>
+    <p class="hint"><kbd>←</kbd> <kbd>→</kbd> to move. Every screen has something to click.</p>
+  </nav>
+
+  <main id="deck">
+  <!-- 0 -->
+  <section class="slide" data-title="Orion">
+    <div class="hero">
+      <div>
+        <h1>A GPU photo editor I use every day.</h1>
+        <p class="lede">RAW editor for macOS. Edits are a graph of GPU compute nodes. A slider re-runs only the nodes after it. I use it on my own 42 MP camera files.</p>
+      </div>
+      <div class="card"><svg id="mini" viewBox="0 44 580 84" width="100%" role="img" aria-label="Sensor to screen as a chain of GPU stages"></svg><p class="cap" id="miniCap">Click a stage.</p></div>
+    </div>
+  </section>
+
+  <section class="slide" data-title="The pipeline">
+    <h2>Nineteen stages, sensor to screen.</h2>
+    <p class="lede">Click a stage, or play a photo through it.</p>
+    <div class="row" style="margin-bottom:12px"><button class="btn" id="playGo">Play a photo through it</button></div>
+    <div class="pipe">
+      <svg id="pipeA" viewBox="0 0 1000 560" width="100%" role="img" aria-label="The nineteen stages of the develop graph"></svg>
+      <div class="stageCard" id="cardA" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <!-- 1 -->
+  <section class="slide" data-title="Only what changed runs">
+    <h2>A slider re-runs only the nodes after it.</h2>
+    <p class="lede">Upstream outputs stay cached on the GPU. Pick a control.</p>
+    <div class="chips" id="ctlChips" role="group" aria-label="Controls"></div>
+    <div class="pipe">
+      <svg id="pipeB" viewBox="0 0 1000 560" width="100%" role="img" aria-label="Stages downstream of the chosen control"></svg>
+      <div class="stageCard" id="cardB" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="slide" data-title="Sensor to screen">
+    <h2>One slider tick, start to finish.</h2>
+    <div class="tick-top">
+      <div class="stepper4" id="stepper4" role="group" aria-label="Steps"></div>
+      <div class="row"><button class="btn ghost" id="t4prev">Back</button><button class="btn" id="t4next">Next step</button></div>
+    </div>
+    <svg id="flow" viewBox="0 0 1000 300" width="100%" role="img" aria-label="The path of one slider tick: four steps on the CPU, a command buffer handed to the GPU, shaders, output texture, window"></svg>
+    <div class="explain">
+      <div class="say4" aria-live="polite"><h3 id="t4title"></h3><p id="t4say"></p><div id="t4extra"></div></div>
+      <div class="code" id="t4code"></div>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide" data-title="Measured">
+    <h2>What the benchmark says.</h2>
+    <p class="lede">orion-bench on a real Sony A7R III raw, 7968 × 5320 (42.4 MP), Apple M4.</p>
+    <div class="tabs" role="tablist" id="mTabs">
+      <button role="tab" aria-selected="true" data-m="lat">Latency</button>
+      <button role="tab" aria-selected="false" data-m="mem">Memory</button>
+      <button role="tab" aria-selected="false" data-m="ok">Correctness</button>
+    </div>
+    <div id="mBody" aria-live="polite"></div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide" data-title="Per-node profiling">
+    <h2>Where the GPU time goes.</h2>
+    <p class="lede">205 nodes. Most stages are one node; pyramids make the rest. Click a segment, hover a node.</p>
+    <div class="bar" id="bar" role="group" aria-label="Nodes per stage"></div>
+    <div class="zoom">
+      <div class="mapWrap"><svg id="sub" width="100%" role="img" aria-label="The nodes inside the chosen stage"></svg></div>
+      <div class="card why" id="why" aria-live="polite"></div>
+    </div>
+    <div class="two">
+      <div class="card small"><h4>How it is timed</h4><p>Normal renders put all dirty nodes in one command buffer. Profiling mode (<code>Pipeline::setProfiling</code>, used by orion-bench) gives each node its own, so each node's GPU time is separate.</p></div>
+      <div class="card small next"><h4>What I'd measure next</h4><ul><li>Memory traffic per stage</li><li>Fusing cheap adjacent stages</li><li>The same profile on a different GPU</li></ul></div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide" data-title="How it's checked">
+    <h2>Tests render real GPU output. Agent edits need approval.</h2>
+    <div class="checks">
+      <div>
+        <div class="row" style="justify-content:space-between;margin-bottom:10px"><h4 style="margin:0">Nine gates</h4><button class="btn" id="gatesGo">Run the gates</button></div>
+        <div class="gates" id="gates"></div>
+        <p class="cap">Results from the run on 2026-10-06.</p>
+      </div>
+      <div>
+        <div class="row" style="justify-content:space-between;margin-bottom:10px"><h4 style="margin:0">Agent edits over MCP</h4><button class="btn" id="mcpGo">Ask it to warm the photo</button></div>
+        <ol class="steps" id="steps"></ol>
+        <div class="appwin" id="appwin">
+          <div class="appbar"><i></i><i></i><i></i><span>Orion</span></div>
+          <div class="compare idle" id="compare"><div class="half before"><span>Before</span></div><div class="half after"><span>Proposed</span></div></div>
+          <div class="appfoot"><span id="appMsg">No proposal.</span><span class="row"><button class="btn ghost" id="rejectBtn" disabled>Reject</button><button class="btn" id="approveBtn" disabled>Approve</button></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-title="Agents over MCP">
+    <h2>An AI agent proposes. The photographer decides.</h2>
+    <div class="row" style="margin-bottom:14px"><button class="btn" id="mcpGo2">Ask it to warm the photo</button><button class="btn ghost" id="mcpReset2">Reset</button></div>
+    <svg id="arch" viewBox="0 0 1000 150" width="100%" role="img" aria-label="Agent, MCP server, Orion command line, files beside the RAW, and the Orion app"></svg>
+    <div class="mcp">
+      <ol class="steps" id="steps2"></ol>
+      <div class="appwin" id="appwin2">
+        <div class="appbar"><i></i><i></i><i></i><span>Orion</span></div>
+        <div class="compare idle" id="compare2"><div class="half before"><span>Before</span></div><div class="half after"><span>Proposed</span></div></div>
+        <div class="appfoot"><span id="appMsg2">No proposal.</span><span class="row"><button class="btn ghost" id="rejectBtn2" disabled>Reject</button><button class="btn" id="approveBtn2" disabled>Approve</button></span></div>
+      </div>
+    </div>
+  </section>
+  </main>
+</div>
+
+<div class="nav"><span class="count" id="count"></span><button id="prev" aria-label="Previous">←</button><button id="next" aria-label="Next">→</button></div>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ═══ The graph: a replay of DevelopPipeline's pipeline_.add() calls ═══
+   engine/src/pipe/DevelopCapture.cpp, DevelopLocal.cpp, DevelopMask.cpp, DevelopOutput.cpp */
+const N = [], byLabel = {};
+const add = (label, kernel, inputs, stage) => { const id = N.length; N.push({ id, label, kernel, inputs, stage }); byLabel[label] = id; return id; };
+const src = add('source mosaic', 'decoded RAW', [], 'source');
+const lin = add('linearize', 'linearize', [src], 'demosaic');
+const dirs = add('rcd:dirs', 'rcdDirs', [lin], 'demosaic'), lpf = add('rcd:lowpass', 'rcdLpf', [lin], 'demosaic');
+const green = add('rcd:green', 'rcdGreen', [lin, dirs, lpf], 'demosaic');
+const rgb = add('rcd:red/blue', 'rcdRedBlue', [lin, green, dirs], 'demosaic');
+const hl = add('highlights', 'highlightRecover', [rgb], 'highlights');
+const HL = 12, pull = [], push = [];
+pull[0] = add('hl:mask', 'hlMask', [hl, rgb], 'highlights');
+for (let l = 1; l < HL; l++) pull[l] = add('hl:pull ' + l, 'hlPull', [pull[l - 1]], 'highlights');
+push[HL - 1] = pull[HL - 1];
+for (let l = HL - 2; l >= 0; l--) push[l] = add('hl:push ' + l, 'hlPush', [pull[l], push[l + 1]], 'highlights');
+const fill = add('hl:fill', 'hlApply', [hl, push[0], rgb], 'highlights');
+const blur = [], shrink = [];
+for (let j = 0; j < 4; j++) { // fine to coarse, interleaved (#406)
+  blur[j] = add('denoise:blur ' + j, 'atrousBlur', [j ? blur[j - 1] : fill], 'denoise');
+  shrink[j] = add('denoise:shrink ' + j, 'atrousShrink', [j ? blur[j - 1] : fill, blur[j], j ? shrink[j - 1] : blur[j]], 'denoise');
+}
+const lens = add('lens', 'lensCorrect', [shrink[3]], 'lens');
+const sm = add('spots:measure', 'spotMeasure', [lens], 'spots'), sa = add('spots:apply', 'spotApply', [lens, sm], 'spots');
+const sh = add('sharpen', 'sharpen', [sa], 'sharpen');
+const mat = add('camera->working', 'cameraToWorking', [sh], 'profile');
+const hs = add('profile:hue/sat', 'hueSatMap', [mat], 'profile');
+const dC = add('dehaze:channel min', 'dehazeChannelMin', [hs], 'dehaze');
+const dH = add('dehaze:dark h', 'dehazeRank', [dC], 'dehaze'), dV = add('dehaze:dark v', 'dehazeRank', [dH], 'dehaze');
+add('dehaze:candidates', 'dehazePeak', [dV, hs], 'dehaze');
+let d = add('dehaze:channel min/A', 'dehazeChannelMin', [hs], 'dehaze');
+for (const n of ['min h', 'min v', 'max h', 'max v']) d = add('dehaze:' + n, 'dehazeRank', [d], 'dehaze');
+let hz = add('dehaze:moments', 'dehazePrep', [hs, d], 'dehaze');
+for (const [n, k] of [['blur h', 'boxBlur4'], ['blur v', 'boxBlur4'], ['coeffs', 'dehazeAb'], ['blur h2', 'boxBlur'], ['blur v2', 'boxBlur']]) hz = add('dehaze:' + n, k, [hz], 'dehaze');
+const dehaze = add('dehaze', 'dehazeRecover', [hs, hz], 'dehaze');
+const gauss = [], pack = [[]], llOut = [];
+const luma = add('clarity:luma', 'llfLuma', [dehaze], 'clarity'); gauss[0] = luma;
+for (let l = 1; l < 6; l++) gauss[l] = add('clarity:gauss ' + l, 'llfDown', [gauss[l - 1]], 'clarity');
+for (let l = 1; l < 6; l++) { pack[l] = []; for (let s = 0; s < 4; s++) {
+  const t = 'clarity:remap ' + l + '.' + s;
+  pack[l][s] = l === 1 ? add(t + ' v', 'llfDownV', [add(t + ' h', 'llfRemapH', [luma], 'clarity')], 'clarity') : add(t, 'llfDownPacked', [pack[l - 1][s]], 'clarity');
+} }
+llOut[5] = gauss[5];
+for (let l = 4; l >= 1; l--) llOut[l] = add('clarity:collapse ' + l, 'llfCollapse', [gauss[l], ...pack[l], ...pack[l + 1], llOut[l + 1]], 'clarity');
+llOut[0] = add('clarity:collapse 0', 'llfCollapse0', [luma, ...pack[1], llOut[1]], 'clarity');
+const clarity = add('clarity', 'llfApply', [dehaze, llOut[0], luma], 'clarity');
+const proxy = add('fusion:proxy', 'fuseProxy', [clarity], 'fusion'), fI = [], fW = [], fO = [];
+for (let l = 0; l < 6; l++) { fI[l] = []; fW[l] = []; for (let s = 0; s < 2; s++) {
+  const t = '.' + l + '.' + s;
+  fI[l][s] = add('fusion:images' + t, l ? 'llfDownPacked' : 'fuseSplit', [l ? fI[l - 1][s] : proxy], 'fusion');
+  fW[l][s] = add('fusion:weights' + t, l ? 'llfDownPacked' : 'fuseSplit', [l ? fW[l - 1][s] : proxy], 'fusion');
+} }
+for (let l = 5; l >= 0; l--) { const r = l === 5, c = r ? l : l + 1;
+  fO[l] = add('fusion:blend ' + l, 'fuseBlend', [fI[l][0], fI[l][1], fW[l][0], fW[l][1], fI[c][0], fI[c][1], r ? fW[l][0] : fO[l + 1]], 'fusion'); }
+const fusion = add('fusion', 'fuseApply', [clarity, fO[0], proxy], 'fusion');
+const gp = add('guide:prep', 'guidePrep', [hs], 'guide');
+let g = gp;
+for (const [n, k] of [['subsample', 'guideDown'], ['blur h', 'boxBlur'], ['blur v', 'boxBlur'], ['coeffs', 'guideAb'], ['blur h2', 'boxBlur'], ['blur v2', 'boxBlur']]) g = add('guide:' + n, k, [g], 'guide');
+const comp = [], refine = [];
+let prev = add('mask:base', 'maskBase', [], 'masks');
+for (let i = 0; i < 8; i++) prev = comp[i] = add('mask:' + i, 'maskComponent', [prev, hs], 'masks');
+for (let i = 0; i < 8; i++) { const t = 'mask' + i + ':';
+  let m = add(t + 'guide prep', 'maskGuidePrep', [gp, comp[i]], 'refine');
+  for (const [n, k] of [['guide blur h', 'boxBlur4'], ['guide blur v', 'boxBlur4'], ['guide coeffs', 'maskGuideAb'], ['guide blur h2', 'boxBlur'], ['guide blur v2', 'boxBlur']]) m = add(t + n, k, [m], 'refine');
+  refine[i] = add(t + 'refine', 'maskGuideApply', [comp[i], m, gp], 'refine'); }
+const linear = add('develop:linear', 'developLinear', [fusion, g, gp, ...refine], 'tone');
+const grade = add('grade + vignette', 'colorGrade', [linear], 'grade');
+const display = add('develop:display', 'developDisplay', [grade], 'display');
+const grain = add('develop:grain', 'grain', [display], 'grain');
+add('geometry', 'geometry', [grain], 'geometry');
+
+const readers = N.map(() => []);
+N.forEach(n => new Set(n.inputs).forEach(i => readers[i].push(n.id)));
+// Pipeline::markDownstreamDirty: the changed nodes plus everything that reads them.
+function dirtySet(ids) {
+  const seen = new Set(ids), stack = [...ids];
+  while (stack.length) for (const r of readers[stack.pop()]) if (!seen.has(r)) { seen.add(r); stack.push(r); }
+  return seen;
+}
+const SHADERS = N.length - 1; // the source is an upload, not a shader
+const inStage = s => N.filter(n => n.stage === s).map(n => n.id);
+const prefixed = p => N.filter(n => n.label.startsWith(p)).map(n => n.id);
+// What each control's apply*() writes parameters into (DevelopPipeline::apply).
+const CONTROLS = [
+  { key: 'exposure', name: 'Exposure', ids: [linear], why: 'Exposure comes after the local filters. They stay cached.' },
+  { key: 'curve', name: 'Tone curve', ids: [display], why: 'The curve is near the end. A drag is cheap.' },
+  { key: 'crop', name: 'Crop', ids: [N.length - 1, grade], why: 'Crop is last. The vignette follows the crop, so Grade runs too.' },
+  { key: 'mask', name: 'Mask', ids: [comp[0]], why: 'Masks join the graph at Tone.' },
+  { key: 'clarity', name: 'Clarity', ids: inStage('clarity'), why: 'Clarity is 36 shaders. It comes before exposure.' },
+  { key: 'sharpen', name: 'Sharpen', ids: [sh], why: 'Sharpen comes before all tone controls.' },
+  { key: 'wb', name: 'White balance', ids: [lin], why: 'White balance is at the start. Almost all nodes run again.' },
+];
+
+/* GPU ms per shader at 42 MP, profiled one command buffer per node (orion-bench --stages). */
+const MS = {"linearize":2.69,"rcd:dirs":7.65,"rcd:lowpass":5.11,"rcd:green":11.37,"rcd:red/blue":13.87,"highlights":7.01,"hl:mask":15.29,"hl:pull 1":0.28,"hl:pull 2":0.07,"hl:pull 3":0.02,"hl:pull 4":0.01,"hl:pull 5":0.0,"hl:pull 6":0.0,"hl:pull 7":0.0,"hl:pull 8":0.0,"hl:pull 9":0.0,"hl:pull 10":0.0,"hl:pull 11":0.0,"hl:push 10":0.0,"hl:push 9":0.0,"hl:push 8":0.0,"hl:push 7":0.0,"hl:push 6":0.0,"hl:push 5":0.0,"hl:push 4":0.0,"hl:push 3":0.01,"hl:push 2":0.02,"hl:push 1":0.12,"hl:push 0":0.47,"hl:fill":9.9,"denoise:blur 0":12.21,"denoise:blur 1":11.79,"denoise:blur 2":11.77,"denoise:blur 3":11.85,"denoise:shrink 3":9.69,"denoise:shrink 2":13.15,"denoise:shrink 1":15.64,"denoise:shrink 0":15.66,"lens":8.19,"sharpen":7.57,"camera->working":7.31,"profile:hue/sat":7.42,"dehaze:channel min":4.87,"dehaze:dark h":7.94,"dehaze:dark v":8.68,"dehaze:candidates":3.34,"dehaze:channel min/A":4.64,"dehaze:min h":7.89,"dehaze:min v":8.18,"dehaze:max h":7.85,"dehaze:max v":7.77,"dehaze:moments":7.61,"dehaze:blur h":8.86,"dehaze:blur v":6.91,"dehaze:coeffs":0.63,"dehaze:blur h2":3.54,"dehaze:blur v2":3.53,"dehaze":7.54,"clarity:luma":4.43,"clarity:gauss 1":2.51,"clarity:gauss 2":0.67,"clarity:gauss 3":0.16,"clarity:gauss 4":0.04,"clarity:gauss 5":0.01,"clarity:remap 1.0 h":4.72,"clarity:remap 1.0 v":3.06,"clarity:remap 1.1 h":4.68,"clarity:remap 1.1 v":2.72,"clarity:remap 1.2 h":5.81,"clarity:remap 1.2 v":2.65,"clarity:remap 1.3 h":5.08,"clarity:remap 1.3 v":2.7,"clarity:remap 2.0":1.37,"clarity:remap 2.1":1.35,"clarity:remap 2.2":1.32,"clarity:remap 2.3":1.31,"clarity:remap 3.0":0.34,"clarity:remap 3.1":0.34,"clarity:remap 3.2":0.35,"clarity:remap 3.3":0.34,"clarity:remap 4.0":0.09,"clarity:remap 4.1":0.09,"clarity:remap 4.2":0.09,"clarity:remap 4.3":0.09,"clarity:remap 5.0":0.03,"clarity:remap 5.1":0.03,"clarity:remap 5.2":0.03,"clarity:remap 5.3":0.03,"clarity:collapse 4":0.11,"clarity:collapse 3":0.43,"clarity:collapse 2":1.71,"clarity:collapse 1":7.28,"clarity:collapse 0":20.99,"clarity":9.71,"fusion:proxy":4.76,"fusion:images.0.0":0.26,"fusion:weights.0.0":0.52,"fusion:images.0.1":0.27,"fusion:weights.0.1":0.35,"fusion:images.1.0":0.34,"fusion:weights.1.0":0.38,"fusion:images.1.1":0.36,"fusion:weights.1.1":0.35,"fusion:images.2.0":0.1,"fusion:weights.2.0":0.09,"fusion:images.2.1":0.09,"fusion:weights.2.1":0.09,"fusion:images.3.0":0.03,"fusion:weights.3.0":0.03,"fusion:images.3.1":0.03,"fusion:weights.3.1":0.03,"fusion:images.4.0":0.01,"fusion:weights.4.0":0.01,"fusion:images.4.1":0.01,"fusion:weights.4.1":0.01,"fusion:images.5.0":0.0,"fusion:weights.5.0":0.0,"fusion:images.5.1":0.0,"fusion:weights.5.1":0.0,"fusion:blend 5":0.0,"fusion:blend 4":0.01,"fusion:blend 3":0.03,"fusion:blend 2":0.1,"fusion:blend 1":0.37,"fusion:blend 0":1.4,"fusion":7.42,"guide:prep":6.81,"guide:subsample":5.18,"guide:blur h":0.78,"guide:blur v":0.75,"guide:coeffs":0.42,"guide:blur h2":0.75,"guide:blur v2":0.77,"mask:base":0.97,"mask:0":1.33,"mask0:guide prep":7.56,"mask0:guide blur h":2.92,"mask0:guide blur v":2.29,"mask0:guide coeffs":0.65,"mask0:guide blur h2":1.29,"mask0:guide blur v2":1.29,"mask0:refine":5.41,"mask1:guide prep":7.81,"mask1:guide blur h":2.75,"mask1:guide blur v":2.37,"mask1:guide coeffs":0.62,"mask1:guide blur h2":1.28,"mask1:guide blur v2":1.26,"mask1:refine":5.49,"mask2:guide prep":7.94,"mask2:guide blur h":2.73,"mask2:guide blur v":2.27,"mask2:guide coeffs":0.64,"mask2:guide blur h2":1.31,"mask2:guide blur v2":1.26,"mask2:refine":5.97,"mask3:guide prep":7.32,"mask3:guide blur h":2.75,"mask3:guide blur v":2.75,"mask3:guide coeffs":0.62,"mask3:guide blur h2":1.3,"mask3:guide blur v2":1.33,"mask3:refine":5.49,"mask4:guide prep":7.49,"mask4:guide blur h":3.39,"mask4:guide blur v":2.29,"mask4:guide coeffs":0.66,"mask4:guide blur h2":1.31,"mask4:guide blur v2":1.24,"mask4:refine":5.64,"mask5:guide prep":7.91,"mask5:guide blur h":2.76,"mask5:guide blur v":2.27,"mask5:guide coeffs":0.62,"mask5:guide blur h2":1.3,"mask5:guide blur v2":1.24,"mask5:refine":5.36,"mask6:guide prep":7.67,"mask6:guide blur h":2.75,"mask6:guide blur v":2.3,"mask6:guide coeffs":0.64,"mask6:guide blur h2":1.32,"mask6:guide blur v2":1.23,"mask6:refine":5.82,"mask7:guide prep":7.32,"mask7:guide blur h":2.76,"mask7:guide blur v":2.28,"mask7:guide coeffs":0.77,"mask7:guide blur h2":1.29,"mask7:guide blur v2":1.25,"mask7:refine":5.74,"develop:linear":11.43,"grade + vignette":7.28,"develop:display":7.08,"develop:grain":10.98,"geometry":4.2};
+
+/* ═══ Stages: hand-placed boxes ═══ */
+const STAGES = {
+  source:     { t: 'Sensor data',  r: 'src', x: 20,  y: 40,  say: 'Raw sensor data. One color per pixel.' },
+  demosaic:   { t: 'Demosaic',     r: 'cap', x: 142, y: 40,  say: 'Fills in the two missing colors per pixel.' },
+  highlights: { t: 'Highlights',   r: 'cap', x: 264, y: 40,  say: 'Rebuilds clipped highlights.' },
+  denoise:    { t: 'Denoise',      r: 'cap', x: 386, y: 40,  say: 'Removes noise.' },
+  lens:       { t: 'Lens',         r: 'cap', x: 508, y: 40,  say: 'Corrects distortion, fringes and vignetting.' },
+  spots:      { t: 'Spots',        r: 'cap', x: 630, y: 40,  say: 'Removes dust spots.' },
+  sharpen:    { t: 'Sharpen',      r: 'cap', x: 752, y: 40,  say: 'Restores fine detail.' },
+  profile:    { t: 'Color',        r: 'cap', x: 874, y: 40,  say: 'Camera color to a standard color space.' },
+  dehaze:     { t: 'Dehaze',       r: 'loc', x: 874, y: 160, say: 'Removes haze.' },
+  clarity:    { t: 'Clarity',      r: 'loc', x: 752, y: 160, say: 'Increases local contrast.' },
+  fusion:     { t: 'Fusion',       r: 'loc', x: 630, y: 160, say: 'Lifts shadows, keeps local contrast.' },
+  guide:      { t: 'Guide',        r: 'loc', x: 874, y: 270, say: 'Edge map for shadows and highlights.' },
+  masks:      { t: 'Masks',        r: 'msk', x: 874, y: 370, say: 'Gradients, brushes, subject masks.' },
+  refine:     { t: 'Mask edges',   r: 'msk', x: 752, y: 370, say: 'Aligns mask edges with the photo.' },
+  tone:       { t: 'Tone',         r: 'out', x: 386, y: 480, say: 'Exposure, tone, color and masks in one shader.' },
+  grade:      { t: 'Grade',        r: 'out', x: 508, y: 480, say: 'Color grading and vignette.' },
+  display:    { t: 'Display',      r: 'out', x: 630, y: 480, say: 'Tone curve, LUT, screen conversion.' },
+  grain:      { t: 'Grain',        r: 'out', x: 752, y: 480, say: 'Film grain and dither.' },
+  geometry:   { t: 'Crop',         r: 'out', x: 874, y: 480, say: 'Crop and rotate.' },
+};
+const ORDER = Object.keys(STAGES);
+const BW = 108, BH = 52;
+const stageOf = id => N[id].stage;
+const stageCount = s => N.filter(n => n.stage === s && n.id !== src).length;
+const SEDGES = [];
+{ const seen = new Set();
+  N.forEach(n => n.inputs.forEach(i => { const a = stageOf(i), b = n.stage; if (a !== b && !seen.has(a + b)) { seen.add(a + b); SEDGES.push([a, b]); } })); }
+
+function edgePath(a, b) {
+  const A = STAGES[a], B = STAGES[b];
+  const ax = A.x + BW / 2, ay = A.y + BH / 2, bx = B.x + BW / 2, by = B.y + BH / 2;
+  if (A.y === B.y) { const s = bx > ax ? 1 : -1; return `M${ax + s * BW / 2},${ay} L${bx - s * BW / 2},${by}`; }
+  // Same column, rows apart: go round the right margin instead of through the boxes between.
+  if (A.x === B.x && Math.abs(B.y - A.y) > 130) { const xr = A.x + BW, m = 994; return `M${xr},${ay} C${m},${ay} ${m},${by} ${xr},${by}`; }
+  // The branches join Tone through a channel right of the card: down x=590, along y=455.
+  if (b === 'tone') {
+    const tail = `L${bx + 10},455 Q${bx},455 ${bx},465 L${bx},${B.y}`;
+    if (A.y === 160) return `M${ax},${A.y + BH} L${ax},445 Q${ax},455 ${ax - 10},455 ${tail}`;
+    return `M${A.x},${ay} L600,${ay} Q590,${ay} 590,${ay + 10} L590,445 Q590,455 580,455 ${tail}`;
+  }
+  const sy = by > ay ? 1 : -1, y1 = ay + sy * BH / 2, y2 = by - sy * BH / 2, my = (y1 + y2) / 2;
+  return `M${ax},${y1} C${ax},${my} ${bx},${my} ${bx},${y2}`;
+}
+function drawPipe(svg) {
+  svg.innerHTML =
+    `<text class="region" x="20" y="24">Capture</text><text class="region" x="630" y="146">Local</text><text class="region" x="874" y="442">Masks</text><text class="region" x="386" y="466">Output</text>` +
+    SEDGES.map(([a, b]) => `<path class="s-edge" data-e="${a}>${b}" d="${edgePath(a, b)}" marker-end="url(#arr)"/>`).join('') +
+    `<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4a4a50"/></marker></defs>` +
+    ORDER.map(k => { const s = STAGES[k], c = stageCount(k);
+      return `<g class="s-node" data-s="${k}" tabindex="0" role="button" aria-label="${s.t}" style="--c:var(--${s.r})"><rect x="${s.x}" y="${s.y}" width="${BW}" height="${BH}" rx="9"/><text x="${s.x + 12}" y="${s.y + 23}">${s.t}</text><text class="sub" x="${s.x + 12}" y="${s.y + 40}">${c ? c + (c > 1 ? ' shaders' : ' shader') : 'upload'}</text></g>`; }).join('');
+}
+function paint(svg, { sel = [], hot = [], lit = [], cold = false, edgesHot = new Set(), edgesLit = new Set() }) {
+  svg.querySelectorAll('.s-node').forEach(g => {
+    const k = g.dataset.s;
+    g.classList.toggle('sel', sel.includes(k));
+    g.classList.toggle('hot', hot.includes(k) && !sel.includes(k));
+    g.classList.toggle('lit', lit.includes(k));
+    g.classList.toggle('cold', cold && !sel.includes(k) && !hot.includes(k) && !lit.includes(k));
+  });
+  svg.querySelectorAll('.s-edge').forEach(e => {
+    e.classList.toggle('hot', edgesHot.has(e.dataset.e));
+    e.classList.toggle('lit', edgesLit.has(e.dataset.e));
+    e.classList.toggle('cold', cold && !edgesHot.has(e.dataset.e) && !edgesLit.has(e.dataset.e));
+  });
+}
+function card(el, k, extra = '') {
+  const s = STAGES[k], c = stageCount(k);
+  el.innerHTML = `<h3>${s.t}</h3><p>${s.say}</p><div class="meta">${c ? c + (c > 1 ? ' shaders' : ' shader') : 'uploaded once'}${extra}</div>`;
+}
+function onStage(svg, fn) {
+  svg.addEventListener('click', e => { const g = e.target.closest('.s-node'); if (g) fn(g.dataset.s); });
+  svg.addEventListener('keydown', e => { const g = e.target.closest('.s-node'); if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); fn(g.dataset.s); } });
+}
+
+/* ═══ deck nav ═══ */
+const slides = $$('.slide'); let cur = 0;
+$('#railBtns').innerHTML = slides.map((s, i) => `<button data-i="${i}"><span>${i}</span><span>${s.dataset.title}</span></button>`).join('');
+function go(i) {
+  cur = Math.max(0, Math.min(slides.length - 1, i));
+  slides.forEach((s, j) => s.classList.toggle('on', j === cur));
+  $$('#railBtns button').forEach((b, j) => b.setAttribute('aria-current', j === cur));
+  $('#count').textContent = `${cur + 1} / ${slides.length}`;
+  if (location.hash !== '#' + cur) history.replaceState(null, '', '#' + cur);
+}
+$('#railBtns').onclick = e => { const b = e.target.closest('button'); if (b) go(+b.dataset.i); };
+$('#prev').onclick = () => go(cur - 1); $('#next').onclick = () => go(cur + 1);
+addEventListener('keydown', e => {
+  if (e.target.matches('input')) return;
+  if (e.key === 'ArrowRight' || e.key === 'PageDown') go(cur + 1);
+  if (e.key === 'ArrowLeft' || e.key === 'PageUp') go(cur - 1);
+});
+go(+location.hash.slice(1) || 0);
+
+/* ═══ Measured facts. Every number on screen comes from here. ═══
+   AUG31: orion-bench output archived 2026-08-31 (173-node build, 4 mask slots).
+   OCT6:  orion-bench on the current build (205 nodes), same Apple M4. */
+const M_TAG = '<span class="tag m">MEASURED</span>', E_TAG = '<span class="tag e">ESTIMATED</span>';
+const AUG31 = 'Apple M4, 2026-08-31', OCT6 = 'Apple M4, 2026-10-06';
+
+/* ═══ 0 title ═══ */
+{ const MINI = [['Sensor', 'src', 'source'], ['Demosaic', 'cap', 'demosaic'], ['Color', 'cap', 'profile'], ['Local', 'loc', 'clarity'], ['Tone', 'out', 'tone'], ['Screen', 'out', 'geometry']];
+  const w = 78, gap = 18, y = 60;
+  $('#mini').innerHTML = MINI.map(([t, r], i) => {
+    const x = 10 + i * (w + gap);
+    return (i ? `<line class="s-edge" x1="${x - gap}" y1="${y + 26}" x2="${x}" y2="${y + 26}"/>` : '') +
+      `<g class="s-node" data-i="${i}" tabindex="0" role="button" style="--c:var(--${r})"><rect x="${x}" y="${y}" width="${w}" height="52" rx="9"/><text x="${x + 10}" y="${y + 31}">${t}</text></g>`;
+  }).join('');
+  let timer = null, i = 0;
+  const step = () => { $$('#mini .s-node').forEach((g, j) => g.classList.toggle('sel', j === i)); $$('#mini .s-edge').forEach((e, j) => e.classList.toggle('lit', j === i - 1)); i = (i + 1) % 7; };
+  if (!reduce) timer = setInterval(step, 650);
+  const pick = k => { clearInterval(timer); $$('#mini .s-node').forEach((g, j) => g.classList.toggle('sel', j === k)); $$('#mini .s-edge').forEach(e => e.classList.remove('lit'));
+    const st = STAGES[MINI[k][2]]; $('#miniCap').textContent = `${st.t}: ${st.say}`; };
+  $('#mini').addEventListener('click', e => { const g = e.target.closest('.s-node'); if (g) pick(+g.dataset.i); });
+  $('#mini').addEventListener('keydown', e => { const g = e.target.closest('.s-node'); if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pick(+g.dataset.i); } });
+}
+
+/* ═══ 1 only what changed runs: measured node counts per control ═══ */
+const B = $('#pipeB');
+drawPipe(B);
+// nodes and ms: "Control check", one tick each, AUG31. ids: where the control writes, for the lit stages.
+const MCTL = [
+  { name: 'Exposure', ran: 3, ms: 18.77, ids: [linear] },
+  { name: 'Contrast', ran: 2, ms: 11.79, ids: [display] },
+  { name: 'Mask, local +2 EV', ran: 4, ms: 24.76, ids: [comp[0]] },
+  { name: 'Sharpen', ran: 6, ms: 39.34, ids: [sh] },
+  { name: 'White balance', ran: 11, ms: 81.01, ids: [lin] },
+  { name: 'Denoise', ran: 14, ms: 137.60, ids: prefixed('denoise:') },
+  { name: 'Clarity', ran: 39, ms: 101.33, ids: inStage('clarity') },
+  { name: 'Dehaze', ran: 15, ms: 207.83, ids: inStage('dehaze') },
+];
+$('#ctlChips').innerHTML = MCTL.map((c, i) => `<button data-i="${i}" aria-pressed="false">${c.name}</button>`).join('');
+// On at default settings (the bench's starting point); a control also switches on its own stage.
+const DEFAULT_ON = new Set(['demosaic', 'sharpen', 'profile', 'tone', 'display', 'geometry']);
+function pickCtl(i) {
+  const c = MCTL[i], ds = dirtySet(c.ids);
+  const own = new Set(c.ids.map(stageOf));
+  const touched = [...own], all = [...new Set([...ds].map(stageOf))];
+  const hot = all.filter(k => DEFAULT_ON.has(k) || own.has(k)), off = all.filter(k => !hot.includes(k));
+  $$('#ctlChips button').forEach((b, j) => b.setAttribute('aria-pressed', j === i));
+  paint(B, { sel: touched, hot, cold: true, edgesHot: new Set(SEDGES.filter(([a, b]) => (hot.includes(a) || own.has(a)) && hot.includes(b)).map(e => e.join('>'))) });
+  B.querySelectorAll('.s-node').forEach(g => g.classList.toggle('off', off.includes(g.dataset.s)));
+  $('#cardB').innerHTML = `<div class="tally"><div><b class="hotN">${c.ran}</b><small>nodes ran</small></div><div><b>${c.ms.toFixed(2)}</b><small>ms, one tick</small></div></div>
+    <p class="src">${M_TAG} ${AUG31}, 42 MP, 173-node build. Amber: ran. Dashed: after the change, but switched off.</p>`;
+}
+$('#ctlChips').onclick = e => { const b = e.target.closest('button'); if (b) pickCtl(+b.dataset.i); };
+onStage(B, k => { const i = MCTL.findIndex(c => c.ids.some(id => stageOf(id) === k)); if (i >= 0) pickCtl(i); });
+pickCtl(0);
+
+/* ═══ 2 measured ═══ */
+const axis = (vals, lo, hi, line) => (x => `<div class="axis"><i class="band" style="left:${x(vals[0][0])}%;width:${x(vals[vals.length - 1][0]) - x(vals[0][0])}%"></i>${line ? `<i class="target" style="left:${x(line)}%"><span>${line} ms target</span></i>` : ''}${vals.map(([v, l, cls]) => `<i class="pt ${cls || ''}" style="left:${x(v)}%"><span>${l}</span></i>`).join('')}</div><div class="ticks">${[14.5, 15, 15.5, 16, 16.5, 17].map(t => `<span style="left:${x(t)}%">${t} ms</span>`).join('')}</div>`)(v => 100 * (v - lo) / (hi - lo));
+// Texture lifetimes, 10 of the 205 nodes in run order. Illustration of the rule, not a measurement.
+// [name, runs at step, freed after step (null = kept to the end), pinned]
+const LIFE = [['Linearize', 0, 1], ['Demosaic', 1, null, 1], ['Highlights', 2, null, 1], ['Denoise', 3, 4], ['Lens', 4, 5],
+  ['Sharpen', 5, 6], ['Color', 6, null, 1], ['Tone', 7, 8], ['Display', 8, 9], ['Crop', 9, null]];
+function lifeHTML(mode) {
+  const W = 100 / 10, after = mode === 'after';
+  // Slots, simulated with the engine's rule: a node borrows a free slot when it runs,
+  // and its slot is free again once its last reader has run. Pinned and final outputs are kept.
+  const slot = {}, holder = [];
+  LIFE.forEach(([n, a, b, pin]) => {
+    if (!after || pin || b == null) return;
+    holder.forEach((h, i) => { if (h && h[2] < a) holder[i] = null; });
+    let i = holder.findIndex(h => !h); if (i < 0) i = holder.length;
+    holder[i] = [n, a, b]; slot[n] = i;
+  });
+  const NAMES = 'ABCDEF', uses = {};
+  Object.entries(slot).forEach(([n, i]) => (uses[i] ??= []).push(n));
+  const rows = LIFE.map(([n, a, b, pin]) => {
+    const end = after && b != null ? b + 1 : 10;
+    const kind = !after ? 'all' : pin ? 'pin' : b == null ? 'out' : 's' + slot[n];
+    const tag = !after ? 'own texture' : pin ? 'kept, pinned' : b == null ? 'kept' : 'slot ' + NAMES[slot[n]];
+    return `<div class="lrow"><span>${n}</span><div class="ltrack"><i class="${kind}" style="left:${a * W}%;width:${(end - a) * W}%"><em>${tag}</em></i></div></div>`;
+  }).join('');
+  const live = t => LIFE.filter(([, a, b]) => a <= t && (!after || b == null || t <= b)).length;
+  const peak = Math.max(...LIFE.map((_, t) => live(t)));
+  const rack = after ? `<div class="rack">${Object.keys(uses).map(i => `<div class="slot s${i}"><b>${NAMES[i]}</b><span>${uses[i].join(' → ')}</span></div>`).join('')}<p>Shared slots, same size. Each node writes over the slot when its turn comes.</p></div>` : '';
+  return `<div class="row" role="group" aria-label="Texture lifetimes" style="margin-bottom:10px">
+      <button class="btn ghost" data-life="before" aria-pressed="${!after}">Before</button><button class="btn ghost" data-life="after" aria-pressed="${after}">After</button>
+      <span class="lpeak">${peak} of 10 textures in use at the busiest step</span></div>
+    <div class="lifeWrap"><div class="life">${rows}<div class="lsteps"><span>render order →</span></div></div>${rack}</div>
+    <p class="note2">${after ? 'A node borrows a shared slot and writes over it. Once its last reader has run, the slot is free for the next node of the same size. Pinned outputs keep their own texture. A rebuild starts from the nearest kept parent.' : 'Every node keeps its own full-size texture from photo open to photo close.'}</p>
+    <p class="src">Illustration: 10 of 205 nodes, simplified to a chain.</p>`;
+}
+const MBODY = {
+  lat: () => `<div class="mgrid">
+    <div class="card"><h4>Exposure drag, full resolution ${M_TAG}</h4>
+      ${axis([[15.04, 'min 15.04', 'low'], [15.14, 'median 15.14'], [15.34, 'mean 15.34', 'low2'], [16.27, 'p95 16.27', 'warn']], 14.5, 17, 16)}
+      <p class="note2">Not a normal distribution: the mean sits above the median and the tail runs past 16 ms. Half the frames take 15.14 ms or less; 5% take more than 16.27 ms. The median is not a budget: the p95 misses 16 ms. 3 rounds × 60 frames; p95 by round 16.36, 16.27, 16.32 ms.</p></div>
+    <div class="card"><div class="kv"><b>87.74 ms</b><span>full render, all 173 nodes ${M_TAG}</span></div>
+      <div class="kv"><b>803 MP/s</b><span>raw decode, 52.8 ms ${M_TAG}</span></div>
+      <div class="kv"><b>3 of 173</b><span>nodes recomputed per exposure tick ${M_TAG}</span></div></div></div>
+    <p class="src">${AUG31}. Source: orion-bench-42mp-2026-08-31.txt. A re-run on ${OCT6} is not comparable: the bench flagged other GPU load (p95 spread 2.16 ms across rounds).</p>`,
+  mem: () => `<div class="mgrid"><div class="card"><h4>How long each texture lives</h4><div id="lifeBox">${lifeHTML('after')}</div></div>
+    <div class="card"><div class="kv"><b>13,861 MiB</b><span>if every node kept its own texture, 42 MP ${M_TAG}</span></div>
+      <div class="kv"><b>1,722 MiB</b><span>peak held at any moment during one full render ${M_TAG}</span></div>
+      <div class="kv"><b>1,803 MiB</b><span>still allocated after the render ${M_TAG}</span></div>
+      <ul class="rules"><li><b>Lazy:</b> a texture is made only when its node runs.</li><li><b>Rebuilt once:</b> if a handed-on output is needed again, it is rebuilt from the nearest kept parent, then kept. A drag does not rebuild it every tick.</li><li><b>Checked:</b> two renders still match bit for bit, 0 of 169,559,040 samples differ.</li></ul>
+      <div class="pinEx"><h4>Why a node is pinned: an example</h4><p>The color picker reads the image after camera color correction and before any of your edits. If it read the edited image, changing a color would change what you pick next. It reads that texture after the render ends, so its texture must not be handed on: <code>profile:hue/sat</code> is pinned.</p><p class="src">Rule: pin any node read from outside the graph. Six are pinned; the screen output is kept as well.</p></div></div></div>
+    <p class="src">Apple M4, 2026-10-06, 205-node build. Changed 2026-09-05: giving every node its own texture ran out of memory at 42 MP. On 2026-08-31 the bench measured 12,567 MiB.</p>`,
+  ok: () => `<div class="mgrid"><div class="card"><h4>Render A/B ${M_TAG}</h4><div class="kv"><b>bit-identical</b><span>0 of 169,559,040 samples differ between two full renders</span></div>
+      <p class="note2">The bench also checks each control moves the image, and how many nodes it runs (35 controls).</p></div>
+    <div class="card"><h4>The bench flags noise</h4><p class="note2">It runs three rounds and reports the p95 spread. On 2026-10-06 it printed: "something else is using the GPU … this number is not comparable".</p></div></div>
+    <p class="src">${AUG31} (A/B); ${OCT6} (noise flag).</p>`,
+};
+function showM(k) { $$('#mTabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.m === k)); $('#mBody').innerHTML = MBODY[k](); }
+$('#mBody').addEventListener('click', e => { const b = e.target.closest('[data-life]'); if (b) $('#lifeBox').innerHTML = lifeHTML(b.dataset.life); });
+$('#mTabs').onclick = e => { const b = e.target.closest('button'); if (b) showM(b.dataset.m); };
+showM('lat');
+
+/* ═══ 3 per-node profiling ═══ */
+const WHY = {
+  source: 'The raw upload. Not a node.', demosaic: 'Linearize, then 4 RCD passes.', highlights: 'Pull-push pyramid: 11 levels down, 11 up.',
+  denoise: '4 scales, each a blur and a shrink.', lens: 'One pass.', spots: 'Measure, then heal.', sharpen: 'One pass.',
+  profile: 'A matrix, then a hue/saturation table.', dehaze: 'Min filters, then a guided filter.', clarity: '6-level pyramid. 16 remapped copies, 4 per texture.',
+  fusion: 'Two 6-level pyramids: images and weights.', guide: 'Guided filter at quarter size.', masks: 'A base and 8 mask slots.',
+  refine: '7-node guided filter per mask slot: 8 × 7.', tone: 'All adjustments in one pass.', grade: 'One pass.', display: 'One pass.', grain: 'One pass.', geometry: 'One pass.',
+};
+const stageMs = k => N.filter(n => n.stage === k).reduce((t, n) => t + (MS[n.label] || 0), 0);
+$('#bar').innerHTML = ORDER.filter(k => stageCount(k)).map(k => {
+  const c = stageCount(k);
+  return `<button data-s="${k}" style="flex:${c};--c:var(--${STAGES[k].r})" aria-pressed="false" aria-label="${STAGES[k].t}, ${c} nodes">${c >= 12 ? `<span>${STAGES[k].t} ${c}</span>` : ''}</button>`;
+}).join('');
+const short = l => l.replace(/^mask(\d):(guide )?/, '$1 ').replace(/^[a-z]+:/, '').replace(/^grade \+ vignette$/, 'grade');
+function drawSub(k) {
+  const ids = N.filter(n => n.stage === k && n.id !== src).map(n => n.id), inS = new Set(ids), ext = {};
+  ids.forEach(id => N[id].inputs.forEach(i => { if (!inS.has(i)) ext[stageOf(i)] = 'x' + stageOf(i); }));
+  const rk = {};
+  Object.values(ext).forEach(x => rk[x] = 0);
+  ids.forEach(id => { rk[id] = 1 + Math.max(0, ...N[id].inputs.map(i => inS.has(i) ? rk[i] : 0)); });
+  const cols = [];
+  [...Object.values(ext), ...ids].forEach(v => (cols[rk[v]] ??= []).push(v));
+  const compact = cols.length > 13, bw = compact ? 12 : 84, bh = compact ? 12 : 22, dx = compact ? 26 : 100, dy = compact ? 22 : 30;
+  const rows = Math.max(...cols.map(c => c.length)), P = {};
+  cols.forEach((c, r) => c.forEach((v, j) => { P[v] = [10 + r * dx, 10 + ((rows - c.length) / 2 + j) * dy]; }));
+  const sub = $('#sub');
+  sub.setAttribute('viewBox', `0 0 ${20 + (cols.length - 1) * dx + bw} ${20 + (rows - 1) * dy + bh}`);
+  sub.style.maxHeight = '260px';
+  const link = (a, b) => { const [x1, y1] = P[a], [x2, y2] = P[b], mx = (x1 + bw + x2) / 2;
+    return `<path class="s-edge" d="M${x1 + bw},${y1 + bh / 2} C${mx},${y1 + bh / 2} ${mx},${y2 + bh / 2} ${x2},${y2 + bh / 2}"/>`; };
+  sub.innerHTML =
+    ids.flatMap(id => [...new Set(N[id].inputs.map(i => inS.has(i) ? i : ext[stageOf(i)]))].map(a => link(a, id))).join('') +
+    Object.entries(ext).map(([s, x]) => `<g class="sn ext"><rect x="${P[x][0]}" y="${P[x][1]}" width="${bw}" height="${bh}" rx="5"/>${compact ? '' : `<text x="${P[x][0] + 7}" y="${P[x][1] + 15}">from ${STAGES[s].t}</text>`}</g>`).join('') +
+    ids.map(id => `<g class="sn" data-id="${id}" style="--c:var(--${STAGES[k].r})"><rect x="${P[id][0]}" y="${P[id][1]}" width="${bw}" height="${bh}" rx="${compact ? 6 : 5}"/>${compact ? '' : `<text x="${P[id][0] + 7}" y="${P[id][1] + 15}">${short(N[id].label)}</text>`}</g>`).join('');
+}
+function pickBar(k) {
+  $$('#bar button').forEach(b => b.setAttribute('aria-pressed', b.dataset.s === k));
+  drawSub(k);
+  const c = stageCount(k), ms = stageMs(k);
+  $('#why').innerHTML = `<h3>${STAGES[k].t}</h3><div class="n">${c} node${c > 1 ? 's' : ''}</div><p>${WHY[k]}</p>` +
+    (ms ? `<div class="m">${E_TAG} ${ms.toFixed(1)} ms: sum of this stage's per-node GPU times, every stage switched on. Not a frame time.</div>` : '') +
+    (k === 'clarity' ? `<div class="m">${M_TAG} 2026-08-31: <code>clarity:collapse 0</code> was 20.70 ms, 20.8% of clarity's 99.56 ms serialized.</div>` : '') +
+    `<div class="m">${M_TAG} per-node times: ${OCT6}, 42 MP. Hover a node.</div>`;
+}
+$('#bar').onclick = e => { const b = e.target.closest('button'); if (b) pickBar(b.dataset.s); };
+const tip = $('#tip');
+$('#sub').addEventListener('mousemove', e => {
+  const c = e.target.closest('[data-id]'); if (!c) { tip.hidden = true; return; }
+  const n = N[+c.dataset.id], ms = MS[n.label];
+  tip.innerHTML = `<b>${n.label}</b><span>shader ${n.kernel}</span><span>${ms != null ? ms.toFixed(2) + ' ms, MEASURED' : 'off in the profiled edit'}</span>`;
+  tip.hidden = false; tip.style.left = Math.min(innerWidth - 300, e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 14) + 'px';
+});
+$('#sub').addEventListener('mouseleave', () => tip.hidden = true);
+pickBar('clarity');
+
+/* ═══ 4 checks: gates (2026-10-06 run) and the MCP loop ═══ */
+const GATES = [['orion-tests', '1,192 checks, real GPU renders'], ['orion-viewport-tests', '4,279 checks'], ['check-decisions', '288 design notes link-check'],
+  ['check-gestures', '6 gestures'], ['check-screens', '3 UI scenes assert'], ['check-modes', 'library, batch export, HDR'],
+  ['check-wiring', '505 functions swept'], ['check-agent', '21 of 21 MCP checks'], ['check-site', 'links, privacy']];
+$('#gates').innerHTML = GATES.map(([n, r]) => `<div class="gate"><b>${n}</b><span class="res">${r}</span></div>`).join('');
+$('#gatesGo').onclick = async e => {
+  e.target.disabled = true; const gs = $$('.gate'); gs.forEach(g => g.classList.remove('ok', 'run'));
+  for (const g of gs) { g.classList.add('run'); await wait(reduce ? 60 : 300); g.classList.replace('run', 'ok'); }
+  e.target.disabled = false; e.target.textContent = 'Run again';
+};
+const STEPS = [
+  { t: 'You: “Warm this photo a little.”' },
+  { t: 'Agent reads the open photo and its current values.', c: 'current_photo, get_stats' },
+  { t: 'Agent proposes an edit.', c: 'propose_edit {temperatureK: 5900}' },
+  { t: 'Each value is checked against its control’s range. Out of range: rejected.', c: '39 controls with a range' },
+  { t: 'Orion previews it. You approve or reject.', c: 'Approve writes the XMP sidecar' },
+];
+$('#steps').innerHTML = STEPS.map(s => `<li><div>${s.t}${s.c ? `<code>${s.c}</code>` : ''}</div></li>`).join('');
+function mcpReset() { $$('#steps li').forEach(li => li.classList.remove('on')); $('#compare').className = 'compare idle'; $('#appMsg').textContent = 'No proposal.'; $('#approveBtn').disabled = $('#rejectBtn').disabled = true; $('#mcpGo').disabled = false; }
+$('#mcpGo').onclick = async () => {
+  mcpReset(); $('#mcpGo').disabled = true; const li = $$('#steps li');
+  for (let i = 0; i < STEPS.length; i++) {
+    li[i].classList.add('on');
+    if (i === 4) { $('#compare').className = 'compare live'; $('#appMsg').textContent = 'Proposal. Panels locked.'; $('#approveBtn').disabled = $('#rejectBtn').disabled = false; break; }
+    await wait(reduce ? 150 : 1000);
+  }
+};
+$('#approveBtn').onclick = () => { $('#compare').className = 'compare done'; $('#appMsg').textContent = 'Saved to XMP. Proposal deleted.'; $('#approveBtn').disabled = $('#rejectBtn').disabled = true; $('#mcpGo').disabled = false; };
+$('#rejectBtn').onclick = () => { $('#compare').className = 'compare idle'; $('#appMsg').textContent = 'Proposal deleted. XMP unchanged.'; $('#approveBtn').disabled = $('#rejectBtn').disabled = true; $('#mcpGo').disabled = false; };
+mcpReset();
+
+
+/* ═══ restored: the pipeline, click a stage or play through ═══ */
+const A = $('#pipeA');
+drawPipe(A);
+function pickA(k) {
+  const up = new Set([k]); let grew = true;
+  while (grew) { grew = false; for (const [a, b] of SEDGES) if (up.has(b) && !up.has(a)) { up.add(a); grew = true; } }
+  paint(A, { sel: [k], lit: [...up].filter(x => x !== k), cold: true, edgesLit: new Set(SEDGES.filter(([a, b]) => up.has(a) && up.has(b)).map(e => e.join('>'))) });
+  card($('#cardA'), k, ' · lit: its inputs');
+}
+onStage(A, pickA);
+$('#cardA').innerHTML = '<h3>A graph, not a chain</h3><p>Color splits into three branches. They join again at Tone.</p>';
+$('#playGo').onclick = async e => {
+  e.target.disabled = true;
+  const done = [];
+  for (const k of ORDER) {
+    done.push(k);
+    const edges = new Set(SEDGES.filter(([a, b]) => b === k && done.includes(a)).map(x => x.join('>')));
+    paint(A, { sel: [k], lit: done.slice(0, -1), edgesLit: edges });
+    card($('#cardA'), k);
+    await wait(reduce ? 200 : 900);
+  }
+  paint(A, {});
+  $('#cardA').innerHTML = '<h3>On screen</h3><p>Click any stage.</p>';
+  e.target.disabled = false; e.target.textContent = 'Play again';
+};
+
+/* ═══ restored: one slider tick, step by step ═══ */
+/* ═══ 4 one slider tick, step by step, with the real code ═══
+   Code is trimmed from the files named; the notes on the right are not in the source. */
+const TAIL = ['Tone', 'Display', 'Crop']; // Grade and Grain are off at default, so these three run
+{ let cache = '';
+  for (let i = 0; i < 200; i++) cache += `<rect x="${592 + (i % 20) * 9}" y="${196 + Math.floor(i / 20) * 9}" width="7" height="7" rx="1"/>`;
+  $('#flow').innerHTML = `
+  <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3d5a78"/><stop offset=".55" stop-color="#8aa7c2"/><stop offset=".56" stop-color="#4b4a3a"/><stop offset="1" stop-color="#2c2e25"/></linearGradient>
+    <marker id="fa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#4a4a50"/></marker></defs>
+  <rect class="lane" x="10" y="8" width="980" height="122" rx="12"/><text class="laneT" x="24" y="28">CPU: Swift and C++</text>
+  <rect class="lane" x="10" y="168" width="980" height="124" rx="12"/><text class="laneT" x="24" y="188">GPU: Metal</text>
+  <path class="fwire" d="M180,72 L208,72" marker-end="url(#fa)"/><path class="fwire" d="M368,72 L396,72" marker-end="url(#fa)"/>
+  <path class="fwire" d="M556,72 L584,72" marker-end="url(#fa)"/><path class="fwire" d="M752,72 L788,72" marker-end="url(#fa)"/>
+  <path class="fwire" d="M790,240 L566,240" marker-end="url(#fa)"/><path class="fwire" d="M330,240 L292,240" marker-end="url(#fa)"/><path class="fwire" d="M226,240 L176,240" marker-end="url(#fa)"/>
+  <g class="fbox" id="fb0"><rect x="30" y="42" width="150" height="62" rx="10"/><text x="44" y="68">Slider</text><text class="s" x="44" y="88">Swift</text></g>
+  <g class="fbox" id="fb1"><rect x="208" y="42" width="160" height="62" rx="10"/><text x="222" y="68">One struct</text><text class="s" x="222" y="88">67 numbers</text></g>
+  <g class="fbox" id="fb2"><rect x="396" y="42" width="160" height="62" rx="10"/><text x="410" y="68">What changed?</text><text class="s" x="410" y="88">C++</text></g>
+  <g class="fbox" id="fb3"><rect x="584" y="42" width="168" height="62" rx="10"/><text x="598" y="68">Mark dirty</text><text class="s" x="598" y="88">5 dirty, 3 run</text></g>
+  <g class="fbox" id="fb4"><rect x="790" y="42" width="190" height="236" rx="10"/><text x="804" y="66">Command buffer</text><text class="s" x="804" y="84">the GPU's to-do list</text>
+    ${TAIL.map((t, i) => `<text class="todo" id="td${i}" x="804" y="${112 + i * 20}">${i + 1}. run ${t}</text>`).join('')}
+    <text class="s" x="804" y="222">sent once, all three</text><line x1="790" y1="149" x2="790" y2="149"/></g>
+  <text class="laneT" x="778" y="153" text-anchor="end" style="font-size:11px">hand-off ↓</text>
+  <g class="cache">${cache}</g><text class="laneT" x="592" y="286" style="font-size:11px">the rest: kept from last time</text>
+  <g class="fbox" id="fb5"><rect x="330" y="200" width="236" height="84" rx="10"/><text x="344" y="220" style="font-size:13px">Shaders run</text>
+    ${TAIL.map((t, i) => `<rect class="shd" id="sh${i}" x="${344 + i * 44}" y="230" width="34" height="34" rx="5"/>`).join('')}</g>
+  <rect class="tex" id="tex" x="236" y="214" width="56" height="38" rx="3"/><text class="laneT" x="236" y="270" id="texT" style="font-size:11px"></text>
+  <g class="fbox" id="fb6"><rect x="30" y="200" width="146" height="84" rx="10"/><rect class="screenGlow" id="scr" x="44" y="210" width="118" height="64" rx="3"/></g>
+  <g class="noback" id="noback"><path d="M264,212 C264,160 300,140 300,106" stroke="#ff7a59" stroke-width="2" stroke-dasharray="6 5" fill="none"/>
+    <path d="M276,150 l12,12 M288,150 l-12,12" stroke="#ff7a59" stroke-width="3"/><text x="104" y="160" fill="#ff7a59" font-size="12" font-weight="600">no copy to show it</text></g>`;
+}
+// A small C-family highlighter: Swift, C, C++, Objective-C and Slang all fit it.
+const KW = new Set('typedef struct const bool if for int return void float float3 float4 uint3 let func auto else break true false guard'.split(' '));
+const hilite = src => src.replace(/(\/\/.*$|\/\*.*?\*\/)|(\b\d+(?:\.\d+)?f?\b)|(\b[A-Za-z_]\w*\b)(\s*\()?|([&<>])/gm, (m, c, n, w, p, e) =>
+  c ? `<span class="tc">${c.replace(/[<>&]/g, x => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[x]))}</span>` :
+  n ? `<span class="tn">${n}</span>` :
+  w ? (KW.has(w) ? `<span class="tk">${w}</span>` : p ? `<span class="tf">${w}</span>${p}` : /^[A-Z]/.test(w) ? `<span class="tt">${w}</span>` : w) + (p && KW.has(w) ? p : '') :
+  ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[e]));
+const row = (cells, cls = '') => `<div class="er ${cls}">${cells.map(x => `<span>${x}</span>`).join('')}</div>`;
+const STEP4 = [
+  { t: 'You drag the slider', box: 0, say: 'Swift records the new value.',
+    ex: `<div class="exs"><span>Exposure</span><div class="trk"><i class="old" style="left:57.5%"></i><i class="new" style="left:67.5%"></i></div><b>+0.3 → +0.7</b></div>`,
+    file: 'app/AdjustmentSlider.swift', code: `set: { v in\n    engine.edit(name) { value = v }\n}` },
+  { t: 'One struct crosses to C++', box: 1, say: 'All 67 values go in one C struct. One function call.',
+    ex: `<div class="etab">${row(['temperature_k', '5400'])}${row(['tint', '0.00'])}${row(['exposure_ev', '0.30 → 0.70'], 'hot')}${row(['highlights', '0.00'])}${row(['shadows', '0.00'])}${row(['…', '62 more'], 'dim')}</div>`,
+    file: 'engine/include/orion/orion.h', code: `typedef struct OrionAdjustments {\n    float temperature_k;\n    float tint;\n    float exposure_ev;\n    // … 67 fields\n} OrionAdjustments;\n\norion_engine_set_adjustments(handle, &adj);` },
+  { t: 'C++ finds what changed', box: 2, say: 'Only exposure changed. Tone gets new parameters.',
+    ex: `<div class="etab">${row(['exposure_ev', '0.30 ≠ 0.70', 'changed'], 'hot')}${row(['highlights', '0.00 = 0.00', 'same'])}${row(['shadows', '0.00 = 0.00', 'same'])}${row(['temperature_k', '5400 = 5400', 'same'])}</div>`,
+    file: 'engine/src/pipe/DevelopOutput.cpp', code: `const bool linearMoved =\n    adj.exposureEv != lastAdj_.exposureEv ||\n    adj.highlights != lastAdj_.highlights || …;\nif (linearMoved)\n    pipeline_.setParams(nLinear_, &la, sizeof la);` },
+  { t: 'Mark the nodes after it dirty', box: 3, say: 'Tone and the nodes after it are marked dirty. Grade and Grain are off, so 3 nodes run. The rest keep their output.',
+    ex: `<div class="chain">${[['Tone'], ['Grade', 1], ['Display'], ['Grain', 1], ['Crop']].map(([t, off]) => `<b class="${off ? 'off' : ''}">${t}${off ? ' (off)' : ''}</b>`).join('<i></i>')}</div><div class="clean"><span>the rest: cached</span>${'<i></i>'.repeat(40)}</div><p class="src">${M_TAG} 3 of 173 nodes recomputed per exposure tick, Apple M4, 2026-08-31.</p>`,
+    file: 'engine/src/pipe/Pipeline.cpp (simplified)', code: `dirty_[nodeId] = true;\nfor (int id : order_)\n    for (int in : nodes_[id].inputs)\n        if (dirty_[in]) dirty_[id] = true;` },
+  { t: 'Fill the command buffer', box: 4, say: 'The CPU writes one GPU job per node that runs. It sends all three at once.',
+    ex: `<div class="etab jobs">${[['developLinear', 'Tone'], ['developDisplay', 'Display'], ['geometry', 'Crop']].map(([k, t], i) => row([`${i + 1}`, `<code>${k}</code>`, t])).join('')}${row(['', '<b>commit</b>', 'one hand-off'], 'hot')}</div>`,
+    file: 'engine/src/gpu/Resources.mm (simplified)', code: `[enc setComputePipelineState:pso];   // the shader\n[enc setTexture:input atIndex:0];\n[enc setBytes:params length:n atIndex:0];\n[enc dispatchThreadgroups:grid threadsPerThreadgroup:group];\n[cb commit];` },
+  { t: 'The GPU runs the shaders', box: 5, say: 'Each job runs its shader on every pixel. Tone runs <code>developLinear</code>.',
+    ex: `<div class="evdemo"><label for="ev4">Exposure</label><input type="range" id="ev4" min="-2" max="2" step="0.1" value="0.7"><span></span><div class="swatches"><i id="sw0"></i><span>× 2<sup id="evx"></sup> =</span><i id="sw1"></i><span id="evv"></span></div></div>`,
+    file: 'engine/shaders/develop_linear.slang', code: `float3 c = src[tid.xy].rgb;\nc = applyExposure(c, p.exposureEv);   // c * exp2(ev)\n…\ndst[tid.xy] = float4(c, 1.0f);`, demo: true },
+  { t: 'Draw it on screen', box: 6, say: 'The window draws the texture from GPU memory. No copy to the CPU to show it.',
+    ex: `<div class="exwin"><div></div><span>MTKView</span></div>`,
+    file: 'app/ImageCanvas.swift', code: `let rendered = engine.displayTexture\n…\nencoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)\nbuffer.present(drawable)` },
+];
+$('#stepper4').innerHTML = STEP4.map((s, i) => `<button data-i="${i}" aria-current="false"><b>${i + 1}</b>${['Slider', 'Struct', 'Diff', 'Dirty', 'Command buffer', 'Shaders', 'Screen'][i]}</button>`).join('');
+let s4 = 0;
+function showStep4(i) {
+  s4 = Math.max(0, Math.min(STEP4.length - 1, i)); const st = STEP4[s4];
+  $$('#stepper4 button').forEach((b, j) => b.setAttribute('aria-current', j === s4));
+  $$('#flow .fbox').forEach(g => { const k = +g.id.slice(2); g.classList.toggle('on', k === st.box); g.classList.toggle('done', k < st.box); });
+  TAIL.forEach((_, j) => { $('#td' + j).classList.toggle('on', s4 >= 4); $('#sh' + j).classList.toggle('on', s4 >= 5); });
+  $('#tex').classList.toggle('on', s4 >= 5); $('#scr').classList.toggle('on', s4 >= 6); $('#noback').classList.toggle('on', s4 >= 6);
+  $('#t4title').textContent = st.t; $('#t4say').innerHTML = st.say; $('#t4extra').innerHTML = st.ex + ([1, 2].includes(s4) ? '<p class="src">Example values.</p>' : '');
+  $('#t4code').innerHTML = `<div class="file">${st.file}</div><pre>${hilite(st.code)}</pre>`;
+  if (st.demo) {
+    const base = [0.18, 0.15, 0.12], toS = v => Math.round(255 * Math.min(1, v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055));
+    const upd = () => { const ev = +$('#ev4').value, k = Math.pow(2, ev), out = base.map(v => v * k);
+      $('#sw0').style.background = `rgb(${base.map(toS)})`; $('#sw1').style.background = `rgb(${out.map(toS)})`;
+      $('#evx').textContent = (ev > 0 ? '+' : '') + ev.toFixed(1); $('#evv').textContent = `${base[0].toFixed(2)} → ${out[0].toFixed(2)}`; };
+    $('#ev4').addEventListener('input', upd); upd();
+  }
+  $('#t4prev').disabled = s4 === 0; $('#t4next').disabled = s4 === STEP4.length - 1;
+}
+$('#stepper4').onclick = e => { const b = e.target.closest('button'); if (b) showStep4(+b.dataset.i); };
+$('#t4prev').onclick = () => showStep4(s4 - 1); $('#t4next').onclick = () => showStep4(s4 + 1);
+$('#texT').textContent = 'output';
+showStep4(0);
+
+
+/* ═══ restored: agents over MCP, full slide ═══ */
+const BOX = [['You', 'chat'], ['AI agent', 'Claude'], ['MCP server', 'Node, 10 tools'], ['Orion --agent', 'headless engine'], ['Beside the RAW', '.proposed.json'], ['Orion app', 'compare view']];
+{ const bw = 150, gx = 170;
+  $('#arch').innerHTML =
+    `<defs><marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#4a4a50"/></marker></defs>` +
+    [[0, 1, 'chat'], [1, 2, 'stdio'], [2, 3, 'execFile'], [3, 4, 'reads'], [4, 5, 'file watch']].map(([a, b, t]) =>
+      `<path class="al" id="l${a}${b}" d="M${a * gx + bw},75 L${b * gx},75" marker-end="url(#ma)"/><text class="alT" x="${a * gx + bw + 10}" y="132" text-anchor="middle">${t}</text>`).join('') +
+    `<path class="al" id="l24" d="M${2 * gx + 110},40 C${2 * gx + 110},6 ${4 * gx + 40},6 ${4 * gx + 40},40" marker-end="url(#ma)"/><text class="alT" x="${3 * gx + 20}" y="14">writes the proposal</text>` +
+    BOX.map(([t, s], i) => `<g class="ab" id="b${i}"><rect x="${i * gx}" y="40" width="${bw}" height="70" rx="10"/><text x="${i * gx + 14}" y="70">${t}</text><text class="s" x="${i * gx + 14}" y="92">${s}</text></g>`).join('');
+}
+const STEPS2 = [
+  { t: 'You: \u201cWarm this photo a little.\u201d', on: ['b0', 'b1', 'l01'] },
+  { t: 'Agent finds the open photo.', c: 'current_photo', on: ['b1', 'b2', 'l12', 'b5'] },
+  { t: 'Agent reads units and ranges.', c: 'describe_edits \u2192 39 controls with a range', on: ['b2', 'b3', 'l23'] },
+  { t: 'Agent reads current values.', c: 'get_stats \u2192 temperatureK 5400', on: ['b2', 'b3', 'l23'] },
+  { t: 'Agent writes a proposal. Nothing is saved.', c: 'propose_edit {temperatureK: 5900}', on: ['b2', 'b4', 'l24'] },
+  { t: 'Orion shows it in compare view.', on: ['b4', 'b5', 'l45'] },
+  { t: 'You approve or reject.', c: 'Approve writes the XMP sidecar', on: ['b0', 'b5'] },
+];
+$('#steps2').innerHTML = STEPS2.map(s => `<li><div>${s.t}${s.c ? `<code>${s.c}</code>` : ''}</div></li>`).join('');
+const lit2 = ids => { $$('#arch .ab, #arch .al').forEach(el => el.classList.toggle('on', ids.includes(el.id))); };
+function mcpReset2() {
+  $$('#steps2 li').forEach(li => li.classList.remove('on')); lit2([]);
+  $('#compare2').className = 'compare idle'; $('#appMsg2').textContent = 'No proposal.';
+  $('#approveBtn2').disabled = $('#rejectBtn2').disabled = true; $('#mcpGo2').disabled = false;
+}
+$('#mcpGo2').onclick = async () => {
+  mcpReset2(); $('#mcpGo2').disabled = true; const li = $$('#steps2 li');
+  for (let i = 0; i < STEPS2.length; i++) {
+    li[i].classList.add('on'); lit2(STEPS2[i].on);
+    if (i === 5) { $('#compare2').className = 'compare live'; $('#appMsg2').textContent = 'Proposal. Panels locked.'; }
+    if (i === 6) { $('#approveBtn2').disabled = $('#rejectBtn2').disabled = false; break; }
+    await wait(reduce ? 200 : 1300);
+  }
+};
+$('#approveBtn2').onclick = () => { $('#compare2').className = 'compare done'; $('#appMsg2').textContent = 'Saved to XMP. Proposal deleted.'; $('#approveBtn2').disabled = $('#rejectBtn2').disabled = true; lit2(['b5', 'b4', 'l45']); $('#mcpGo2').disabled = false; };
+$('#rejectBtn2').onclick = () => { $('#compare2').className = 'compare idle'; $('#appMsg2').textContent = 'Proposal deleted. XMP unchanged.'; $('#approveBtn2').disabled = $('#rejectBtn2').disabled = true; lit2(['b5', 'b4']); $('#mcpGo2').disabled = false; };
+$('#mcpReset2').onclick = mcpReset2;
+mcpReset2();
+</script>
+</body>
+</html>
