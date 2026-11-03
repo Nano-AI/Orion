@@ -133,6 +133,8 @@ decode → linearize + white balance + white clip → RCD demosaic
 ```
 
 27 nodes, about 4 GiB of intermediates on a 24 MP frame.
+[docs/pipeline-graph](docs/pipeline-graph/index.html) is an interactive map of
+the whole graph, with a picture of what each stage does to a real photograph.
 
 Everything between the camera matrix and the display transform is scene-linear
 and unbounded. There is exactly one display transform, and it is at the end.
