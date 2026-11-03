@@ -1,5 +1,13 @@
 # Orion — session history
 
+## Archived at the Mac gates prune, 2026-11-02
+
+The oldest recent-session row (`tools/bench.py`, #402), moved verbatim from `STATUS.md`.
+
+| Date | What landed |
+|---|---|
+| 2026-10-31c | **`tools/bench.py`: one command for "did this make Orion slower or hungrier?" (#402).** Branch `lh/bench` off `darora1/linux/daily-driver`. Eight scenarios run headless as a person meets them (`--list`): a cold folder open (`posix_fadvise` eviction, `fincore`-verified) and a warm one (time to a responsive window, to the first picture, to settled, the worst UI-thread stall), a swap, an exposure drag, the pan's own `--bench --pan` (#401), read from its `bench pan` lines, the first full render with the card's per-process peak (nvidia-smi), an export through `ExportRun`, and orion-bench (now built off macOS). Five processes a scenario, interleaved; median and MAD; Hodges-Lehmann shift with its exact interval against a per-machine baseline outside the repo, or `--ab TREE` interleaved. Guarded: GPU lock per sample, niced, refuses under 30% memory or load 8. **Baseline numbers, RTX 3070, base `63e7cac`:** developer's 336 ARWs on exFAT 27.6 s cold / 9.5 s warm to a responsive window, all of it in window construction (synchronous filmstrip thumbnails); same count of links on an SSD 8.7 s; neighbour swap 443 ms, jump 436 ms; preview drag 7 ms UI / 3.6 ms engine; full drag 195 ms a tick (out of GPU memory and retried every tick); pan 0.2 ms UI, sharp 190-205 ms after the hand stops (measured by a driver of this branch's, since dropped for #401's); full render and export fail out of GPU memory under ~3.4 GB free; engine full render 24 ms, exposure p95 5.0 ms, then orion-bench itself runs out of memory at 42 MP. Every scenario run twice: nothing slower. Gates: check-wiring, check-decisions, check-gestures; ci-selftest linux 443 passed, 4 stated skips, 1 unexpected (tab fit, as on the base). ⚠ A headless frame raster-draws on the UI thread (~45 ms at 1:1, ~110 ms in a drag): `*_ui_ms` excludes it, `*_frame_ms` does not. |
+
 ## Archived at the rebase onto main, 2026-10-31
 
 The oldest recent-session rows, moved verbatim from `STATUS.md` when `darora1/linux/daily-driver` was rebased onto `main`.

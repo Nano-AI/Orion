@@ -23,6 +23,14 @@ namespace {
 
 using namespace orion;
 
+/// One step of a half float at `v`: IEEE 754 binary16 keeps 10 fraction bits,
+/// so 2^-11 in [0.5, 1), 2^-10 in [1, 2), and 2^-24 below the normal range.
+double halfStep(double v) {
+    int e;
+    std::frexp(std::max(std::fabs(v), 0x1p-14), &e);
+    return std::ldexp(1.0, e - 11);
+}
+
 struct Seen {
     int         nodes = 0;
     double      worst = 0.0;      // max |metal - dawn| over every sample
@@ -289,7 +297,6 @@ void testDawnParityGpu() {
     // keeps the one above.
     const bool virtualGpu = metal->info().name.find("Paravirtual") != std::string::npos;
     const double step = (virtualGpu ? 2.0 : 1.0) / 1024.0;
-    const double chainBar = virtualGpu ? 1.0 / 2048.0 : 0.0;
     if (virtualGpu) std::printf("  on %s: the virtual GPU's measured bars\n", metal->info().name.c_str());
     const std::map<std::string, double> kAllowed = {
         {"colorGrade", step}, {"developLinear", step}};
@@ -298,6 +305,7 @@ void testDawnParityGpu() {
     std::map<std::string, std::unique_ptr<gpu::Library>> libs;
     std::map<std::string, std::unique_ptr<gpu::Kernel>>  kernels;
     double chain = 0.0;   // the whole graph on each backend, output against output
+    std::size_t chainDiffer = 0, chainSamples = 0, chainOver = 0;   // over: past one half-float step
     try {
         const auto input = parityInput();
         pipe::DevelopPipeline probe(*metal, ORION_SHADER_DIR, input);
@@ -322,9 +330,15 @@ void testDawnParityGpu() {
                 const auto a = floats(d.output(), d.outputWidth(), d.outputHeight());
                 const auto b = floats(w.output(), w.outputWidth(), w.outputHeight());
                 double worst = 0.0;
-                for (std::size_t i = 0; i < a.size() && a.size() == b.size(); ++i)
-                    worst = std::max(worst, double(std::fabs(a[i] - b[i])));
+                for (std::size_t i = 0; i < a.size() && a.size() == b.size(); ++i) {
+                    const double diff = std::fabs(double(a[i]) - b[i]);
+                    worst = std::max(worst, diff);
+                    chainDiffer += diff > 0.0;
+                    chainOver += !(diff <= halfStep(std::max(std::fabs(a[i]), std::fabs(b[i]))));   // NaN is over
+                }
                 chain = std::max(chain, a.size() == b.size() ? worst : 1e9);
+                chainOver += a.size() != b.size();
+                chainSamples += a.size();
             }
         }
         // A linear (demosaiced) source has its own first node.
@@ -346,20 +360,45 @@ void testDawnParityGpu() {
         report(s.worst <= (allowed == kAllowed.end() ? 0.0 : allowed->second), kernel, line);
     }
     std::printf("  %zu kernels compared\n", seen.size());
-    // ⚠ The chain's bar is zero: the single-step differences above could meet
-    // downstream, but measured they do not reach the output at all, so any
-    // difference there is new and fails.
-    char line[96];
-    std::snprintf(line, sizeof line, "worst %.6f over three edits, screen and wide", chain);
+    // ⚠ The chain's bar: every sample within one half-float step of Metal's,
+    // at its own value (`halfStep`). Not zero, and why, measured on an Apple M4
+    // (macOS 26.4, issue 37, decision #413): chain against chain, node by node, all ~210 nodes of
+    // all three edits are bit-identical except developLinear (2 samples, one
+    // step at 1.29) and colorGrade (13 samples, one step at 1.95), the two
+    // kernels with a stated step above, and what they feed: developDisplay
+    // carries 4 of them as one step at 0.90 (2^-11, the 0.000488 of issue 37), and
+    // grain and geometry pass those through. So the output moves exactly where
+    // the accepted kernel differences reach it, by the step they rounded to,
+    // and nowhere else. Those differences are not a bug to fix: neither
+    // language promises a correctly rounded transcendental. WGSL's
+    // "Floating Point Accuracy" section (W3C WebGPU Shading Language) bounds
+    // exp and exp2 at 3 + 2|x| ULP and log2 at 3 ULP (absolute 2^-21 on
+    // [0.5, 2]); the Metal Shading Language Specification's "Numerical
+    // Compliance" section gives its own ULP bounds, looser under fast math.
+    // Two compilers inside those bounds can land an fp32 result either side of
+    // a half's rounding point, and the stored half then moves one step (IEEE
+    // 754 binary16). Compiling these two kernels without -ffast-math was
+    // tried, and made it worse (developLinear 0.0078, the chain 0.0039).
+    // Any wrong parameter or kernel shows as more than a step, and the
+    // per-kernel bars above stay exact for every other kernel.
+    char line[160];
+    std::snprintf(line, sizeof line, "worst %.6f, %zu of %zu samples differ, %zu past one half-float step, over three edits, screen and wide",
+                  chain, chainDiffer, chainSamples, chainOver);
     std::printf("  whole graph, Dawn against Metal: %s\n", line);
-    report(chain <= chainBar, virtualGpu ? "the whole develop graph on Dawn matches Metal's output within the virtual GPU's bar"
-                                         : "the whole develop graph on Dawn matches Metal's output exactly", line);
+    report(chainOver == 0, "the whole develop graph on Dawn matches Metal's output within one half-float step", line);
 }
 
 void testEveryKernelCompilesOnDawnGpu() {
     section("Every kernel compiles on Dawn (GPU)");
     // Not inside the parity test: that needs Metal, and Windows and Linux,
     // where Dawn is the only backend, are where this matters most.
+#if defined(__APPLE__) && !defined(ORION_HAS_DAWN)
+    // A Mac built without third_party/dawn-build renders on Metal alone (issue 41).
+    // Only there: off macOS Dawn is the only backend, and a Dawn build that
+    // cannot open a device still fails below.
+    std::printf("  skipped: this engine was built without Dawn; Metal is this Mac's backend\n");
+    return;
+#endif
     std::unique_ptr<gpu::Device> dawn;
     try {
         dawn = gpu::Device::create(gpu::Backend::Dawn);
