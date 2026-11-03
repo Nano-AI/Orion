@@ -14,7 +14,7 @@
 <h3 align="center">Orion</h3>
 
   <p align="center">
-    A fast, subscription-free RAW photo editor for macOS.
+    A fast, subscription-free RAW photo editor for macOS, with Windows and Linux in alpha.
     <br />
     <a href="planning/STATUS.md"><strong>Read where it stands »</strong></a>
     <br />
@@ -26,6 +26,17 @@
     <a href="https://github.com/Nano-AI/Orion/issues/new?labels=enhancement">Request a feature</a>
   </p>
 </div>
+
+<p align="center">
+  <img src="docs/exposure-demo.webp" width="800"
+       alt="Orion's Exposure slider moving from -1.5 to +1.5 EV and back over a night photograph of cars outside a showroom. Every frame is a real headless render of one Sony ARW.">
+</p>
+
+**Install:** download the alpha from
+[bankoti.dev/Orion/download](https://bankoti.dev/Orion/download/) (Apple silicon
+Mac, macOS 14 or later) or from
+[GitHub Releases](https://github.com/Nano-AI/Orion/releases), which also has a
+Windows installer and a Linux AppImage. Open it; there is no account.
 
 <details>
   <summary>Table of Contents</summary>
@@ -42,7 +53,7 @@
       <a href="#getting-started">Getting started</a>
       <ul>
         <li><a href="#prerequisites">Prerequisites</a></li>
-        <li><a href="#installation">Installation</a></li>
+        <li><a href="#building-from-source-for-contributors">Building from source (for contributors)</a></li>
       </ul>
     </li>
     <li><a href="#usage">Usage</a></li>
@@ -77,13 +88,19 @@ Undo is unlimited and edits persist per photo in XMP sidecars. Export writes
 JPEG, PNG, TIFF and JPEG XL. Past fit, the canvas renders only what is on
 screen, at the screen's resolution.
 
-**Not there yet:** tethering, X-Trans sensors, and a Windows or Linux release.
-Both build and pass their tests in CI on Dawn (D3D12, Vulkan), and the packages
-are CI artifacts, but none has been released: the canvas there still copies
-through the CPU, and Linux has only been run without a GPU. See
-[`planning/STATUS.md`](planning/STATUS.md), which is the honest list, including
-the one shipped defect: a 24 MP frame allocates more intermediate memory than an
-8 GB Mac has, so it will not open there.
+**Platforms.** macOS on Apple silicon is the tested one. Windows and Linux run
+the same engine on Dawn (Direct3D 12, Vulkan), and v0.6.0-alpha.1 on GitHub
+Releases has a Windows installer and a Linux AppImage. Linux on `main`, newer
+than that release, is used daily on an NVIDIA RTX 3070 (decisions #392-#407);
+AMD and Intel GPUs and native Wayland are untested, and CI runs Linux without a
+GPU. Windows has only run in CI, on Microsoft's WARP software renderer. On both,
+the canvas still copies each render through the CPU, and export writes sRGB
+without camera metadata.
+
+**Not there yet:** tethering, X-Trans sensors, and Windows and Linux out of
+alpha. See [`planning/STATUS.md`](planning/STATUS.md), which is the honest list,
+including the one shipped defect: a 24 MP frame allocates more intermediate
+memory than an 8 GB Mac has, so it will not open there.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -116,6 +133,8 @@ decode → linearize + white balance + white clip → RCD demosaic
 ```
 
 27 nodes, about 4 GiB of intermediates on a 24 MP frame.
+[docs/pipeline-graph](docs/pipeline-graph/index.html) is an interactive map of
+the whole graph, with a picture of what each stage does to a real photograph.
 
 Everything between the camera matrix and the display transform is scene-linear
 and unbounded. There is exactly one display transform, and it is at the end.
@@ -154,8 +173,11 @@ is fine, since mathematics is not copyrightable, and each entry says which it is
 ## Getting started
 
 To use Orion, download the newest alpha from
-[bankoti.dev/Orion/download](https://bankoti.dev/Orion/download/): an Apple
-silicon Mac on macOS 14 or later. To build it yourself, read on.
+[bankoti.dev/Orion/download](https://bankoti.dev/Orion/download/) or
+[GitHub Releases](https://github.com/Nano-AI/Orion/releases). The rest of this
+section is for contributors building from source on a Mac. Windows and Linux
+build with vcpkg and Dawn (`tools/build-dawn.sh`); `.github/workflows/build.yml`
+has the steps for each.
 
 ### Prerequisites
 
@@ -167,7 +189,7 @@ silicon Mac on macOS 14 or later. To build it yourself, read on.
 * Slang: extract a macOS release from
   [shader-slang/slang](https://github.com/shader-slang/slang/releases) into `third_party/slang/`
 
-### Installation
+### Building from source (for contributors)
 
 1. Clone the repository
    ```sh
@@ -272,8 +294,8 @@ way and fails on one that is blank, unchanged from another, or unstable.
 - [x] The Avalonia interface, shipping as Orion.app in place of the Swift one
 - [x] The Avalonia canvas fed from the GPU with no CPU copy
 - [x] Region-of-interest rendering: only what is on screen, at screen resolution
-- [x] Dawn as the GPU backend, for Windows and Linux builds (in CI, unreleased)
-- [ ] Windows and Linux releases: zero-copy canvas, a GPU Linux runner
+- [x] Dawn as the GPU backend, for Windows and Linux builds (alpha packages on GitHub Releases)
+- [ ] Windows and Linux out of alpha: zero-copy canvas, a GPU Linux runner, a run on real Windows hardware
 - [ ] X-Trans sensors
 - [ ] Tethering
 
@@ -284,17 +306,16 @@ See the [issues](https://github.com/Nano-AI/Orion/issues) for the work in progre
 
 ## Contributing
 
-Contributions are welcome. Read [`CONTRIBUTING.md`](.github/CONTRIBUTING.md)
-and [`AGENTS.md`](AGENTS.md) first: its hard constraints (no GPL code, every
-non-trivial filter cited in `research/`) apply to every change.
+Contributions are welcome. [`CONTRIBUTING.md`](CONTRIBUTING.md) has the build,
+the test gates, how a change lands and the licence terms for contributions.
+Issues labelled
+[good first issue](https://github.com/Nano-AI/Orion/labels/good%20first%20issue)
+are a place to start. The hard constraints in [`AGENTS.md`](AGENTS.md) (no GPL
+code, every non-trivial filter cited in `research/`) apply to every change.
 
-1. Fork the project
-2. Create a branch (`git checkout -b feature/your-change`)
-3. Commit your changes (`git commit -m 'Add your change'`)
-4. Push the branch (`git push origin feature/your-change`)
-5. Open a pull request
-
-Forks exist to send pull requests back; [`LICENSE`](LICENSE) forbids distributing your own version. By contributing you grant the project the rights its additional permissions describe.
+Forks exist to send pull requests back; [`LICENSE`](LICENSE) forbids
+distributing your own version. By contributing you grant the project the rights
+its additional permission 2 describes.
 
 ### Top contributors
 
@@ -306,9 +327,20 @@ Forks exist to send pull requests back; [`LICENSE`](LICENSE) forbids distributin
 
 ## License
 
-**Source-available, not open source. See [`LICENSE`](LICENSE).**
+**Orion is source-available, not open source.** The code is public to read,
+build and improve through pull requests, under
+[PolyForm Internal Use 1.0.0](https://polyformproject.org/licenses/internal-use/1.0.0)
+with two added permissions (decision #359). That is not an OSI-approved
+open-source licence. The full text is in [`LICENSE`](LICENSE).
 
-[PolyForm Internal Use 1.0.0](https://polyformproject.org/licenses/internal-use/1.0.0), plus permission for personal use and pull requests. Use Orion for your own work or your company's, paid or not, and help improve it through pull requests. You may not redistribute it, in source or binary form, or sell it or your own version of it. Revisions through commit abf3a51, and commits 82ec298 and 4005930, were published under Apache-2.0 and remain available under it.
+| You may | You may not |
+|---|---|
+| Use Orion for your own photographs or your company's internal work, paid or unpaid | Redistribute Orion, in source or binary form, changed or not |
+| Change it for your own use | Sell it, or publish your own version of it |
+| Fork it on GitHub to send pull requests back | Keep a fork for any other purpose |
+
+Revisions through commit abf3a51, and commits 82ec298 and 4005930, were
+published under Apache-2.0 and remain available under it.
 
 ⚠ **[`NOTICE`](NOTICE) carries third-party licenses and obligations**:
 

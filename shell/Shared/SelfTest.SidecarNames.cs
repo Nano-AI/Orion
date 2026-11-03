@@ -27,7 +27,8 @@ static partial class SelfTest {
                                   && s.Label == p.Label && s.Source == p.Name && s.Develop!.SequenceEqual(Encoding.UTF8.GetBytes(p.Name))),
                   $"photo.ARW, photo.dng{(caseBlind ? "" : " and photo.DNG")} round-trip rating, label and edit in their own sidecars (#405)");
             string merged = File.ReadAllText(P("photo.xmp"));
-            Check(Canonical(merged) == Canonical(original) && merged.StartsWith(declaration) && merged.EndsWith("?>\n"),
+            Check(Canonical(merged) == Canonical(original) && merged.StartsWith(declaration) && merged.EndsWith("?>\n")
+                  && !merged.Contains('\r'),   // the parse under Canonical folds CRLF to LF: #37 hid there
                   "the shared photo.xmp keeps every foreign node byte for byte, Orion's fields aside, its whitespace and final newline included");
 
             // A raw of the same name escapes to its full name, with a notice, and never touches the other's.

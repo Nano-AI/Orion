@@ -1,8 +1,6 @@
 /*  Orion site: the download page. Picks the visitor's system from what the
- *  browser reports and offers the newest build GitHub has for it. A release
- *  that carries a Windows or Linux file turns that system's download on, with
- *  no change here. Without this file the page is the Mac page, its buttons on
- *  the release list.
+ *  browser reports and offers the newest build GitHub has for it. Without
+ *  this file the page is the Mac page, every button on the release list.
  */
 (() => {
   'use strict';
@@ -42,14 +40,10 @@
     const lead = found[os] ? os : 'mac';
     if (os) {
       const branch = os === 'phone' || os === 'intel' ? os : lead === os ? 'ready' : 'soon';
-      const desktop = found.windows || found.linux;
       $$('[data-for]').forEach(el => { el.hidden = el.dataset.for !== branch; });
       $$('[data-name]').forEach(el => { el.textContent = NAMES[os] || 'macOS'; });
       $$('[data-row]').forEach(el => { el.querySelector('.dl__here').hidden = el.dataset.row !== os; });
-      $('[data-title]').textContent = os === 'phone' ? `Orion is a ${desktop ? 'desktop' : 'Mac'} app`
-        : `Orion for ${NAMES[os] || 'macOS'}`;
-      if (desktop) $('[data-phone]').textContent = `It runs on ${Object.keys(found).map(s => NAMES[s]).join(', ')}. ` +
-        'Open this page on your computer to download it, or share the link to send it there.';
+      $('[data-title]').textContent = os === 'phone' ? 'Orion is a desktop app' : `Orion for ${NAMES[os] || 'macOS'}`;
     }
     $('[data-lede]').textContent = LEDES[lead];
     $('[data-label]').textContent = `Download for ${NAMES[lead]}`;
@@ -58,14 +52,6 @@
       const f = found[a.dataset.file === 'visitor' ? lead : a.dataset.file];
       if (f) { a.href = f.asset.browser_download_url; a.hidden = false; }
     });
-    for (const [system, f] of Object.entries(found)) {
-      const row = $(`[data-row="${system}"]`);
-      if (system === 'mac' || !row) continue;
-      row.querySelector('.needs').textContent = f.asset.name;
-      row.querySelector('.status').textContent = 'Alpha, available now';
-      row.querySelector('.status').classList.add('is-ready');
-      $('[data-only]').hidden = true;
-    }
 
     const f = found[lead];
     if (f) {
@@ -82,9 +68,8 @@
         if (value) { row.querySelector('dd').textContent = value; row.hidden = false; }
       }
     }
-    // what it runs on, and the first-launch steps, are written for the Mac build only
+    // what it runs on is written for the Mac build only
     $('[data-fact="runs"]').hidden = lead !== 'mac';
-    $('[data-steps]').hidden = lead !== 'mac';
   };
   render();
 

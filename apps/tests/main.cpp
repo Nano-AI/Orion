@@ -11,7 +11,9 @@
 
 #include "harness.h"
 
-int main() {
+#include <cstdlib>
+
+int main(int argc, char** argv) {
     // Unbuffered: piped (CI), a crash would otherwise take the last few
     // kilobytes of output with it, and with them where it happened (#376).
     std::setvbuf(stdout, nullptr, _IONBF, 0);
@@ -23,104 +25,136 @@ int main() {
         return failures == 0 ? 0 : 1;
     }
 
+    // --kernels: only "every kernel compiles on Dawn", the GPU check a Windows pull
+    // request keeps (WARP renders the rest for an hour; push and nightly run it all, #412).
+    // --cpu-only: only the tests below called plainly, never through gpu(): each was
+    // read and creates no device (no Device::create, Engine or orion_engine_create).
+    // They are colour and tone maths, orientation and geometry, mask and perspective
+    // geometry, the noise estimator, DNG and export I/O (JPEG XL, watermark,
+    // sharpening), lens maths and the database, HDR merge maths and alignment, and
+    // stacking below its facade. ORION_GPU is poisoned so a device any of them
+    // creates throws: a GPU test called plainly fails here, it does not slow CI.
+    bool cpuOnly = false;
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg == "--kernels") {
+            testEveryKernelCompilesOnDawnGpu();
+            std::printf("\n%d checks, %d failures\n", checks, failures);
+            return failures == 0 ? 0 : 1;
+        }
+        if (arg != "--cpu-only") {
+            std::fprintf(stderr, "orion-tests: unknown argument %s (--cpu-only, --kernels)\n", argv[i]);
+            return 1;
+        }
+        cpuOnly = true;
+    }
+    if (cpuOnly) {
+#ifdef _WIN32
+        _putenv_s("ORION_GPU", "none-under-cpu-only");
+#else
+        setenv("ORION_GPU", "none-under-cpu-only", 1);
+#endif
+    }
+    const auto gpu = [cpuOnly](void (*test)()) { if (!cpuOnly) test(); };
+
     // First, because it is the one that catches a shader and a binary that
     // disagree — a state in which every other GPU test's result is a guess.
-    testBindingCount();
-    testDisabledCacheReleaseGpu();
-    testReleaseEveryRenderGpu();
-    testGpuBudget42MpGpu();
-    testWarmGraphMatchesFreshGpu();
-    testMemoryRuleGpu();
-    testDawnParityGpu();
-    testEveryKernelCompilesOnDawnGpu();
+    gpu(testBindingCount);
+    gpu(testDisabledCacheReleaseGpu);
+    gpu(testReleaseEveryRenderGpu);
+    gpu(testGpuBudget42MpGpu);
+    gpu(testWarmGraphMatchesFreshGpu);
+    gpu(testMemoryRuleGpu);
+    gpu(testDawnParityGpu);
+    gpu(testEveryKernelCompilesOnDawnGpu);
 
     testWhiteBalance();
     testPlanckianLocus();
     testToneCurve();
     testCfa();
     testOrientation();
-    testOrientGpu();
-    testDisplayNeutrality();
-    testCropGpu();
-    testStraightenPivot();
+    gpu(testOrientGpu);
+    gpu(testDisplayNeutrality);
+    gpu(testCropGpu);
+    gpu(testStraightenPivot);
     testPerspectiveMath();
-    testPerspectiveShaderMatchesHost();
-    testPerspectiveIdentity();
-    testPerspectiveConvergingLines();
-    testPerspectiveOneResample();
-    testPerspectiveAutoScaleFillsTheFrame();
+    gpu(testPerspectiveShaderMatchesHost);
+    gpu(testPerspectiveIdentity);
+    gpu(testPerspectiveConvergingLines);
+    gpu(testPerspectiveOneResample);
+    gpu(testPerspectiveAutoScaleFillsTheFrame);
     testPerspectiveMaskGeometry();
     testPerspectiveMaskExtent();
     testDisplayMatrixMatchesFromFrame();
     testPlaceToFrame();
-    testTexturePool();
-    testPerspectiveWiring();
+    gpu(testTexturePool);
+    gpu(testPerspectiveWiring);
     testNoiseEstimator();
-    testLinearizeClipsToWhite();
-    testDenoiseGpu();
-    testDenoiseColorOnlyGpu();
-    testDenoiseDetailGpu();
-    testDenoiseDetailZeroIsShippedGpu();
-    testDenoiseMaskedGpu();
-    testDenoiseOrderGpu();
-    testNlmGpu();
-    testTextureGpu();
-    testDenoiseSmoothnessGpu();
-    testHighlightRecoveryGpu();
+    gpu(testLinearizeClipsToWhite);
+    gpu(testDenoiseGpu);
+    gpu(testDenoiseColorOnlyGpu);
+    gpu(testDenoiseDetailGpu);
+    gpu(testDenoiseDetailZeroIsShippedGpu);
+    gpu(testDenoiseMaskedGpu);
+    gpu(testDenoiseOrderGpu);
+    gpu(testNlmGpu);
+    gpu(testTextureGpu);
+    gpu(testDenoiseSmoothnessGpu);
+    gpu(testHighlightRecoveryGpu);
     testGradeOffsets();
-    testLensGpu();
-    testDngLensOpcodes();
+    gpu(testLensGpu);
+    gpu(testDngLensOpcodes);
     testLensInverseMap();
-    testDngLensOpcodesThroughLibRaw();
-    testLensSourceOnRealSony();
-    testRegionMatchesCropGpu();
-    testRegionAtFrameEdgesGpu();
-    testRegionDngLensGpu();
+    gpu(testDngLensOpcodesThroughLibRaw);
+    gpu(testLensSourceOnRealSony);
+    gpu(testRegionMatchesCropGpu);
+    gpu(testRegionAtFrameEdgesGpu);
+    gpu(testRegionDngLensGpu);
     testLensAutoScale();
-    testToneBandsWithoutGuide();
-    testHueSatMapGpu();
-    testColorGradeGpu();
-    testLocalLaplacianGpu();
-    testClarityNoiseFloorGpu();
-    testDehazeGpu();
-    testCreativeLut();
+    gpu(testToneBandsWithoutGuide);
+    gpu(testHueSatMapGpu);
+    gpu(testColorGradeGpu);
+    gpu(testLocalLaplacianGpu);
+    gpu(testClarityNoiseFloorGpu);
+    gpu(testDehazeGpu);
+    gpu(testCreativeLut);
     testExposureFusionMath();
-    testExposureFusionGpu();
-    testFusionInvalidationGpu();
+    gpu(testExposureFusionGpu);
+    gpu(testFusionInvalidationGpu);
     testAutoEnhanceStats();
-    testMaskGpu();
-    testMaskBrushGpu();
-    testMaskCompositeGpu();
-    testLayerBreakRefreshesTheLayerTable();
-    testMaskEightSlotsGpu();
-    testMaskRefineLayerEndsGpu();
-    testOverlayPaintsTheSelectedLayer();
+    gpu(testMaskGpu);
+    gpu(testMaskBrushGpu);
+    gpu(testMaskCompositeGpu);
+    gpu(testLayerBreakRefreshesTheLayerTable);
+    gpu(testMaskEightSlotsGpu);
+    gpu(testMaskRefineLayerEndsGpu);
+    gpu(testOverlayPaintsTheSelectedLayer);
     testMaskGeometry();
-    testMaskRefineGpu();
-    testMaskMatteGpu();
-    testLongBrushStroke();
-    testDabBlockRejection();
-    testBrushErase();
+    gpu(testMaskRefineGpu);
+    gpu(testMaskMatteGpu);
+    gpu(testLongBrushStroke);
+    gpu(testDabBlockRejection);
+    gpu(testBrushErase);
     testBrushPrefixPredicate();
-    testBrushPrefixWiring();
-    testBrushAccumulator();
-    testBrushSpacingRipple();
-    testDabHardnessAcrossNibSizes();
-    testGuideEpsilonInStops();
+    gpu(testBrushPrefixWiring);
+    gpu(testBrushAccumulator);
+    gpu(testBrushSpacingRipple);
+    gpu(testDabHardnessAcrossNibSizes);
+    gpu(testGuideEpsilonInStops);
     testMaskGeometryInverse();
-    testLocalAdjustments();
-    testMaskRangeGpu();
-    testMaskColorGpu();
+    gpu(testLocalAdjustments);
+    gpu(testMaskRangeGpu);
+    gpu(testMaskColorGpu);
     testBayerDecimation();
-    testPreviewShadowsMatchGpu();
-    testSpotRemovalGpu();
+    gpu(testPreviewShadowsMatchGpu);
+    gpu(testSpotRemovalGpu);
     testBrushDabsFollowTheFrame();
-    testHighlightHaloGpu();
-    testHighlightFillGpu();
-    testHighlightFillWiring();
-    testOutputDepth();
-    testAgxLatitudeIsAnAnchoredRescale();
-    testDisplayRollOffIsInjective();
+    gpu(testHighlightHaloGpu);
+    gpu(testHighlightFillGpu);
+    gpu(testHighlightFillWiring);
+    gpu(testOutputDepth);
+    gpu(testAgxLatitudeIsAnAnchoredRescale);
+    gpu(testDisplayRollOffIsInjective);
     testLensDatabase();
     testBlackLevels();
     testExportFormats();
@@ -129,21 +163,21 @@ int main() {
     testExportSharpening();
     testFloatToHalf();
     testDngRoundTrip();
-    testLinearDngOpens();
+    gpu(testLinearDngOpens);
     testDngEmbeddedPreview();
     testDngEmbeddedXmp();
-    testLinearDngBaselineExposure();
-    testLinearDngEngineOpen();
-    testFacadeSessionSeams();
-    testDisplayCopyGpu();
+    gpu(testLinearDngBaselineExposure);
+    gpu(testLinearDngEngineOpen);
+    gpu(testFacadeSessionSeams);
+    gpu(testDisplayCopyGpu);
     testMergeExposureMaths();
     testMergeReconstruction();
     testMergeDeghostAndCoverage();
-    testMergeRenderDemosaic();
+    gpu(testMergeRenderDemosaic);
     testAlignRecoversHomography();
     testAlignRefusesFeatureless();
-    testHdrMergeFacade();
-    testHdrMergeCancelIsAtomic();
+    gpu(testHdrMergeFacade);
+    gpu(testHdrMergeCancelIsAtomic);
     testStackRejection();
     testStarDetect();
     testStarAlignRecovers();
@@ -157,24 +191,24 @@ int main() {
     testStackSkyGroundBlend();
     testStackBandsEqualWhole();
     testSkySplitOrientation();
-    testStackFacadeNoise();
-    testStackFacadeStars();
-    testStackFacadeLandscape();
-    testStackFacadeRefuses();
-    testStackCancelIsAtomic();
-    testStackBandsThroughStacker();
-    testStackMemory();
+    gpu(testStackFacadeNoise);
+    gpu(testStackFacadeStars);
+    gpu(testStackFacadeLandscape);
+    gpu(testStackFacadeRefuses);
+    gpu(testStackCancelIsAtomic);
+    gpu(testStackBandsThroughStacker);
+    gpu(testStackMemory);
     testStackMasterDark();
     testStackFlatGain();
     testStackBayerRoundTrip();
-    testStackFacadeCalibrated();
-    testStackCalibratedRaws();
+    gpu(testStackFacadeCalibrated);
+    gpu(testStackCalibratedRaws);
     testGrainPlate();
-    testGrainGpu();
-    testGrainWiring();
+    gpu(testGrainGpu);
+    gpu(testGrainWiring);
     testCompositionCircle();
-    testCreativeVignetteGpu();
-    testVignetteFollowsTheCrop();
+    gpu(testCreativeVignetteGpu);
+    gpu(testVignetteFollowsTheCrop);
 
     std::printf("\n%d checks, %d failures\n", checks, failures);
     if (skipped > 0) std::printf("%d skipped: no usable GPU (%s)\n", skipped, gpuProblem().c_str());

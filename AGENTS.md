@@ -68,7 +68,7 @@ A release must carry the update feed Velopack writes beside the packages.
 | `research/` | the algorithm sources the sourcing rule cites; read it before touching a filter |
 
 - Work is tracked in [GitHub issues](https://github.com/Nano-AI/Orion/issues): one parent issue per piece of work, with a checklist, no sub-issue per item.
-- Write an issue as "issue N". A bare `#N` in code or `research/` is a row of the retired decision ledger: read it with `git show 2b39a54:planning/DECISIONS.md`.
+- Write an issue as "issue N". A bare `#N` in code or `research/` is a row of the retired decision ledger: read it with `git show 1d02003:planning/DECISIONS.md` (rows 1 to 413).
 
 ## Commits
 
@@ -114,6 +114,7 @@ None of them opens a window.
 
 - Run every gate before claiming a code change works. Docs need none.
 - CI (`.github/workflows/build.yml`) builds and runs `orion-tests` and the selftest on all three systems for pushes to `main` and `ci/**` and for pull requests. `tools/ci-selftest.py` holds the selftest to a stated per-system skip list; the Linux runner has no GPU, so its GPU checks skip.
+  Except a Windows pull request: WARP, a CPU rasterizer, takes two hours over the full run, so there it is `orion-tests --cpu-only` and `--kernels` only, and the full suite and selftest run on the push to `main` (or `ci/**`) and nightly. A Windows-only failure therefore shows up after merging unless the branch is `ci/**`.
 - `check-gestures.py` and `check-wiring.py` are greps, not compilers: they catch a deleted call, not a wrong one, and reflection or a name built at run time is invisible to them. Triage their reports by hand.
 - A call from the harness does not count as use: `check-wiring.py` reports every method in `shell/` whose only callers are `SelfTest*`, the screenshot scenes or `Unattended.cs`, and a legitimate one says why in `HARNESS_ONLY`.
 - A deleted command-line dispatch opens a window instead of exiting, so `check-modes.py` and `check-screens.py` catch it by timeout.

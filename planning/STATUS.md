@@ -11,7 +11,7 @@ The Avalonia app is Orion on macOS and ships as alpha pre-releases on GitHub.
 Windows and Linux build, test and package in CI on Dawn and run on real NVIDIA hardware on Linux; neither is a supported release yet.
 Shipped on `main`: JPEG XL export, foreign-XMP preservation, region-of-interest rendering, lens correction from DNG opcodes, stacking (noise and star modes, streamed), Velopack installers and updates, one palette and brand across app and site.
 
-Known open on `main` (issue 37): on a real Mac GPU, Dawn/Metal whole-graph parity differs by 0.000488 and the resting pan renders nothing; CI's Windows job fails the shared-XMP byte check and 13 WARP GPU-memory budgets.
+`main` passes every gate on a real Mac and in CI on all three systems (issues 37 and 41 closed, #47, #48).
 
 ## Next, in order
 
