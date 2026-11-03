@@ -121,6 +121,10 @@ CI (`.github/workflows/build.yml`, #376) builds and runs `orion-tests` and the
 selftest on all three systems for pushes to `main` and `ci/**` and for pull requests, and packages
 Windows and Linux as artifacts. `tools/ci-selftest.py` holds the selftest to a
 stated per-system skip list; the Linux runner has no GPU, so its GPU checks skip.
+⚠ Except a Windows pull request (#412): WARP, a CPU rasterizer, takes two hours over
+the full run, so there it is `orion-tests --cpu-only` and `--kernels` only, and the
+full suite and selftest run on the push to `main` (or `ci/**`) and nightly. A
+Windows-only failure therefore shows up after merging unless the branch is `ci/**`.
 
 `check-agent` and the packager use the first of `_PIC8095`, `overexposed-background`,
 `_PIC8220` … found in `ORION_SAMPLES`; every step passes on each of those that is here

@@ -7,16 +7,24 @@ name: Build (macOS, Windows, Linux)
 # once a release carries it, and making one is the developer's call.
 
 # Documentation builds nothing (#409): Markdown, planning/, research/, feedback/,
-# docs/ and web/ (which pages.yml deploys). paths-ignore skips a push or pull
-# request that is all documentation; the `changes` job below skips the builds
-# when only this push is, e.g. a doc fix pushed onto a pull request whose code
-# has already built. Keep the two lists the same.
+# docs/ and web/ (which pages.yml deploys), and tools/check-site.py, which reads
+# only web/ (#412). paths-ignore skips a push or pull request that is all
+# documentation; the `changes` job below skips the builds when only this push is,
+# e.g. a doc fix pushed onto a pull request whose code has already built. Keep the
+# three lists the same.
+#
+# Windows has no GPU here (WARP, a CPU rasterizer): its full orion-tests and
+# selftest take two hours, so a pull request runs the GPU-free tests and the
+# kernel compile there, and a push to main or ci/**, and the nightly, run it all
+# (#412). macOS and Linux run everything on every push and pull request.
 on:
   push:
     branches: [main, 'ci/**']
-    paths-ignore: ['**/*.md', 'planning/**', 'research/**', 'feedback/**', 'docs/**', 'web/**']
+    paths-ignore: ['**/*.md', 'planning/**', 'research/**', 'feedback/**', 'docs/**', 'web/**', 'tools/check-site.py']
   pull_request:
-    paths-ignore: ['**/*.md', 'planning/**', 'research/**', 'feedback/**', 'docs/**', 'web/**']
+    paths-ignore: ['**/*.md', 'planning/**', 'research/**', 'feedback/**', 'docs/**', 'web/**', 'tools/check-site.py']
+  schedule:
+    - cron: '17 4 * * *'   # nightly, Windows only: the full suite its pull requests skip
   workflow_dispatch:
 
 permissions:
@@ -57,7 +65,7 @@ jobs:
         run: |
           code=true
           if [ -n "$BEFORE" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-            git diff --name-only "$BEFORE" "$AFTER" | grep -vE '\.md$|^(planning|research|feedback|docs|web)/' | grep -q . || code=false
+            git diff --name-only "$BEFORE" "$AFTER" | grep -vE '\.md$|^(planning|research|feedback|docs|web)/|^tools/check-site\.py$' | grep -q . || code=false
           fi
           echo "code=$code" | tee -a "$GITHUB_OUTPUT"
 
@@ -68,7 +76,7 @@ jobs:
   # --exclude-libs: .NET loads the system's libstdc++ into the same process).
   linux:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
     # Per job, not per workflow: a doc-only push must not cancel a build it then skips.
     concurrency: { group: "build-${{ github.ref }}-linux", cancel-in-progress: true }
     runs-on: ubuntu-24.04
@@ -315,11 +323,13 @@ jobs:
   windows:
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    concurrency: { group: "build-${{ github.ref }}-windows", cancel-in-progress: true }
+    # The nightly in a group of its own, so it and a push's run on main never cancel each other.
+    concurrency: { group: "build-${{ github.ref }}-windows${{ github.event_name == 'schedule' && '-nightly' || '' }}", cancel-in-progress: true }
     runs-on: windows-2022
     defaults:
       run: { shell: bash }
     env:
+      FULL: ${{ github.event_name != 'pull_request' }}   # the whole suite, the selftest and the packages (#412)
       ORION_VCPKG: ${{ github.workspace }}/../vcpkg   # not VCPKG_ROOT, which msvc-dev-cmd points at Visual Studio's
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/../vcpkg-cache
     steps:
@@ -396,22 +406,38 @@ jobs:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
           key: ${{ steps.vcpkg.outputs.cache-primary-key }}
 
-      - name: orion-tests (Dawn on D3D12, WARP)
-        id: tests
+      # A pull request: every test that creates no GPU device, then every kernel
+      # compiled on Dawn. Seconds, where WARP takes most of an hour to render the rest.
+      - name: orion-tests --cpu-only, then --kernels (pull request)
+        if: env.FULL != 'true'
         run: |
           mkdir -p /d/tmp   # the tests write to /tmp, which Windows reads as the drive's \tmp
-          ./build/apps/tests/orion-tests.exe
-      # Only when they failed: the same run under the Windows SDK's console
-      # debugger, so a crash leaves every thread's stack in the log.
-      - name: orion-tests under cdb (after a failure)
-        if: failure() && steps.tests.outcome == 'failure'
+          ./build/apps/tests/orion-tests.exe --cpu-only
+          ./build/apps/tests/orion-tests.exe --kernels
+
+      - name: orion-tests (Dawn on D3D12, WARP)
+        id: tests
+        if: env.FULL == 'true'
+        run: |
+          mkdir -p /d/tmp   # the tests write to /tmp, which Windows reads as the drive's \tmp
+          set +e; ./build/apps/tests/orion-tests.exe; code=$?; set -e
+          # orion-tests returns 0 or 1 itself; any other status is a crash (an SEH
+          # exception, abort, a stack overflow), however bash maps it.
+          echo "crashed=$([ "$code" -gt 1 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          exit "$code"
+      # Only after a crash: the same run under the Windows SDK's console debugger,
+      # so every thread's stack is in the log. A failed check already says which
+      # one it was, and a second run cost 50 minutes.
+      - name: orion-tests under cdb (after a crash)
+        if: failure() && steps.tests.outputs.crashed == 'true'
         run: |
           cdb="/c/Program Files (x86)/Windows Kits/10/Debuggers/x64/cdb.exe"
           [ -x "$cdb" ] || { echo "no cdb on this image"; exit 0; }
           "$cdb" -lines -c "g; .ecxr; ~*kn 40; q" ./build/apps/tests/orion-tests.exe 2>&1 | tail -300
 
       # The shell and the packages still run when orion-tests failed (the job stays
-      # red): one run then reports every step, not the first failure.
+      # red): one run then reports every step, not the first failure. A pull request
+      # skips the full run, so these too (#412): macOS and Linux build the shell there.
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9   # v4
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         with: { dotnet-version: '10.0.x' }
@@ -444,7 +470,7 @@ jobs:
 
   macos:
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
     concurrency: { group: "build-${{ github.ref }}-macos", cancel-in-progress: true }
     runs-on: macos-15
     steps:

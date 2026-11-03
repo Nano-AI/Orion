@@ -6,10 +6,12 @@
 
 #include <dawn/native/DawnNative.h>
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
+#include <thread>
 #include <vector>
 
 namespace orion::gpu::dawn {
@@ -144,6 +146,17 @@ struct DawnDevice final : Device::Impl {
             ctx->wait(ctx->queue.OnSubmittedWorkDone(wgpu::CallbackMode::WaitAnyOnly,
                                                      [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {}));
             submit();
+            // ⚠ And then tick until that submit is seen done (#37). D3D12's allocated-bytes
+            // count drops in a BestEffort serial processor, which a wait skips while still
+            // marking the serial done, and D3D12's fence poll then reports no progress
+            // (CheckAndUpdateCompletedSerials returns 0): unless a tick is the first to see
+            // a submit finish, the count never catches up. On WARP (CI) it did not fall
+            // after any reclaim: every peak after the first was the last one's leftovers.
+            // Bounded: the empty submit is normally all that is outstanding, but a tick
+            // also answers "not idle" for any work in flight, which must not stall this.
+            const auto give_up = std::chrono::steady_clock::now() + std::chrono::milliseconds(250);
+            while (::dawn::native::DeviceTick(ctx->device.Get()) && std::chrono::steady_clock::now() < give_up)
+                std::this_thread::yield();
         } catch (...) {}   // a failed wait leaves the memory for a later tick, as before
     }
     // The driver's count where it has one (#406); Dawn has none of its own.

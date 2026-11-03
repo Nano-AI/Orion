@@ -59,6 +59,10 @@ target_include_directories(orion-tests PRIVATE ${CMAKE_SOURCE_DIR}/engine/src ${
 target_compile_definitions(orion-tests PRIVATE ORION_SHADER_DIR="${ORION_SHADER_DIR}"
             ORION_DATA_DIR="${CMAKE_SOURCE_DIR}/data")
 target_link_libraries(orion-tests PRIVATE Orion::Engine)
+if(ORION_DAWN)
+    # The engine's own ORION_HAS_DAWN is PRIVATE; the Dawn tests ask too (issue 41).
+    target_compile_definitions(orion-tests PRIVATE ORION_HAS_DAWN=1)
+endif()
 if(WIN32)
     # The 8 MB main-thread stack macOS and Linux give: Windows' 1 MB overflows
     # on entry to testDngRoundTrip, whose frames live on the stack (#376).
