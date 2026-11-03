@@ -1,8 +1,8 @@
 # Orion agent MCP server (POC)
 
 Thin stdio MCP shell over `Orion --agent <verb>`. No XMP, no Metal, no state
-of its own beyond a `.proposed.json` file beside each RAW. See
-`docs/superpowers/specs/2026-09-13-agent-mcp-design.md`.
+of its own beyond a `.proposed.json` file beside each RAW. The design spec is
+`git show 2b39a54:docs/superpowers/specs/2026-09-13-agent-mcp-design.md`.
 
 ## Run
 

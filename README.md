@@ -299,7 +299,7 @@ way and fails on one that is blank, unchanged from another, or unstable.
 - [ ] X-Trans sensors
 - [ ] Tethering
 
-See [`planning/ROADMAP.md`](planning/ROADMAP.md) for the milestones and
+See the [issues](https://github.com/Nano-AI/Orion/issues) for the work in progress and
 [`planning/FEATURES.md`](planning/FEATURES.md) for every feature and its target.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -310,10 +310,8 @@ Contributions are welcome. [`CONTRIBUTING.md`](CONTRIBUTING.md) has the build,
 the test gates, how a change lands and the licence terms for contributions.
 Issues labelled
 [good first issue](https://github.com/Nano-AI/Orion/labels/good%20first%20issue)
-are a place to start. The hard constraints in [`CLAUDE.md`](CLAUDE.md) (no GPL
-code, every non-trivial filter cited in `research/`) apply to every change, and
-[`planning/DECISIONS.md`](planning/DECISIONS.md) records the choices already
-settled.
+are a place to start. The hard constraints in [`AGENTS.md`](AGENTS.md) (no GPL
+code, every non-trivial filter cited in `research/`) apply to every change.
 
 Forks exist to send pull requests back; [`LICENSE`](LICENSE) forbids
 distributing your own version. By contributing you grant the project the rights

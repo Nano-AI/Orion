@@ -26,11 +26,10 @@ don't open a pull request.
 
 | Rule | Where it is written |
 |---|---|
-| A non-trivial filter cites a published, dated reference in `research/`. Anything uncited goes in `research/UNSOURCED.md`. | `CLAUDE.md`, Algorithm sourcing |
-| A citation is not patent clearance. If a method's only sources are patents, ask on the issue before writing code. | `CLAUDE.md`, Algorithm sourcing |
-| GPL code is never copied and GPL libraries are never used. LGPL (LibRaw) only when dynamically linked. Implementing a published algorithm from its paper is fine; reading darktable's source and rewriting it is copying. | `CLAUDE.md`, Hard constraints |
-| A settled choice gets a row in `planning/DECISIONS.md` with its reason. Don't reopen a decision in a pull request; open an issue. | `planning/DECISIONS.md` |
-| One node is one small shader (50 to 150 lines). No 1000-line files; anyone must be able to hand-edit any file. | `CLAUDE.md`, Hard constraints |
+| A non-trivial filter cites a published, dated reference in `research/`. Anything uncited goes in `research/UNSOURCED.md`. | `AGENTS.md`, Algorithm sourcing |
+| A citation is not patent clearance. If a method's only sources are patents, ask on the issue before writing code. | `AGENTS.md`, Algorithm sourcing |
+| GPL code is never copied and GPL libraries are never used. LGPL (LibRaw) only when dynamically linked. Implementing a published algorithm from its paper is fine; reading darktable's source and rewriting it is copying. | `AGENTS.md`, Hard constraints |
+| One node is one small shader (50 to 150 lines). No 1000-line files; anyone must be able to hand-edit any file. | `AGENTS.md`, Hard constraints |
 
 Say on an issue that you're taking it, so two people don't build the same thing.
 
@@ -64,7 +63,6 @@ files from `ORION_SAMPLES` (default `samples/`).
 | `./build/apps/tests/orion-tests` | engine maths and real GPU renders |
 | `shell/bin/Release/net10.0/Orion RAW --selftest` | the app's invariants |
 | `shell/bin-native/present_test RAW` | the zero-copy surface against the CPU readback (macOS) |
-| `./tools/check-decisions.py` | the decision ledger indexes the tree |
 | `./tools/check-gestures.py` | every gesture still arms the preview graph |
 | `./tools/check-screens.py` | every tool tab renders, distinct and stable |
 | `./tools/check-modes.py` | `--batch-export`, `--hdr-merge` and `--stack` still run |
@@ -84,7 +82,7 @@ because they never touch a texture.
 | Docs only: Markdown, `planning/`, `research/`, `feedback/`, `docs/` | Maintainers push straight to `main`. From a fork, open a pull request; CI skips these paths. |
 | Site: `web/` | As docs, after `./tools/check-site.py`. `main` deploys it. |
 
-One change is one commit (decisions #408, #409). Commit as often as you like
+One change is one commit. Commit as often as you like
 while working, then squash before you push:
 
 ```sh
