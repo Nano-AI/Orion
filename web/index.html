@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Orion, a RAW editor for macOS</title>
-<meta name="description" content="A RAW photo editor for Apple silicon Macs that renders every slider move at full resolution. No subscription or account. Alpha downloads and source on GitHub.">
+<title>Orion, a free RAW photo editor for Mac</title>
+<meta name="description" content="A free RAW photo editor for Apple silicon Macs that renders every slider move at full resolution. No subscription or account. Downloads and source on GitHub.">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0b0b0c">
-<meta property="og:title" content="Orion, a RAW editor for macOS">
+<meta property="og:title" content="Orion, a free RAW photo editor for Mac">
 <meta property="og:description" content="RAW editing at full resolution, without a subscription. Alpha downloads and source on GitHub.">
 <meta property="og:image" content="https://bankoti.dev/Orion/img/og-image.png">
 <meta property="og:image:width" content="1200">
@@ -15,6 +15,8 @@
 <meta property="og:image:alt" content="Orion. Dramatic edits, made easy. A RAW photo editor. The Orion icon, a fir under the three stars of Orion's Belt, beside the word ORION over dusk-blue hills.">
 <meta property="og:url" content="https://bankoti.dev/Orion/">
 <meta property="og:type" content="website">
+<meta property="og:site_name" content="Orion">
+<meta property="og:locale" content="en_US">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://bankoti.dev/Orion/img/og-image.png">
 <meta name="twitter:image:alt" content="Orion. Dramatic edits, made easy. A RAW photo editor. The Orion icon, a fir under the three stars of Orion's Belt, beside the word ORION over dusk-blue hills.">
@@ -25,7 +27,17 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
 <link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/Archivo-var.woff2">
-<link rel="preload" as="image" href="img/app-ev3-1800.jpg" imagesrcset="img/app-ev3-1200.jpg 1200w, img/app-ev3-1800.jpg 1800w" imagesizes="(max-width: 1280px) 94vw, 1200px" fetchpriority="high">
+<link rel="preload" as="image" type="image/avif" imagesrcset="img/app-ev3-1200.avif 1200w, img/app-ev3-1800.avif 1800w" imagesizes="(max-width: 1280px) 94vw, 1200px" fetchpriority="high">   <!-- AVIF only, no href: a browser without AVIF skips it and fetches the JPEG through <picture>, so nothing is fetched twice -->
+<script>   /* before the first paint, so nothing is redrawn when the scripts arrive: html.js lays out the controls they drive, and html.os-mac, os-windows, os-linux or os-phone (?os= to preview one) picks the words and the download for this visitor. The same block is in both pages. */
+(function (html, nav, asked) {
+  var platform = (nav.userAgentData && nav.userAgentData.platform) || nav.platform || '';
+  var os = /^(mac|intel|windows|linux|phone)$/.test(asked) ? asked
+    : /iPhone|iPad|iPod|Android/i.test(nav.userAgent) || (/Mac/i.test(platform) && nav.maxTouchPoints > 1) ? 'phone'   // iPadOS reports a Mac, with touch
+    : /Mac/i.test(platform) ? 'mac' : /Win/i.test(platform) ? 'windows' : /Linux|X11/i.test(platform) ? 'linux' : '';
+  html.classList.add('js');
+  if (os) html.classList.add('os-' + os);
+})(document.documentElement, navigator, new URLSearchParams(location.search).get('os'));
+</script>
 <link rel="stylesheet" href="css/tokens.css">
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/home.css">
@@ -33,11 +45,51 @@
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
+  "@id": "https://bankoti.dev/Orion/#app",
   "name": "Orion",
+  "description": "A free RAW photo editor for Apple silicon Macs that renders every slider move at full resolution. No subscription or account.",
   "operatingSystem": "macOS 14 or later",
   "applicationCategory": "PhotographyApplication",
+  "applicationSubCategory": "RAW photo editor",
   "url": "https://bankoti.dev/Orion/",
-  "downloadUrl": "https://bankoti.dev/Orion/download/"
+  "downloadUrl": "https://bankoti.dev/Orion/download/",
+  "releaseNotes": "https://github.com/Nano-AI/Orion/releases",
+  "isAccessibleForFree": true,
+  "offers": {
+    "@type": "Offer",
+    "price": 0,
+    "priceCurrency": "USD"
+  },
+  "image": "https://bankoti.dev/Orion/img/og-image.png",
+  "screenshot": "https://bankoti.dev/Orion/img/app-ev3-1800.jpg",
+  "featureList": [
+    "Exposure, contrast, highlights, shadows, whites, blacks",
+    "White balance, color grading, tone curves",
+    "Film looks from any .cube file",
+    "Haze removal, clarity, shadow recovery",
+    "Noise reduction, sharpening, color mixer",
+    "Spot and blemish removal",
+    "Distortion and vignetting for 1,558 lenses",
+    "Perspective and keystone correction",
+    "Gradient, radial, brush, brightness and color masks",
+    "Selecting a subject, a person or a sky",
+    "Presets, and copying settings between photos",
+    "Export at 8 or 16 bits, resized, sharpened for screen or print"
+  ],
+  "author": {
+    "@type": "Organization",
+    "name": "Nano-AI",
+    "url": "https://github.com/Nano-AI"
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "@id": "https://bankoti.dev/Orion/#website",
+  "name": "Orion",
+  "url": "https://bankoti.dev/Orion/"
 }
 </script>
 </head>
@@ -55,7 +107,7 @@
         <li><a href="#build">Features</a></li>
       </ul>
     </nav>
-    <a class="btn nav__cta" href="download/" data-os-label>Download for Mac</a>
+    <a class="btn nav__cta" href="download/"><span class="for-mac">Download for Mac</span><span class="for-any">Download</span></a>
     <button class="nav__toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Menu"><span></span></button>
   </div>
 </header>
@@ -68,7 +120,7 @@
     <h1 class="h1" id="hero-title">Fast RAW editing for free</h1>
     <p class="lede">The RAW editor for Apple silicon Macs that keeps up with you: <b>every slider move under 20&nbsp;ms</b>, your originals untouched. <b>No subscription, no account.</b></p>
     <div class="hero__cta">
-      <a class="btn btn--xl" href="download/"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg><span data-os-label>Download for Mac</span></a>
+      <a class="btn btn--xl" href="download/"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg><span class="for-mac">Download for Mac</span><span class="for-any">Download</span></a>
       <a class="btn btn--xl btn--ghost" href="https://github.com/Nano-AI/Orion"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-2.5-13-3 16"/></svg>Source code</a>
     </div>
     <p class="mono hero__req">macOS 14 or later &middot; Apple silicon &middot; Alpha &middot; <a class="link" href="download/">Other systems</a></p>
@@ -82,14 +134,35 @@
     <div class="aurora aurora--core" aria-hidden="true"><div class="aurora__core"></div><span></span><span></span><span></span><span></span><span></span></div>
     <div class="stage__in">
       <figure class="stage__window" data-sweep data-evs="-1.5,-1,-0.5,0,0.5,1,1.5">
-        <img src="img/app-ev0-1800.jpg" srcset="img/app-ev0-1200.jpg 1200w, img/app-ev0-1800.jpg 1800w" sizes="(max-width: 1280px) 94vw, 1200px" width="1800" height="1125" alt="" aria-hidden="true" decoding="async" fetchpriority="low">
-        <img src="img/app-ev1-1800.jpg" srcset="img/app-ev1-1200.jpg 1200w, img/app-ev1-1800.jpg 1800w" sizes="(max-width: 1280px) 94vw, 1200px" width="1800" height="1125" alt="" aria-hidden="true" decoding="async" fetchpriority="low">
-        <img src="img/app-ev2-1800.jpg" srcset="img/app-ev2-1200.jpg 1200w, img/app-ev2-1800.jpg 1800w" sizes="(max-width: 1280px) 94vw, 1200px" width="1800" height="1125" alt="" aria-hidden="true" decoding="async" fetchpriority="low">
-        <img src="img/app-ev3-1800.jpg" srcset="img/app-ev3-1200.jpg 1200w, img/app-ev3-1800.jpg 1800w" sizes="(max-width: 1280px) 94vw, 1200px" width="1800" height="1125" fetchpriority="high" decoding="async"
-             alt="Orion's window: a night photograph of cars outside a showroom, with the Light panel's white balance and exposure sliders beside it.">
-        <img src="img/app-ev4-1800.jpg" srcset="img/app-ev4-1200.jpg 1200w, img/app-ev4-1800.jpg 1800w" sizes="(max-width: 1280px) 94vw, 1200px" width="1800" height="1125" alt="" aria-hidden="true" decoding="async" fetchpriority="low">
-        <img src="img/app-ev5-1800.jpg" srcset="img/app-ev5-1200.jpg 1200w, img/app-ev5-1800.jpg 1800w" sizes="(max-width: 1280px) 94vw, 1200px" width="1800" height="1125" alt="" aria-hidden="true" decoding="async" fetchpriority="low">
-        <img src="img/app-ev6-1800.jpg" srcset="img/app-ev6-1200.jpg 1200w, img/app-ev6-1800.jpg 1800w" sizes="(max-width: 1280px) 94vw, 1200px" width="1800" height="1125" alt="" aria-hidden="true" decoding="async" fetchpriority="low">
+        <picture>
+          <source type="image/avif" srcset="img/app-ev0-1200.avif 1200w, img/app-ev0-1800.avif 1800w" sizes="(max-width: 1280px) 94vw, 1200px">
+          <img src="img/app-ev0-1800.jpg" srcset="img/app-ev0-1200.jpg 1200w, img/app-ev0-1800.jpg 1800w" sizes="(max-width: 1280px) 94vw, 1200px" width="1800" height="1125" alt="" aria-hidden="true" decoding="async" fetchpriority="low">
+        </picture>
+        <picture>
+          <source type="image/avif" srcset="img/app-ev1-1200.avif 1200w, img/app-ev1-1800.avif 1800w" sizes="(max-width: 1280px) 94vw, 1200px">
+          <img src="img/app-ev1-1800.jpg" srcset="img/app-ev1-1200.jpg 1200w, img/app-ev1-1800.jpg 1800w" sizes="(max-width: 1280px) 94vw, 1200px" width="1800" height="1125" alt="" aria-hidden="true" decoding="async" fetchpriority="low">
+        </picture>
+        <picture>
+          <source type="image/avif" srcset="img/app-ev2-1200.avif 1200w, img/app-ev2-1800.avif 1800w" sizes="(max-width: 1280px) 94vw, 1200px">
+          <img src="img/app-ev2-1800.jpg" srcset="img/app-ev2-1200.jpg 1200w, img/app-ev2-1800.jpg 1800w" sizes="(max-width: 1280px) 94vw, 1200px" width="1800" height="1125" alt="" aria-hidden="true" decoding="async" fetchpriority="low">
+        </picture>
+        <picture>
+          <source type="image/avif" srcset="img/app-ev3-1200.avif 1200w, img/app-ev3-1800.avif 1800w" sizes="(max-width: 1280px) 94vw, 1200px">
+          <img src="img/app-ev3-1800.jpg" srcset="img/app-ev3-1200.jpg 1200w, img/app-ev3-1800.jpg 1800w" sizes="(max-width: 1280px) 94vw, 1200px" width="1800" height="1125" fetchpriority="high" decoding="async"
+               alt="Orion's window: a night photograph of cars outside a showroom, with the Light panel's white balance and exposure sliders beside it.">
+        </picture>
+        <picture>
+          <source type="image/avif" srcset="img/app-ev4-1200.avif 1200w, img/app-ev4-1800.avif 1800w" sizes="(max-width: 1280px) 94vw, 1200px">
+          <img src="img/app-ev4-1800.jpg" srcset="img/app-ev4-1200.jpg 1200w, img/app-ev4-1800.jpg 1800w" sizes="(max-width: 1280px) 94vw, 1200px" width="1800" height="1125" alt="" aria-hidden="true" decoding="async" fetchpriority="low">
+        </picture>
+        <picture>
+          <source type="image/avif" srcset="img/app-ev5-1200.avif 1200w, img/app-ev5-1800.avif 1800w" sizes="(max-width: 1280px) 94vw, 1200px">
+          <img src="img/app-ev5-1800.jpg" srcset="img/app-ev5-1200.jpg 1200w, img/app-ev5-1800.jpg 1800w" sizes="(max-width: 1280px) 94vw, 1200px" width="1800" height="1125" alt="" aria-hidden="true" decoding="async" fetchpriority="low">
+        </picture>
+        <picture>
+          <source type="image/avif" srcset="img/app-ev6-1200.avif 1200w, img/app-ev6-1800.avif 1800w" sizes="(max-width: 1280px) 94vw, 1200px">
+          <img src="img/app-ev6-1800.jpg" srcset="img/app-ev6-1200.jpg 1200w, img/app-ev6-1800.jpg 1800w" sizes="(max-width: 1280px) 94vw, 1200px" width="1800" height="1125" alt="" aria-hidden="true" decoding="async" fetchpriority="low">
+        </picture>
         <input class="stage__grab" type="range" min="-5" max="5" step="0.01" value="0" aria-label="Exposure, on the app's own slider">
       </figure>
       <div class="stage__ctl">
@@ -115,10 +188,16 @@
       <p class="small">Raw files from most cameras. Drag to compare.</p>
     </div>
     <figure class="cmp" data-compare style="--pos: 50%">
-      <img class="cmp__before" src="img/hero-asshot-2400.jpg" srcset="img/hero-asshot-1200.jpg 1200w, img/hero-asshot-1600.jpg 1600w, img/hero-asshot-2400.jpg 2400w" sizes="(max-width: 1360px) 94vw, 1280px"
-           width="2400" height="1987" fetchpriority="low" decoding="async" alt="Fir trees and a cliff face disappearing into fog, as shot.">
-      <img class="cmp__after" src="img/hero-edit-2400.jpg" srcset="img/hero-edit-1200.jpg 1200w, img/hero-edit-1600.jpg 1600w, img/hero-edit-2400.jpg 2400w" sizes="(max-width: 1360px) 94vw, 1280px"
-           width="2400" height="1987" fetchpriority="low" decoding="async" alt="The same frame developed in Orion, with the firs and the rock face lifted out of the shadow under the fog.">
+      <picture>
+        <source type="image/avif" srcset="img/hero-asshot-1200.avif 1200w, img/hero-asshot-1600.avif 1600w, img/hero-asshot-2400.avif 2400w" sizes="(max-width: 1360px) 94vw, 1280px">
+        <img class="cmp__before" src="img/hero-asshot-2400.jpg" srcset="img/hero-asshot-1200.jpg 1200w, img/hero-asshot-1600.jpg 1600w, img/hero-asshot-2400.jpg 2400w" sizes="(max-width: 1360px) 94vw, 1280px"
+             width="2400" height="1987" fetchpriority="low" loading="lazy" decoding="async" alt="Fir trees and a cliff face disappearing into fog, as shot.">
+      </picture>
+      <picture>
+        <source type="image/avif" srcset="img/hero-edit-1200.avif 1200w, img/hero-edit-1600.avif 1600w, img/hero-edit-2400.avif 2400w" sizes="(max-width: 1360px) 94vw, 1280px">
+        <img class="cmp__after" src="img/hero-edit-2400.jpg" srcset="img/hero-edit-1200.jpg 1200w, img/hero-edit-1600.jpg 1600w, img/hero-edit-2400.jpg 2400w" sizes="(max-width: 1360px) 94vw, 1280px"
+             width="2400" height="1987" fetchpriority="low" loading="lazy" decoding="async" alt="The same frame developed in Orion, with the firs and the rock face lifted out of the shadow under the fog.">
+      </picture>
       <span class="cmp__line" aria-hidden="true"></span>
       <span class="cmp__grip" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12h18M7 8l-4 4 4 4M17 8l4 4-4 4"/></svg></span>
       <span class="cmp__label cmp__label--before" aria-hidden="true">As shot</span>
@@ -219,11 +298,14 @@
 </section>
 
 <section class="close" id="alpha" aria-labelledby="alpha-title">
-  <img class="close__photo" src="img/pier-2400.jpg" srcset="img/pier-1200.jpg 1200w, img/pier-2400.jpg 2400w" sizes="100vw" width="2400" height="1602" loading="lazy" decoding="async"
-       alt="Wooden pilings of an old pier in calm water, developed in Orion in a cool, deep blue.">
+  <picture>
+    <source type="image/avif" srcset="img/pier-1200.avif 1200w, img/pier-2400.avif 2400w" sizes="100vw">
+    <img class="close__photo" src="img/pier-2400.jpg" srcset="img/pier-1200.jpg 1200w, img/pier-2400.jpg 2400w" sizes="100vw" width="2400" height="1602" loading="lazy" decoding="async"
+         alt="Wooden pilings of an old pier in calm water, developed in Orion in a cool, deep blue.">
+  </picture>
   <div class="wrap close__copy">
     <h2 class="h1" id="alpha-title">Try the alpha</h2>
-    <a class="btn btn--lg" href="download/" data-os-label>Download for Mac</a>
+    <a class="btn btn--lg" href="download/"><span class="for-mac">Download for Mac</span><span class="for-any">Download</span></a>
     <p class="mono">Free. No account. <a class="link" href="https://github.com/Nano-AI/Orion">Source on GitHub</a>.</p>
   </div>
 </section>

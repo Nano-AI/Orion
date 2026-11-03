@@ -22,6 +22,12 @@ being built by separate agents. Checks, each printed as it runs:
   m. the download page: its files exist and are tracked, canonical, alt text and
      no em-dash, its buttons work without scripts, and its script reads the
      whole release list
+  n. sitemap.xml parses and lists exactly the canonical URL of every index.html
+  o. each page's JSON-LD parses, one block's url is the page's canonical and every
+     block's url is a page's canonical; the home page's featureList is all register strings
+  p. titles unique and at most 60 characters, descriptions unique and at most 160
+  q. 404.html exists, names only tracked files from /Orion/, carries noindex,
+     has no canonical and no em-dash
 
 This is a parse over one HTML file, not a browser: it does not fetch remote
 URLs, run scripts, or check that srcset candidates are the right size. It
@@ -87,6 +93,9 @@ class PageParser(html.parser.HTMLParser):
         self.li_stack = []         # list of text buffers, one per open <li>
         self.li_texts = []         # completed <li> visible text
         self.text_chunks = []      # whole-page visible text, for em-dash check
+        self.meta = {}             # <meta name=...> content
+        self.title = []            # <title> text
+        self.in_title = False
 
     def _url_attrs(self, tag, attrs):
         d = dict(attrs)
@@ -113,6 +122,9 @@ class PageParser(html.parser.HTMLParser):
         if tag == "a":
             self.links.append(d)
 
+        if tag == "meta" and d.get("name"):
+            self.meta[d["name"]] = d.get("content", "")
+        self.in_title = tag == "title"
         if tag == "link" and d.get("rel") == "canonical":
             self.canonical = d.get("href")
 
@@ -139,6 +151,10 @@ class PageParser(html.parser.HTMLParser):
                 self.aria_hidden_depth -= 1
 
     def handle_data(self, data):
+        if self.in_title:
+            self.title.append(data)
+            self.in_title = False
+            return
         for buf in self.li_stack:
             buf.append(data)
         self.text_chunks.append(data)
@@ -240,6 +256,7 @@ def main():
     markers = {
         ".jpg": [(b"Exif\x00\x00", "EXIF"), (b"ns.adobe.com/xap/1.0/", "XMP"), (b"Photoshop 3.0\x00", "IPTC")],
         ".png": [(b"eXIf", "EXIF"), (b"XML:com.adobe.xmp", "XMP")],
+        ".avif": [(b"Exif", "EXIF"), (b"application/rdf+xml", "XMP")],   # the Exif item's type, the XMP item's content type
     }
     markers[".jpeg"] = markers[".jpg"]
     blobs = [(f.name, f.suffix.lower(), f.read_bytes()) for f in sorted(WEB.rglob("*"))
@@ -294,6 +311,7 @@ def main():
                  "(l) download buttons/metadata must go to download/, without pinned or mirrored installers")
 
     ok &= check_download_page(tracked)
+    ok &= check_metadata(tracked)
 
     if not ok:
         print("\ncheck-site.py: FAILED")
@@ -335,6 +353,60 @@ def check_download_page(tracked):
     return check(not problems, f"(m) the download page: {len(files)} local urls, "
                  f"{len(buttons)} download buttons on the release list without scripts",
                  "(m) the download page: " + "; ".join(problems))
+
+
+def check_metadata(tracked):
+    """(n) to (q): what a search engine reads. A page added under web/ must join
+    the sitemap; GitHub Pages serves 404.html at any depth under /Orion/, so it
+    names its files from the site root."""
+    import xml.etree.ElementTree as ET
+    ok = True
+    pages = {}
+    for page in sorted(WEB.rglob("index.html")):
+        p = PageParser()
+        src = page.read_text(encoding="utf-8")
+        p.feed(src)
+        pages[page] = (p, [json.loads(b) for b in re.findall(
+            r'<script type="application/ld\+json">(.*?)</script>', src, re.S)])
+    canonicals = {p.canonical for p, _ in pages.values()}
+
+    ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+    try:
+        locs = [u.text for u in ET.parse(WEB / "sitemap.xml").getroot().findall("s:url/s:loc", ns)]
+    except (OSError, ET.ParseError) as e:
+        locs = [f"unreadable: {e}"]
+    ok &= check(sorted(locs) == sorted(canonicals), f"(n) sitemap.xml lists the {len(locs)} canonical URLs",
+                f"(n) sitemap.xml lists {sorted(locs)}, the pages' canonicals are {sorted(canonicals)}")
+
+    bad = [f"{page.relative_to(WEB)}: url {urls} against canonical {p.canonical}"
+           for page, (p, blocks) in pages.items()
+           if p.canonical not in (urls := [b["url"] for b in blocks if "url" in b]) or not set(urls) <= canonicals]
+    features = [f for b in pages[WEB / "index.html"][1] for f in b.get("featureList", [])]
+    bad += [f"featureList item not a register string: {f!r}" for f in features if f not in REGISTER_STRINGS[:19]]  # not the Not yet group
+    ok &= check(not bad, f"(o) JSON-LD parses on {len(pages)} pages, urls are canonicals, {len(features)} features from the register",
+                "(o) " + "; ".join(bad))
+
+    titles = ["".join(p.title).strip() for p, _ in pages.values()]
+    descs = [p.meta.get("description", "") for p, _ in pages.values()]
+    ok &= check(len(set(titles)) == len(titles) and all(0 < len(t) <= 60 for t in titles)
+                and len(set(descs)) == len(descs) and all(0 < len(d) <= 160 for d in descs),
+                f"(p) {len(titles)} titles unique and at most 60 characters, descriptions unique and at most 160",
+                f"(p) titles {titles} or descriptions {[len(d) for d in descs]} repeat or run long")
+
+    page = WEB / "404.html"
+    p = PageParser()
+    p.feed(page.read_text(encoding="utf-8") if page.exists() else "")
+    files = [url for _, url in p.local_urls]
+    problems = [] if page.exists() else ["missing"]
+    problems += [f"not under /Orion/: {u}" for u in files if not u.startswith("/Orion/")]
+    problems += [f"untracked {u}" for u in files if u.startswith("/Orion/")
+                 and str(local_file(WEB, u[len("/Orion/"):]).relative_to(REPO)) not in tracked]
+    problems += ["no noindex"] * ("noindex" not in p.meta.get("robots", ""))
+    problems += ["a canonical link"] * (p.canonical is not None)
+    problems += ["an em-dash"] * ("\u2014" in "".join(p.text_chunks))
+    ok &= check(not problems, f"(q) 404.html: noindex, no canonical, {len(files)} files all tracked under /Orion/",
+                "(q) 404.html: " + "; ".join(problems))
+    return ok
 
 
 if __name__ == "__main__":

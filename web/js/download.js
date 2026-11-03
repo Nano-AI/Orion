@@ -1,19 +1,17 @@
-/*  Orion site: the download page. Picks the visitor's system from what the
- *  browser reports and offers the newest build GitHub has for it. Without
- *  this file the page is the Mac page, every button on the release list.
+/*  Orion site: the download page. Offers the newest build GitHub has for the
+ *  visitor's system, which the page's <head> has already read from what the
+ *  browser reports (html.os-*), so the words and the branch are right from the
+ *  first paint and the two can never disagree. A release
+ *  that carries a Windows or Linux file turns that system's download on, with
+ *  no change here. Without this file the page is the Mac page, its buttons on
+ *  the release list.
  */
 (() => {
   'use strict';
 
   const nav = navigator;
-  const ua = nav.userAgent;
-  const platform = (nav.userAgentData && nav.userAgentData.platform) || nav.platform || '';
+  const html = document.documentElement;
   const NAMES = { mac: 'macOS', windows: 'Windows', linux: 'Linux' };
-  const LEDES = {
-    mac: 'The alpha for Macs with Apple silicon. Free to download, with no account to make.',
-    windows: 'The alpha for Windows. Free to download, with no account to make.',
-    linux: 'The alpha for Linux. Free to download, with no account to make.',
-  };
   // Which release file belongs to which system. An arm64 build is offered only when there is no x64 one.
   const FILES = {
     mac: name => /\.dmg$/i.test(name),
@@ -22,36 +20,44 @@
   };
   const ARM = /arm64|aarch64/i;
 
-  // ?os=windows shows another system's page, to check it before that build ships.
+  // ?os=windows shows another system's page, to check it before that build ships (the <head> reads it too).
   const asked = new URLSearchParams(location.search).get('os');
-  // iPadOS asks for desktop pages and reports a Mac; a Mac has no touch screen.
-  let os = ['mac', 'intel', 'windows', 'linux', 'phone'].includes(asked) ? asked
-    : /iPhone|iPad|iPod|Android/i.test(ua) || (/Mac/i.test(platform) && nav.maxTouchPoints > 1) ? 'phone'
-    : /Mac/i.test(platform) ? 'mac'
-    : /Win/i.test(platform) ? 'windows'
-    : /Linux|X11/i.test(platform) ? 'linux'
-    : null;
+  let os = (/\bos-(mac|intel|windows|linux|phone)\b/.exec(html.className) || [])[1] || null;
   const found = {};   // system -> { release, asset }, from the newest release that has its file
+  let looked = false;   // whether the release list has answered
+  // A phone is told "desktop app" from the start (the page's own words), since
+  // the newest alpha ships for all three systems; the release list can still
+  // take it back to the Mac.
+  const MAC_PHONE = 'It runs on Macs with Apple silicon. Open this page on your Mac to download it, or share the link to send it there.';
 
   const $ = s => document.querySelector(s);
   const $$ = s => document.querySelectorAll(s);
   const render = () => {
-    // the build the page leads with: this system's, else the Mac one every other branch offers
-    const lead = found[os] ? os : 'mac';
-    if (os) {
-      const branch = os === 'phone' || os === 'intel' ? os : lead === os ? 'ready' : 'soon';
-      $$('[data-for]').forEach(el => { el.hidden = el.dataset.for !== branch; });
-      $$('[data-name]').forEach(el => { el.textContent = NAMES[os] || 'macOS'; });
-      $$('[data-row]').forEach(el => { el.querySelector('.dl__here').hidden = el.dataset.row !== os; });
-      $('[data-title]').textContent = os === 'phone' ? 'Orion is a desktop app' : `Orion for ${NAMES[os] || 'macOS'}`;
+    // the build the page leads with: this system's, else the Mac one every other branch offers.
+    // Until the release list answers, a Mac, Windows or Linux visitor is assumed to have one (the
+    // newest alpha ships for all three), so the page does not redraw under them when it does.
+    const lead = found[os] || (!looked && NAMES[os]) ? os : 'mac';
+    // a Windows or Linux visitor whose system has no build yet: download.css shows the "Not yet" branch
+    html.classList.toggle('no-build', os !== 'mac' && Boolean(NAMES[os]) && lead !== os);
+    if (os === 'phone' && looked) {
+      const desktop = found.windows || found.linux;
+      if (!desktop) $('[data-title] .only-phone').textContent = 'Orion is a Mac app';
+      $('[data-phone]').textContent = desktop ? `It runs on ${Object.keys(found).map(s => NAMES[s]).join(', ')}. ` +
+        'Open this page on your computer to download it, or share the link to send it there.' : MAC_PHONE;
     }
-    $('[data-lede]').textContent = LEDES[lead];
-    $('[data-label]').textContent = `Download for ${NAMES[lead]}`;
 
     $$('[data-file]').forEach(a => {
       const f = found[a.dataset.file === 'visitor' ? lead : a.dataset.file];
       if (f) { a.href = f.asset.browser_download_url; a.hidden = false; }
     });
+    for (const [system, f] of Object.entries(found)) {
+      const row = $(`[data-row="${system}"]`);
+      if (system === 'mac' || !row) continue;
+      row.querySelector('.needs').textContent = f.asset.name;
+      row.querySelector('.status').textContent = 'Alpha, available now';
+      row.querySelector('.status').classList.add('is-ready');
+      $('[data-only]').hidden = true;
+    }
 
     const f = found[lead];
     if (f) {
@@ -65,11 +71,13 @@
       };
       for (const [key, value] of Object.entries(facts)) {
         const row = $(`[data-fact="${key}"]`);
-        if (value) { row.querySelector('dd').textContent = value; row.hidden = false; }
+        if (value) { row.querySelector('dd').textContent = value; row.hidden = false; row.removeAttribute('data-pending'); }
       }
     }
-    // what it runs on is written for the Mac build only
+    // what it runs on, and the first-launch steps, are written for the Mac build only (download.css does the
+    // same from html.os-* for the first paint; this keeps it true if the release list changes the lead)
     $('[data-fact="runs"]').hidden = lead !== 'mac';
+    $('[data-steps]').hidden = lead !== 'mac';
   };
   render();
 
@@ -77,7 +85,7 @@
   // Intel on every Mac, so they keep the Apple silicon page.
   if (os === 'mac' && !asked && nav.userAgentData && nav.userAgentData.getHighEntropyValues) {
     nav.userAgentData.getHighEntropyValues(['architecture'])
-      .then(v => { if (v.architecture === 'x86') { os = 'intel'; render(); } })
+      .then(v => { if (v.architecture === 'x86') { html.classList.replace('os-mac', 'os-intel'); os = 'intel'; render(); } })
       .catch(() => {});
   }
 
@@ -95,9 +103,11 @@
           if (asset) found[system] = { release, asset };
         }
       }
+      looked = true;
       render();
     })
-    .catch(() => {});   // rate-limited or offline: the buttons already open the release list
+    .catch(() => {})   // rate-limited or offline: the buttons already open the release list
+    .finally(() => $$('[data-pending]').forEach(row => { row.hidden = true; row.removeAttribute('data-pending'); }));   // a fact the release did not give
 
   const flash = (button, said) => {
     const was = button.textContent;

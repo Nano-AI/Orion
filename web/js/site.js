@@ -20,13 +20,9 @@
     matchMedia('(max-width: 760px)').addEventListener('change', () => setOpen(false));
   }
 
-  // ---------- the download buttons name this computer's system ----------
-  // Only a Mac has a build today; anyone else gets a plain "Download" and the
-  // download page says what exists for them. iPadOS reports a Mac, with touch.
-  const ua = navigator.userAgentData;
-  const platform = (ua && ua.platform) || navigator.platform || '';
-  const mac = /Mac/i.test(platform) && navigator.maxTouchPoints < 2 && !/iPhone|iPad|Android/i.test(navigator.userAgent);
-  if (!mac) document.querySelectorAll('[data-os-label]').forEach(a => { a.textContent = 'Download'; });
+  // The download buttons name this computer's system from the page's <head>
+  // (without html.os-mac, "for Mac" is hidden), before the first paint, so they
+  // never change width under the reader. The download page says what exists for them.
 
   // ---------- nav: aria-current on the section in view ----------
   if ('IntersectionObserver' in window) {
