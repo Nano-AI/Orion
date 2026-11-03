@@ -270,7 +270,8 @@ void testDawnParityGpu() {
         metal = gpu::Device::create(gpu::Backend::Metal);
         dawn  = gpu::Device::create(gpu::Backend::Dawn);
     } catch (const std::exception& e) {
-        std::printf("  skipped: %s\n", e.what());
+        std::printf("  skipped: %s
+", e.what());
         return;
     }
     report(dawn->backend() == gpu::Backend::Dawn, "the second device is Dawn", dawn->info().name);
@@ -360,11 +361,14 @@ void testEveryKernelCompilesOnDawnGpu() {
     section("Every kernel compiles on Dawn (GPU)");
     // Not inside the parity test: that needs Metal, and Windows and Linux,
     // where Dawn is the only backend, are where this matters most.
+    // On a Mac built without Dawn (optional; README does not build it), skip
+    // like testDawnParityGpu instead of failing the suite (#41).
     std::unique_ptr<gpu::Device> dawn;
     try {
         dawn = gpu::Device::create(gpu::Backend::Dawn);
     } catch (const std::exception& e) {
-        report(false, "Dawn device available", e.what());
+        std::printf("  skipped: %s
+", e.what());
         return;
     }
 
