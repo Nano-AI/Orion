@@ -10,7 +10,9 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { agentRunner, installProcessGuards, type OrionError } from "./limits.ts";
 
-const RAW_EXT = new Set([".arw", ".nef", ".cr2", ".cr3", ".dng", ".raf", ".orf", ".rw2"]);
+// Program.RawExtensions
+const RAW_EXT = new Set([".arw", ".srf", ".sr2", ".dng", ".nef", ".nrw", ".cr2", ".cr3", ".crw", ".raf", ".orf", ".rw2",
+                         ".pef", ".srw", ".erf", ".3fr", ".fff", ".iiq", ".mrw", ".raw", ".rwl"]);
 // ORION_BIN wins; then the `Orion` beside this executable, which is where the
 // compiled `orion-mcp` sits inside a packaged Orion.app (Contents/MacOS/), so a
 // downloaded app needs no configuration; then the development build (`dotnet

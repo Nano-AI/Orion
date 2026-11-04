@@ -610,6 +610,16 @@ test("list_folder without a folder resolves it from current.json's folder field"
   }
 });
 
+test("list_folder returns every RAW extension the app opens, in any case, and not a JPEG", async () => {
+  const folder = await fs.mkdtemp(path.join(tmpDir, "raws-"));
+  await Promise.all(["a.pef", "b.NRW", "c.jpg"].map((name) => fs.writeFile(path.join(folder, name), "")));
+  const result = await client.callTool({ name: "list_folder", arguments: { folder } });
+  assert.equal(result.isError, undefined);
+  const content = result.content as Array<{ type: string; text?: string }>;
+  const names = JSON.parse(content[0].text!).map((f: { path: string }) => path.basename(f.path));
+  assert.deepEqual(names.sort(), ["a.pef", "b.NRW"]);
+});
+
 test("every optional-path tool gives the same isError when nothing is open and no path is given", async () => {
   process.env.ORION_CURRENT = path.join(tmpDir, "does-not-exist-2.json");
   try {
