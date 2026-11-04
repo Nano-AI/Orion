@@ -86,7 +86,7 @@ Exec=Orion %F
 Icon=orion
 Categories=Graphics;Photography;
 StartupWMClass=Orion
-MimeType=image/x-sony-arw;image/x-sony-srf;image/x-sony-sr2;image/x-adobe-dng;image/x-nikon-nef;image/x-nikon-nrw;image/x-canon-cr2;image/x-canon-cr3;image/x-canon-crw;image/x-fuji-raf;image/x-olympus-orf;image/x-panasonic-rw2;image/x-panasonic-rw;image/x-pentax-pef;image/x-minolta-mrw;
+MimeType=image/x-sony-arw;image/x-sony-srf;image/x-sony-sr2;image/x-adobe-dng;image/x-nikon-nef;image/x-nikon-nrw;image/x-canon-cr2;image/x-canon-cr3;image/x-canon-crw;image/x-fuji-raf;image/x-olympus-orf;image/x-panasonic-rw2;image/x-panasonic-rw;image/x-pentax-pef;image/x-samsung-srw;image/x-epson-erf;image/x-hasselblad-3fr;image/x-hasselblad-fff;image/x-phaseone-iiq;image/x-minolta-mrw;
 EOF
 # The brand's icons (decision #407): the hicolor theme the .desktop file's Icon=orion
 # names, every size as drawn (16 and 32 hand-hinted), and at the AppDir's root the
