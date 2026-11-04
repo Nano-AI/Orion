@@ -33,10 +33,10 @@
 </p>
 
 **Install:** download the alpha from
-[bankoti.dev/Orion/download](https://bankoti.dev/Orion/download/) (Apple silicon
-Mac, macOS 14 or later) or from
-[GitHub Releases](https://github.com/Nano-AI/Orion/releases), which also has a
-Windows installer and a Linux AppImage. Open it; there is no account.
+[bankoti.dev/Orion/download](https://bankoti.dev/Orion/download/) or
+[GitHub Releases](https://github.com/Nano-AI/Orion/releases): a disk image for
+Apple silicon Macs (macOS 14 or later), a Windows installer and a Linux
+AppImage. Open it; there is no account.
 
 <details>
   <summary>Table of Contents</summary>
@@ -68,7 +68,7 @@ Windows installer and a Linux AppImage. Open it; there is no account.
 
 ## About the project
 
-[![Orion with a linear mask on a seascape][product-screenshot]](https://bankoti.dev/Orion/)
+[![Orion's Develop view: a night photograph of cars outside a showroom, with the Light panel open][product-screenshot]](https://bankoti.dev/Orion/)
 
 Adobe's grip on raw editing makes serious photo work expensive for students and
 hobbyists. The open alternatives are capable but dated or hard to learn. Orion
@@ -89,10 +89,9 @@ JPEG, PNG, TIFF and JPEG XL. Past fit, the canvas renders only what is on
 screen, at the screen's resolution.
 
 **Platforms.** macOS on Apple silicon is the tested one. Windows and Linux run
-the same engine on Dawn (Direct3D 12, Vulkan), and v0.6.0-alpha.1 on GitHub
-Releases has a Windows installer and a Linux AppImage. Linux on `main`, newer
-than that release, is used daily on an NVIDIA RTX 3070 (decisions #392-#407);
-AMD and Intel GPUs and native Wayland are untested, and CI runs Linux without a
+the same engine on Dawn (Direct3D 12, Vulkan), and v0.6.0-alpha.2 on GitHub
+Releases has a Windows installer and a Linux AppImage. Linux is used daily on
+an NVIDIA RTX 3070; AMD and Intel GPUs and native Wayland are untested, and CI runs Linux without a
 GPU. Windows has only run in CI, on Microsoft's WARP software renderer. On both,
 the canvas still copies each render through the CPU, and export writes sRGB
 without camera metadata.
@@ -107,7 +106,7 @@ memory than an 8 GB Mac has, so it will not open there.
 ### Built with
 
 * C++20 engine, Metal compute on macOS and Dawn (D3D12, Vulkan) on Windows and Linux, shaders in [Slang](https://shader-slang.org/)
-* [Avalonia](https://avaloniaui.net/) 12 on .NET 10 for the interface (it replaced a SwiftUI app, decision #380)
+* [Avalonia](https://avaloniaui.net/) 12 on .NET 10 for the interface (it replaced a SwiftUI app)
 * [LibRaw](https://www.libraw.org/) decode, [OpenColorIO](https://opencolorio.org/) and [lcms2](https://www.littlecms.com/) color
 * [lensfun](https://lensfun.github.io/) lens data, XMP sidecars as the source of truth
 
@@ -217,7 +216,7 @@ has the steps for each.
 ### Opening a folder or photo from the shell
 
 `Orion <folders or photos>` opens them as the library. A convenient wrapper
-(this is the whole feature; see decision #193):
+(this is the whole feature):
 
 ```sh
 # ~/.zshrc - `orion` opens the cwd; `orion pic.ARW` opens that photo.
@@ -252,7 +251,7 @@ A packaged Orion.app carries the same server as `Contents/MacOS/orion-mcp`, a
 Node single executable that needs no checkout and no Node, so a downloaded app
 registers it with
 `claude mcp add orion -- /Applications/Orion.app/Contents/MacOS/orion-mcp`
-after clearing the download's quarantine (#310).
+after clearing the download's quarantine.
 
 ### The app's own flags
 
@@ -270,7 +269,7 @@ shell/bin/Release/net10.0/Orion x.ARW --selftest   # the app's invariants, headl
 ./tools/check-agent.py              # the agent surface: a real render and a real approve
 ```
 
-`CLAUDE.md` lists every gate to run before claiming anything works; none opens
+[`AGENTS.md`](AGENTS.md) lists every gate to run before claiming anything works; none opens
 a window, and the ones that render read their photographs from `ORION_SAMPLES`. The GPU
 tests matter most: pure maths tests pass happily on code that renders garbage,
 because they never touch a texture. Two shipped bugs proved it.
@@ -330,7 +329,7 @@ its additional permission 2 describes.
 **Orion is source-available, not open source.** The code is public to read,
 build and improve through pull requests, under
 [PolyForm Internal Use 1.0.0](https://polyformproject.org/licenses/internal-use/1.0.0)
-with two added permissions (decision #359). That is not an OSI-approved
+with two added permissions. That is not an OSI-approved
 open-source licence. The full text is in [`LICENSE`](LICENSE).
 
 | You may | You may not |
@@ -352,7 +351,7 @@ published under Apache-2.0 and remain available under it.
 | `web/fonts/` | SIL OFL 1.1 |
 
 ⚠ **A licence is not a freedom-to-operate assessment, and none has been done.**
-`CLAUDE.md` says this in as many words: a method can be published, dated,
+[`AGENTS.md`](AGENTS.md) says this in as many words: a method can be published, dated,
 correctly attributed and still be covered by a live patent. Every algorithm here
 is implemented from a published description and cited in `research/`, and no
 GPL source was read to write any of it, but nobody has searched the patent
@@ -379,10 +378,10 @@ Project: [github.com/Nano-AI/Orion](https://github.com/Nano-AI/Orion)
 
 [release-shield]: https://img.shields.io/github/v/release/Nano-AI/Orion?include_prereleases&style=for-the-badge
 [release-url]: https://github.com/Nano-AI/Orion/releases
-[license-shield]: https://img.shields.io/github/license/Nano-AI/Orion?style=for-the-badge
+[license-shield]: https://img.shields.io/badge/license-PolyForm%20Internal%20Use-blue?style=for-the-badge
 [license-url]: https://github.com/Nano-AI/Orion/blob/main/LICENSE
 [stars-shield]: https://img.shields.io/github/stars/Nano-AI/Orion?style=for-the-badge
 [stars-url]: https://github.com/Nano-AI/Orion/stargazers
 [issues-shield]: https://img.shields.io/github/issues/Nano-AI/Orion?style=for-the-badge
 [issues-url]: https://github.com/Nano-AI/Orion/issues
-[product-screenshot]: web/img/orion-mask-1200.jpg
+[product-screenshot]: web/img/app-ev3-1200.jpg
