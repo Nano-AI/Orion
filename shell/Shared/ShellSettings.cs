@@ -2,10 +2,10 @@ using System.Text.Json;
 
 namespace OrionShell;
 
-/// The shell's @AppStorage: a few numbers that outlive a launch, in one small
-/// JSON file beside the presets. A file that is missing or unreadable reads as
-/// every default, and a write that fails is dropped: a preference is never
-/// worth an error.
+/// The shell's @AppStorage: a few numbers and words that outlive a launch, in
+/// one small JSON file beside the presets. A file that is missing or unreadable
+/// reads as every default, and a write that fails is dropped: a preference is
+/// never worth an error.
 static class ShellSettings {
     /// Beside the presets in Orion's Application Support folder (AppFolder), where SettingsImport carries the old ones.
     public static readonly string? UserFile = AppFolder.File("shell-settings.json");
@@ -14,21 +14,29 @@ static class ShellSettings {
     /// the headless modes draw every default and never write the user's file.
     public static string? File { get; set; }
 
-    public static double Get(string key, double fallback) {
-        if (File == null) return fallback;
+    public static double Get(string key, double fallback) =>
+        Value(key) is { ValueKind: JsonValueKind.Number } v && v.TryGetDouble(out double d) && double.IsFinite(d) ? d : fallback;
+
+    public static string? Get(string key) => Value(key) is { ValueKind: JsonValueKind.String } v ? v.GetString() : null;
+
+    static JsonElement? Value(string key) {
+        if (File == null) return null;
         try {
             using var doc = JsonDocument.Parse(System.IO.File.ReadAllText(File));
-            return doc.RootElement.TryGetProperty(key, out var v) && v.TryGetDouble(out double d) && double.IsFinite(d) ? d : fallback;
+            return doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty(key, out var v) ? v.Clone() : null;
         } catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) {
-            return fallback;
+            return null;
         }
     }
 
-    public static void Set(string key, double value) {
+    public static void Set(string key, double value) => Set(key, JsonSerializer.SerializeToElement(value));
+    public static void Set(string key, string value) => Set(key, JsonSerializer.SerializeToElement(value));
+
+    static void Set(string key, JsonElement value) {
         if (File == null) return;
         try {
-            Dictionary<string, double> all;
-            try { all = JsonSerializer.Deserialize<Dictionary<string, double>>(System.IO.File.ReadAllText(File)) ?? []; }
+            Dictionary<string, JsonElement> all;
+            try { all = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(System.IO.File.ReadAllText(File)) ?? []; }
             catch (Exception e) when (e is IOException or JsonException) { all = []; }
             all[key] = value;
             Directory.CreateDirectory(Path.GetDirectoryName(File)!);

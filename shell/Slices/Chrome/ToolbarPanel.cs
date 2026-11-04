@@ -12,7 +12,7 @@ namespace OrionShell.Chrome;
 
 /// Main.dc.html's toolbar, from OrionApp+Chrome.swift's `toolbar`: what is
 /// open on the left, the Library/Develop switch in the middle, and what you do
-/// to it on the right, ending in Export, the one filled button. Rebuilt on
+/// to it on the right: Export, the one filled button, then Feedback. Rebuilt on
 /// every open; a render changes nothing here.
 [Panel("toolbar", Region.Toolbar)]
 public sealed class ToolbarPanel : Grid {
@@ -132,6 +132,7 @@ public sealed class ToolbarPanel : Grid {
             _actions.Children.Add(Button("square.and.arrow.up", selected > 0 ? $"Export {selected}" : "Export", () => Commands.Run("export"), Commands.CanRun("export"), ButtonKind.Primary,
                                          selected > 0 ? $"Export the {selected} selected photos to a folder" : Keyed("Export this photo", "export")));
         }
+        _actions.Children.Add(Button(null, "Feedback", () => Commands.Run("feedback"), true, ButtonKind.Quiet, "Tell us how Orion is working for you (opens a form in your browser)"));
     }
 
     /// A tooltip that names the command's key, read from the command table: "Rotate left ([)", "Undo (⌘Z)".

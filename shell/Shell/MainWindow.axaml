@@ -61,6 +61,8 @@
         </Grid>
       </DockPanel>
       <Grid x:Name="GalleryHost" IsVisible="False"/>
+      <!-- Over either face, at its top left under the toolbar: the feedback toast (Chrome/FeedbackReminder). -->
+      <Panel x:Name="ToastHost"/>
     </Grid>
   </DockPanel>
 </Window>

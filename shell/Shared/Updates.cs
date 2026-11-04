@@ -16,6 +16,10 @@ public static class Updates {
 
     static UpdateManager? _manager;
 
+    /// The version Velopack installed, the release tag without its v (0.6.0-alpha.2); "dev" for a build it did not.
+    public static string Version { get; } =
+        (Velopack.Locators.VelopackLocator.IsCurrentSet ? Velopack.Locators.VelopackLocator.Current.CurrentlyInstalledVersion?.ToString() : null) ?? "dev";
+
     /// Downloaded and waiting for a restart; Velopack also applies it on the next launch.
     public static UpdateInfo? Ready { get; private set; }
     public static event Action? Changed;

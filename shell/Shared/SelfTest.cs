@@ -79,6 +79,7 @@ static partial class SelfTest {
 
         CommandChecks();
         UpdateChecks();
+        FeedbackChecks();
         PhotoListNavigation();
 
         // The field table came from orion.h.

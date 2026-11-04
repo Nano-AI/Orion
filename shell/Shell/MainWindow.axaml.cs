@@ -74,7 +74,11 @@ public partial class MainWindow : Window {
         ToolsHost.Transitions = [new DoubleTransition { Property = OpacityProperty, Duration = Motion.Fade, Easing = Motion.EaseOut }];
         EngineModel.Shared.Opened += LockTools;
         EngineModel.Shared.PropertyChanged += (_, _) => LockTools();
+        ToastHost.Children.Add(FeedbackToast);
+        Chrome.FeedbackReminder.Start(this, FeedbackToast);
     }
+
+    public Chrome.FeedbackToast FeedbackToast { get; } = new() { IsVisible = false };
 
     public void LockTools() {
         bool open = CanvasSlice.CanvasState.Now is not (CanvasSlice.CanvasState.Scene.Welcome or CanvasSlice.CanvasState.Scene.Failed);
