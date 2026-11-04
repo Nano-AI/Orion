@@ -3,12 +3,13 @@
 Where the project stands and what comes next.
 Keep it to this page: history is `git log`, work is [GitHub issues](https://github.com/Nano-AI/Orion/issues).
 
-**Updated:** 2026-11-02
+**Updated:** 2026-11-04
 
 ## Where it stands
 
 The Avalonia app is Orion on macOS and ships as alpha pre-releases on GitHub.
 Windows and Linux build, test and package in CI on Dawn and run on real NVIDIA hardware on Linux; neither is a supported release yet.
+Feedback: a toolbar Feedback button and an occasional toast (after 10 active minutes, at most twice in 3 days, quiet once given for a version) open the Tally form with the system, hardware, session counts and the open photo's camera and format, never a path or name (`Chrome/Feedback.cs`, `FeedbackFacts.cs`).
 Shipped on `main`: JPEG XL export, foreign-XMP preservation, region-of-interest rendering, lens correction from DNG opcodes, stacking (noise and star modes, streamed), Velopack installers and updates, one palette and brand across app and site.
 
 `main` passes every gate on a real Mac and in CI on all three systems (issues 37 and 41 closed, #47, #48).

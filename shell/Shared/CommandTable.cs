@@ -116,6 +116,7 @@ static class CommandTable {
         // Updates (#389): no Swift owner, the Swift app never updated itself.
         Built("check-for-updates", "Check for updates", null, "Updates.cs", () => true, Updates.CheckNow),
         Built("restart-to-update", "Restart to update", null, "Updates.cs", () => Updates.Ready != null, Updates.Restart),
+        Built("feedback", "Give feedback", null, "Feedback.cs", () => true, Feedback.Give),
     ];
 
     static Command Built(string name, string title, string? keys, string owner, Func<bool> canRun, Action run) =>

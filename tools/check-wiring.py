@@ -81,6 +81,9 @@ EXPECTED = {
     r"\bCurrentPhoto\.Install\s*\(":
         "current.json is how the MCP server's current_photo learns which photo "
         "is open; nothing headless writes it",
+    # Started at a window only; the selftest checks the rule, never the timer.
+    r"\bFeedbackReminder\.Start\s*\(":
+        "the feedback toast shows only once the reminder is counting use",
 }
 
 # Product methods the harness alone may use, and why each is allowed to be.

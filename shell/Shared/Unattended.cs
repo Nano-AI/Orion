@@ -35,6 +35,14 @@ sealed partial class App {
             if (Run.Screenshot != null) {
                 Pump(() => Library.StackSuggestion.Scanned.IsCompleted, 10);   // the folder's stack line, posted when its scan lands
                 Dispatcher.UIThread.RunJobs();                                 // and shown
+                // ORION_FEEDBACK_TOAST=1 poses the window with the feedback toast up, whatever the reminder's rule says:
+                // arrived, since a still catches its fade-in where the headless clock left it.
+                if (Environment.GetEnvironmentVariable("ORION_FEEDBACK_TOAST") == "1" && window is MainWindow main) {
+                    var motion = Motion.Forced;
+                    Motion.Forced = true;
+                    main.FeedbackToast.Show();
+                    Motion.Forced = motion;
+                }
                 if (Target is Border { Child: Sheets.StackSheet stack }) {
                     // ORION_STACK_MODE (noise, stars, landscape) poses the Stack sheet in that mode; then every frame's
                     // preview is read, so the still shows the strip filled.
