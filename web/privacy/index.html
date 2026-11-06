@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Privacy, Orion</title>
+<meta name="description" content="What Orion and its site send over the network, to whom, when, and how to turn it off. Your photos stay on your computer.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0b0b0c">
+<link rel="canonical" href="https://bankoti.dev/Orion/privacy/">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../favicon.ico" sizes="16x16 32x32 48x48">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<link rel="manifest" href="../site.webmanifest">
+<script>document.documentElement.classList.add('js');   /* before the first paint, as on the other pages: the phone menu is laid out closed from the start */</script>
+<link rel="stylesheet" href="../css/tokens.css">
+<link rel="stylesheet" href="../css/base.css">
+<link rel="stylesheet" href="../css/download.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "@id": "https://bankoti.dev/Orion/privacy/#webpage",
+  "name": "Privacy, Orion",
+  "url": "https://bankoti.dev/Orion/privacy/",
+  "isPartOf": {"@id": "https://bankoti.dev/Orion/#website"},
+  "about": {"@id": "https://bankoti.dev/Orion/#app"}
+}
+</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav">
+  <div class="wrap nav__in">
+    <a class="nav__mark" href="../" aria-label="Orion, home"><img src="../img/orion-symbol.svg" width="32" height="32" alt="" aria-hidden="true">Orion</a>
+    <nav class="nav__nav" aria-label="Sections">
+      <ul class="nav__links" id="nav-links">
+        <li><a href="../#raw">RAW</a></li>
+        <li><a href="../#files">Your files</a></li>
+        <li><a href="../#build">Features</a></li>
+      </ul>
+    </nav>
+    <a class="btn btn--ghost nav__cta" href="../download/">Download</a>
+    <button class="nav__toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Menu"><span></span></button>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- Written from the code, not a template: each row names what the app or the
+     site actually sends. When a network call is added, removed or changes, this
+     page changes with it. -->
+<section class="wrap dl" aria-labelledby="privacy-title">
+  <div class="dl__copy">
+    <h1 class="h1" id="privacy-title">Privacy</h1>
+    <p class="lede">Orion edits your photos on your computer. Your photos, raw files and edits are never uploaded. There is no account, no analytics, no crash reporting and no advertising.</p>
+    <dl class="dl__facts">
+      <div><dt>Applies to</dt><dd>Orion 0.6.0-alpha.2 on macOS, Windows and Linux, and this site</dd></div>
+      <div><dt>Updated</dt><dd>6 November 2026</dd></div>
+      <div><dt>Questions</dt><dd><a class="link" href="https://github.com/Nano-AI/Orion/issues">GitHub issues</a></dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="band" aria-labelledby="app-title">
+  <div class="wrap band__in band__in--wide">
+    <div class="band__head">
+      <h2 class="h2" id="app-title">What the app sends</h2>
+      <p class="small">Three things, and two of them only when you ask.</p>
+    </div>
+    <ul class="platforms platforms--cams">
+      <li>
+        <p class="h3">Update check</p>
+        <p class="needs">To GitHub: a request for Orion's release list, then the update itself if there is a newer one. GitHub sees your IP address, as with any download.</p>
+        <p class="status">Five seconds after each launch, and when you choose Check for updates. There is no switch for it yet: block Orion in your firewall, or work offline, and Orion carries on without a word.</p>
+      </li>
+      <li>
+        <p class="h3">Feedback form</p>
+        <p class="needs">To Tally (tally.so), in your browser: your system and its version, Orion's version and build, processor, graphics card, memory, screen size, minutes used and photos opened this session, and the open photo's camera model and file format. Never a file name, a folder or your user name.</p>
+        <p class="status">Only when you click Feedback, or Give feedback on the reminder. The facts ride in the link, so Tally receives them as the form opens; what you write is sent when you submit. Never show again stops the reminder.</p>
+      </li>
+      <li>
+        <p class="h3">Assistant and MCP server</p>
+        <p class="needs">Orion's MCP server (orion-mcp) makes no network calls. The agent you run with it, Claude Code or Codex, sends what it reads to its own provider under that provider's terms: file names and folders, edit settings, photo statistics, capture data, and a JPEG preview of the photo up to 2048 pixels when it asks for one.</p>
+        <p class="status">Only when you open the assistant column or add orion-mcp to an agent yourself. Leave both alone and nothing goes.</p>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<section class="band" aria-labelledby="site-title">
+  <div class="wrap band__in band__in--wide">
+    <div class="band__head">
+      <h2 class="h2" id="site-title">What this site sends</h2>
+      <p class="small">No cookies, no analytics. Its fonts and images are served from the site itself.</p>
+    </div>
+    <ul class="platforms platforms--cams">
+      <li>
+        <p class="h3">Hosting</p>
+        <p class="needs">GitHub Pages serves every page, so GitHub receives your IP address and browser details with each request, under GitHub's own privacy statement.</p>
+        <p class="status">Every visit.</p>
+      </li>
+      <li>
+        <p class="h3">Download page</p>
+        <p class="needs">Your browser asks GitHub's API (api.github.com) for Orion's release list, to offer the newest file for your system.</p>
+        <p class="status">When the download page opens. Turn off scripts and the buttons open the release list on GitHub instead.</p>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<section class="band" aria-label="What is not collected, and contact">
+  <div class="wrap more">
+    <div>
+      <h2 class="h3">Not collected</h2>
+      <p class="small">Photos, raw files, previews, edits and sidecars stay on your disk, except what you let an agent read. So do your library, ratings and settings. Exports go where you save them, with location stripped by default.</p>
+    </div>
+    <div>
+      <h2 class="h3">Changes</h2>
+      <p class="small">This page changes when the code does. Every version of it is in the <a class="link" href="https://github.com/Nano-AI/Orion/commits/main/web/privacy/index.html">repository's history</a>.</p>
+    </div>
+    <div>
+      <h2 class="h3">Contact</h2>
+      <p class="small">Ask a question or report a problem on <a class="link" href="https://github.com/Nano-AI/Orion/issues">GitHub issues</a>.</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap footer__in">
+    <div>
+      <span class="footer__mark"><img src="../img/orion-symbol.svg" width="26" height="26" alt="" aria-hidden="true">Orion</span>
+      <p class="small">A RAW editor for Mac, Windows and Linux. &copy; 2026 Nano-AI</p>
+    </div>
+    <ul class="footer__links">
+      <li><a href="https://github.com/Nano-AI/Orion">Source</a></li>
+      <li><a href="https://github.com/Nano-AI/Orion/releases">Releases</a></li>
+      <li><a href="https://github.com/Nano-AI/Orion/tree/main/research">Research</a></li>
+      <li><a href="./" aria-current="page">Privacy</a></li>
+      <li><a href="mailto:alpha@bankoti.dev?subject=Orion">Contact</a></li>
+    </ul>
+  </div>
+</footer>
+
+<script src="../js/site.js" defer></script>
+</body>
+</html>
