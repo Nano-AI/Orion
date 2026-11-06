@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Microsoft Store package's manifest; tools/package-msix.sh fills the @...@ fields.
+     A desktop app in full trust (Windows.FullTrustApplication and runFullTrust), not a UWP app.
+     MinVersion 1903: app.manifest's UTF-8 activeCodePage needs it. -->
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+         xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+         IgnorableNamespaces="uap uap3 desktop rescap">
+  <Identity Name="@NAME@" Publisher="@PUBLISHER@" Version="@VERSION@" ProcessorArchitecture="x64" />
+  <Properties>
+    <DisplayName>Orion</DisplayName>
+    <PublisherDisplayName>@PUBLISHER_DISPLAY_NAME@</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.18362.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+  <Applications>
+    <Application Id="Orion" Executable="Orion.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="Orion" Description="Fast, subscription-free RAW photo editor" BackgroundColor="transparent"
+                          Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <!-- `orion` in a terminal, with the package's identity: how CI runs the installed package headless. -->
+        <uap3:Extension Category="windows.appExecutionAlias" Executable="Orion.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap3:AppExecutionAlias>
+            <desktop:ExecutionAlias Alias="orion.exe" />
+          </uap3:AppExecutionAlias>
+        </uap3:Extension>
+        <!-- Program.RawExtensions, every one. -->
+        <uap:Extension Category="windows.fileTypeAssociation">
+          <uap:FileTypeAssociation Name="raw">
+            <uap:DisplayName>RAW photo</uap:DisplayName>
+            <uap:SupportedFileTypes>
+              @FILE_TYPES@
+            </uap:SupportedFileTypes>
+          </uap:FileTypeAssociation>
+        </uap:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

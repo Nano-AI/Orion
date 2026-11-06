@@ -114,7 +114,7 @@ static class CommandTable {
         Built("reject-proposal", "Reject the proposed edit", "Cmd+Escape", "ProposalWatcher.swift", () => ProposalWatcher.Shared.IsLive, ProposalWatcher.Shared.Reject),
 
         // Updates (#389): no Swift owner, the Swift app never updated itself.
-        Built("check-for-updates", "Check for updates", null, "Updates.cs", () => true, Updates.CheckNow),
+        Built("check-for-updates", "Check for updates", null, "Updates.cs", () => !Updates.Packaged, Updates.CheckNow),
         Built("restart-to-update", "Restart to update", null, "Updates.cs", () => Updates.Ready != null, Updates.Restart),
         Built("feedback", "Give feedback", null, "Feedback.cs", () => true, Feedback.Give),
     ];

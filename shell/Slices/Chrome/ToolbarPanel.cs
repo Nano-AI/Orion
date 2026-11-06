@@ -75,12 +75,15 @@ public sealed class ToolbarPanel : Grid {
     /// Open, with the choice of a photo or a folder under it.
     static Control OpenMenu() {
         var open = new StateButton("folder", "Open", () => { }, help: "Open a photo or a folder") { Height = ButtonHeight };
-        open.Flyout = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedLeft, Items = {
+        var menu = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedLeft, Items = {
             Item("Open photo…", () => Commands.Run("open-photo")),
             Item("Open folder…", () => Commands.Run("open-folder")),
-            new Separator(),
-            Item("Check for updates", () => Commands.Run("check-for-updates")),
         } };
+        if (Commands.CanRun("check-for-updates")) {   // not in the Store's build (Updates.Packaged)
+            menu.Items.Add(new Separator());
+            menu.Items.Add(Item("Check for updates", () => Commands.Run("check-for-updates")));
+        }
+        open.Flyout = menu;
         return open;
     }
 
