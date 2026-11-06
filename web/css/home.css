@@ -112,6 +112,9 @@ html:not(.js) .stage__grab, html:not(.js) .stage__ctl { display: none; }
 .section__head { text-align: center; }
 .section__head .small { margin-top: var(--s-3); }
 .section__head .h2 { margin-inline: auto; max-width: 24ch; }
+/* a page that ends on a section rather than the close (privacy): room before the footer, long lines kept to a reading measure */
+main > .section:last-child { padding-bottom: var(--section); }
+main > .section:last-child .small { margin-inline: auto; max-width: 40rem; }
 
 /* ---------- compare: the frame as shot and developed ---------- */
 .cmp { --pos: 50%; position: relative; margin-top: clamp(var(--s-6), 4vw, var(--s-7)); aspect-ratio: 16 / 9; border-radius: var(--r-lg); overflow: hidden; background: var(--panel); user-select: none; -webkit-user-select: none; }
@@ -162,6 +165,7 @@ html:not(.js) .cmp__range, html:not(.js) .cmp__grip { display: none; }
 
 /* ---------- features: a grid of cards, each a panel with its own hairline ---------- */
 .build { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); margin-top: clamp(var(--s-6), 4vw, var(--s-7)); counter-reset: card; }
+.build--two { grid-template-columns: repeat(2, minmax(0, 1fr)); width: min(840px, 100%); margin-inline: auto; }   /* two cards at the width of three */
 .build__group { position: relative; padding: var(--s-5) var(--s-5) var(--s-6); border-radius: var(--r-lg); background: linear-gradient(180deg, var(--raised), var(--panel)); box-shadow: var(--ring); overflow: hidden; transition: box-shadow var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out); }
 .build__group::before { counter-increment: card; content: "0" counter(card); display: block; margin-bottom: var(--s-4); font: 400 var(--fs-xs)/1 var(--mono); letter-spacing: 0.12em; color: var(--accent); }
 .build__group::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity var(--dur-2) var(--ease-out);
