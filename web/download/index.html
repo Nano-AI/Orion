@@ -224,6 +224,38 @@
   </div>
 </section>
 
+<section class="band" id="cameras" aria-labelledby="cameras-title">
+  <div class="wrap band__in band__in--wide">
+    <div class="band__head">
+      <h2 class="h2" id="cameras-title">Supported cameras</h2>
+      <p class="small">Orion opens 21 raw file types. LibRaw decodes them.</p>
+    </div>
+    <ul class="platforms platforms--cams">
+      <li>
+        <p class="h3">Sony</p>
+        <p class="needs">.arw .srf .sr2</p>
+        <p class="status is-ready">Tested on ARW</p>
+      </li>
+      <li>
+        <p class="h3">Fujifilm</p>
+        <p class="needs">.raf</p>
+        <p class="status">Bayer sensors only. X-Trans files are refused</p>
+      </li>
+      <li>
+        <p class="h3">Adobe DNG</p>
+        <p class="needs">.dng</p>
+        <p class="status">Mosaic and linear DNG. Drone and phone files untested</p>
+      </li>
+      <li>
+        <p class="h3">Canon, Nikon, Olympus, Panasonic, Leica, Pentax and more</p>
+        <p class="needs">.cr2 .cr3 .crw .nef .nrw .orf .rw2 .rwl .raw .pef .srw .3fr .fff .iiq .erf .mrw</p>
+        <p class="status">Opened by LibRaw, not tested</p>
+      </li>
+    </ul>
+    <p class="small">Not supported: X-Trans sensors, sensors that are not red, green and blue, and JPEG, TIFF, PNG and HEIC input (planned). Tested on Sony ILCE-7M3 and ILCE-7RM3 files, plus a synthetic DNG; nothing else has been tried. LibRaw 0.22.2 lists 1,258 cameras: see <a class="link" href="https://www.libraw.org/supported-cameras">LibRaw's supported cameras</a>. Being on that list does not mean Orion has been tried on it.</p>
+  </div>
+</section>
+
 <section class="band" aria-label="Other downloads and help">
   <div class="wrap more">
     <div>

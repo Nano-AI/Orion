@@ -44,6 +44,7 @@ AppImage. Open it; there is no account.
     <li>
       <a href="#about-the-project">About the project</a>
       <ul>
+        <li><a href="#supported-cameras">Supported cameras</a></li>
         <li><a href="#built-with">Built with</a></li>
         <li><a href="#how-it-is-built">How it is built</a></li>
         <li><a href="#algorithms-are-cited-not-invented">Algorithms are cited, not invented</a></li>
@@ -97,9 +98,32 @@ the canvas still copies each render through the CPU, and export writes sRGB
 without camera metadata.
 
 **Not there yet:** tethering, X-Trans sensors, and Windows and Linux out of
-alpha. See [`planning/STATUS.md`](planning/STATUS.md), which is the honest list,
-including the one shipped defect: a 24 MP frame allocates more intermediate
-memory than an 8 GB Mac has, so it will not open there.
+alpha. See [`planning/STATUS.md`](planning/STATUS.md), which is the honest list.
+Memory now fits under a 2.5 GB cap by measurement, but nobody has run Orion on
+an 8 GB Mac yet. Reports from one are welcome.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+### Supported cameras
+
+Orion opens these 21 raw file types ([`RawExtensions`](shell/Program.cs)). LibRaw decodes them; whether your model works is LibRaw's call.
+
+| Brand | Extensions | Notes |
+|---|---|---|
+| Sony | .arw .srf .sr2 | Tested on ARW |
+| Canon | .cr2 .cr3 .crw | Not tested |
+| Nikon | .nef .nrw | Not tested |
+| Fujifilm | .raf | Bayer sensors only; X-Trans files are refused |
+| Olympus | .orf | Not tested |
+| Panasonic, Leica | .rw2 .rwl .raw | Not tested |
+| Pentax, Samsung | .pef .srw | Not tested |
+| Hasselblad, Phase One | .3fr .fff .iiq | Not tested |
+| Epson, Minolta | .erf .mrw | Not tested |
+| Any (Adobe DNG) | .dng | Mosaic and linear DNG; drone and phone files untested |
+
+* **Not supported:** X-Trans sensors, sensors that are not red, green and blue (RGBE, CMYG), files with no colour filter array, and JPEG, TIFF, PNG and HEIC input (planned). JPEG XL compressed DNG is planned too.
+* **Tested on:** Sony ILCE-7M3 (24 MP) and ILCE-7RM3 (42 MP) ARW files, plus a synthetic DNG in CI. Nothing else has been tried.
+* **Exact models:** LibRaw 0.22.2, the version the macOS build bundles, lists 1,258 cameras: see [LibRaw's supported cameras](https://www.libraw.org/supported-cameras). Being on that list does not mean Orion has been tried on it.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -118,10 +142,13 @@ its output on the GPU through an IOSurface, with no CPU copy. Shaders are
 authored in Slang and compiled to MSL and WGSL.
 
 Edits form a **DAG, not a chain**, so moving a slider recomputes only what sits
-downstream of it. On an M4, a 24 MP Sony ARW re-renders an exposure change in
-about 8 ms against a 16 ms budget, at full resolution, with no preview proxy.
-That is why zooming to 100% shows real pixels: the full-resolution result is
-already in a texture.
+downstream of it. Measured on an M4 MacBook Air (24 GB) with `orion-bench`, an
+exposure change at full resolution takes 8.6 ms of GPU time at the median on a
+24 MP Sony ARW (p95 9.3 ms) and 15 ms on a 42 MP one (p95 15 to 18 ms). A full
+render of every node takes 68 ms at 24 MP and 100 ms at 42 MP. While you drag a
+slider the app renders a quarter-scale preview (a UI median of 3 to 5 ms for an
+exposure drag at 42 MP), then one full-resolution render when you let go. So
+zooming to 100% shows real pixels once the drag ends.
 
 ```
 decode → linearize + white balance + white clip → RCD demosaic
@@ -131,7 +158,11 @@ decode → linearize + white balance + white clip → RCD demosaic
        → AgX display transform + curve → crop, straighten, orientation
 ```
 
-27 nodes, about 4 GiB of intermediates on a 24 MP frame.
+The develop graph has 221 nodes, each one compute shader. An exposure change
+recomputes 3 of them, and the default look runs 12. At 24 MP the engine holds
+509 MiB resident, with a 647 MiB pool peak. Each render plans its GPU memory
+under a 2.5 GB cap. The pool peak is 0.65 GiB at 24 MP and 1.1 GiB at 42 MP, and
+up to 2.1 GiB at 42 MP with clarity, denoise and texture all on.
 [docs/pipeline-graph](docs/pipeline-graph/index.html) is an interactive map of
 the whole graph, with a picture of what each stage does to a real photograph.
 

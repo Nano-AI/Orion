@@ -85,6 +85,7 @@ html:not(.js) .dl__facts [data-pending] { display: none; }
 .platforms .status { font-size: var(--fs-md); color: var(--dim); }
 .platforms .is-ready { color: var(--text); }
 .platforms .btn { justify-self: start; padding: 0 var(--s-4); font-size: var(--fs-md); }
+.platforms--cams li { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) minmax(0, 1.2fr); }   /* no button column */
 .dl__here { margin-left: var(--s-3); font-family: var(--mono); font-size: var(--fs-xs); font-weight: 400; color: var(--accent); }
 
 .more { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-6) var(--s-8); padding-block: var(--section-tight); }
