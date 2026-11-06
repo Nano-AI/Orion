@@ -56,7 +56,6 @@
       row.querySelector('.needs').textContent = f.asset.name;
       row.querySelector('.status').textContent = 'Alpha, available now';
       row.querySelector('.status').classList.add('is-ready');
-      $('[data-only]').hidden = true;
     }
 
     const f = found[lead];
