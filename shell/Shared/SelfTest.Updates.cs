@@ -13,11 +13,21 @@ static partial class SelfTest {
 
         // Installed (a test locator) but offline (a refused port): an answer, not an exception, and no restart offered.
         var dir = Directory.CreateTempSubdirectory("orion-updates-").FullName;
+        bool packaged = Updates.Packaged;
         try {
             var offline = new UpdateManager(new SimpleWebSource("http://127.0.0.1:9/"), null, new TestVelopackLocator("Orion", "0.6.0", dir, null));
             string said = Updates.Check(offline).Result;
             Check(said.StartsWith(Updates.Failed) && Updates.Ready == null && !Commands.CanRun("restart-to-update"),
                   $"updates: offline is a status line, not a crash ({said})");
-        } finally { Directory.Delete(dir, true); }
+
+            // The Store's MSIX: even an installed manager is never asked, and there is nothing to check for.
+            // The windows job runs the real package (tools/package-msix.sh).
+            Updates.Packaged = true;
+            said = Updates.Check(offline).Result;
+            Check(said == Updates.FromStore && !Commands.CanRun("check-for-updates"), $"updates: the Store's build leaves updates to the Store ({said})");
+        } finally {
+            Updates.Packaged = packaged;
+            Directory.Delete(dir, true);
+        }
     }
 }

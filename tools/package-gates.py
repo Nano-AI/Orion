@@ -32,7 +32,8 @@ from pathlib import Path
 RULES = [
     (["Orion", "Orion.exe", "Orion.dll", "Orion.deps.json", "Orion.runtimeconfig.json",
       "orion_shim.dll", "liborion_shim.so", "AppRun", "orion.desktop", "orion.svg", ".DirIcon",
-      "orion.png", "orion-symbolic.svg"], [], "Orion"),   # the brand's icons (#407)
+      "orion.png", "orion-symbolic.svg",   # the brand's icons (#407)
+      "AppxManifest.xml", "Square44x44Logo.png", "Square150x150Logo.png", "StoreLogo.png"], [], "Orion"),   # the MSIX's
     (["System.*", "Microsoft.*", "mscorlib.dll", "netstandard.dll", "WindowsBase.dll", "createdump", "createdump.exe",
       "coreclr.dll", "libcoreclr.so", "clrjit.dll", "libclrjit.so", "clrgc*.dll", "libclrgc*.so", "clretwrc.dll",
       "hostfxr.dll", "libhostfxr.so", "hostpolicy.dll", "libhostpolicy.so", "mscordaccore*.dll", "libmscordaccore.so",

@@ -17,6 +17,32 @@ shell/bin/Release/net10.0/Orion <RAWs or folders>     # opens a window
 `dist/Orion.app` (`com.nanoai.orion`, the executable `Orion`, the MCP server as
 `Contents/MacOS/orion-mcp`) and `Orion-<git describe>.dmg`, ad-hoc signed.
 
+## Microsoft Store (Windows)
+
+The `windows` job's `orion-windows-store` artifact is `Orion-<version>-x64.msix`,
+made by `tools/package-msix.sh` from the files `tools/package-windows.sh` staged
+(manifest: `tools/AppxManifest.xml`; tiles: `brand/windows/store/`). It is unsigned:
+the Store re-signs an MSIX, so Store users see no SmartScreen warning without a
+paid certificate, which an EXE or MSI submission would need. Inside the package
+Orion has no update check (`Updates.Packaged`); the Store updates it. The version
+is `MAJOR*1000+MINOR.PATCH.<commit count>.0`: the Store wants the first part
+non-zero and the last 0. A packaged app cannot run `--selftest` (it reads `shell/`
+beside `bin/`); CI installs the package under a throwaway certificate and runs
+`orion --command check-for-updates` through its alias instead.
+
+The first submission, by hand:
+
+- [ ] Register at [Partner Center](https://partner.microsoft.com/dashboard) as an individual (free). The publisher display name is compiled into every package: pick one that is not a personal name.
+- [ ] Apps and games → New product → MSIX or PWA app; reserve **Orion**. If it is taken, **Orion RAW** (or **Orion Photo Editor**).
+- [ ] Product identity (Product management → Product identity) gives three values: `gh variable set MSSTORE_IDENTITY_NAME --body '<Package/Identity/Name>'`, `gh variable set MSSTORE_PUBLISHER --body 'CN=<GUID>'`, `gh variable set MSSTORE_PUBLISHER_DISPLAY_NAME --body '<Publisher display name>'`.
+- [ ] Re-run the `windows` job on `main` (Actions → Build → Run workflow) and download `orion-windows-store`.
+- [ ] Properties: category Photo & video; privacy policy URL `https://bankoti.dev/Orion/privacy/`.
+- [ ] Age ratings: the IARC questionnaire (no purchases, no ads, no chat between users; the assistant column and the feedback form reach the internet).
+- [ ] Packages: upload the `.msix`. Store listing: description, at least one 1366x768 or larger screenshot (`--screenshot` scenes will do), and a 300x300 logo if asked (`rsvg-convert -w 300 -h 300 brand/linux/hicolor/scalable/apps/orion.svg`).
+- [ ] Submit. The `runFullTrust` capability asks for a one-line reason: a desktop RAW editor that reads and writes the user's photos and sidecars.
+
+Later, submissions can be automated with Microsoft's `msstore` CLI (`msstore publish`) from the same artifact; not built.
+
 The app keeps its files in `~/Library/Application Support/Orion`, the folder the
 Swift app used: `watermark.json` and `current.json` are shared as they were, and
 `Shared/SettingsImport.cs` carries the Swift app's `presets.json` and its

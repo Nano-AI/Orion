@@ -456,6 +456,7 @@ jobs:
             bin/Release/net10.0/Orion.exe "$RUNNER_TEMP/selftest.dng"
 
       - name: Setup.exe, portable zip and update feed (Velopack)
+        id: velopack
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         run: |
           dotnet tool install -g vpk --version "$VPK_VERSION"
@@ -467,6 +468,58 @@ jobs:
           # Uploaded after a failure too, for a look, but never under a green run's name.
           name: orion-windows${{ (steps.tests.outcome != 'success' || steps.selftest.outcome != 'success') && '-tests-failed' || '' }}
           path: dist/releases/*
+
+      # The Microsoft Store's MSIX, from the same staged files. Partner Center's identity
+      # is in the repository's variables; until they are set the package carries placeholders.
+      - name: Microsoft Store package (MSIX)
+        id: msix
+        if: ${{ !cancelled() && steps.velopack.outcome == 'success' }}
+        env:
+          MSSTORE_IDENTITY_NAME: ${{ vars.MSSTORE_IDENTITY_NAME }}
+          MSSTORE_PUBLISHER: ${{ vars.MSSTORE_PUBLISHER }}
+          MSSTORE_PUBLISHER_DISPLAY_NAME: ${{ vars.MSSTORE_PUBLISHER_DISPLAY_NAME }}
+        run: tools/package-msix.sh "$SHELL_DIR" build dist
+
+      # Installed as the Store installs it, signed for this runner alone by a throwaway
+      # certificate that is neither kept nor uploaded (the Store signs the real one).
+      - name: MSIX installs (test signature)
+        if: ${{ !cancelled() && steps.msix.outcome == 'success' }}
+        shell: powershell   # Windows PowerShell: the Appx cmdlets are its own
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $publisher = ([xml](Get-Content dist/msix/AppxManifest.xml)).Package.Identity.Publisher
+          $cert = New-SelfSignedCertificate -Type Custom -Subject $publisher -KeyUsage DigitalSignature `
+            -CertStoreLocation Cert:\CurrentUser\My -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}')
+          Export-Certificate -Cert $cert -FilePath "$env:RUNNER_TEMP\test.cer" | Out-Null
+          Import-Certificate -FilePath "$env:RUNNER_TEMP\test.cer" -CertStoreLocation Cert:\LocalMachine\TrustedPeople | Out-Null
+          $signed = "$env:RUNNER_TEMP\Orion-test.msix"
+          Copy-Item (Get-Item dist/store/*.msix).FullName $signed
+          signtool sign /fd SHA256 /sha1 $cert.Thumbprint $signed
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Add-AppxPackage $signed
+          Get-AppxPackage -Name ([xml](Get-Content dist/msix/AppxManifest.xml)).Package.Identity.Name
+
+      # With the package's identity (through its `orion` alias) Orion offers no update
+      # check of its own; the same files without it, staged for Velopack, do.
+      - name: MSIX leaves updates to the Store
+        if: ${{ !cancelled() && steps.msix.outcome == 'success' }}
+        run: |
+          python - "$LOCALAPPDATA\\Microsoft\\WindowsApps\\orion.exe" dist/Orion/Orion.exe <<'PY'
+          import subprocess, sys
+          def said(exe):
+              r = subprocess.run([exe, "--command", "check-for-updates"], capture_output=True, text=True, timeout=600)
+              print(f"{exe}: exit {r.returncode}\n{r.stdout}{r.stderr}")
+              return r.stdout.strip()
+          packaged, staged = sys.argv[1:3]
+          ok = said(staged).startswith("ran check-for-updates") and said(packaged) == "check-for-updates: not available now"
+          sys.exit(0 if ok else 1)
+          PY
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4
+        if: ${{ !cancelled() && steps.msix.outcome == 'success' }}
+        with:
+          name: orion-windows-store${{ (steps.tests.outcome != 'success' || steps.selftest.outcome != 'success') && '-tests-failed' || '' }}
+          path: dist/store/*.msix
 
   macos:
     needs: changes

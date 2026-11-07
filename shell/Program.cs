@@ -20,8 +20,9 @@ static class Program {
 
     [STAThread]
     static int Main(string[] args) {
-        // First: Velopack's install, update and uninstall hooks run here and exit (#389).
-        Velopack.VelopackApp.Build().Run();
+        // First: Velopack's install, update and uninstall hooks run here and exit (#389). Not in the
+        // Store's MSIX, which Velopack neither installed nor may write to.
+        if (!Updates.Packaged) Velopack.VelopackApp.Build().Run();
         // Paths first: the working directory changes below.
         string? Value(string flag) => Array.IndexOf(args, flag) is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;
         var panel = Value("--panel");
