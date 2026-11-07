@@ -243,23 +243,30 @@ public sealed class CanvasPanel : Panel {
         // The whole picture into its place, clipped to the view (a rubber band shows
         // the surround past its edge), or to the turned frame while the crop tool previews.
         using var clip = c.PushGeometryClip(CropEdit.Previewing ? TurnedFrame(whole) : new RectangleGeometry(new Rect(size)));
-        using (c.PushRenderOptions(new RenderOptions { BitmapInterpolationMode = mode })) {
-            // Around a region, the preview: what a pan uncovers until the next region lands.
-            if (dest != whole && engine.Session?.Picture is { } under) {
-                var outside = new CombinedGeometry(GeometryCombineMode.Exclude, new RectangleGeometry(whole), new RectangleGeometry(dest));
-                using (c.PushGeometryClip(outside)) c.DrawImage(under, new Rect(under.Size), whole);
-            }
-            if (picture != null) {
-                // A copy taken in this very draw is new pixels in the same bitmap: its version too.
-                var shown = _shown.For(picture, HashCode.Combine(_version, _copied.Version), dest.Width * scaling);
-                c.DrawImage(shown, new Rect(shown.Size), dest);
-            }
-            if (CompareState.Showing && CompareState.Original is { } original) {
-                // The split lives in view space: it holds still while the picture pans under it.
-                var held = _original.For(original, 0, pixels);
-                using (c.PushGeometryClip(CompareState.OriginalSide(CanvasState.DrawnFrame(size))))
-                    c.DrawImage(held, new Rect(held.Size), whole);
-            }
+        // Around a region, the preview: what a pan uncovers until the next region lands.
+        if (dest != whole && engine.Session?.Picture is { } under) {
+            var outside = new CombinedGeometry(GeometryCombineMode.Exclude, new RectangleGeometry(whole), new RectangleGeometry(dest));
+            using (c.PushGeometryClip(outside)) DrawImage(under, whole);
+        }
+        if (picture != null) {
+            // A copy taken in this very draw is new pixels in the same bitmap: its version too.
+            var shown = _shown.For(picture, HashCode.Combine(_version, _copied.Version), dest.Width * scaling);
+            DrawImage(shown, dest);
+        }
+        if (CompareState.Showing && CompareState.Original is { } original) {
+            // The split lives in view space: it holds still while the picture pans under it.
+            var held = _original.For(original, 0, pixels);
+            using (c.PushGeometryClip(CompareState.OriginalSide(CanvasState.DrawnFrame(size))))
+                DrawImage(held, whole);
+        }
+
+        // Every bitmap here is already the smallest halving at least as wide as its place (CopiedPicture.Level,
+        // Halvings), so a downscale is under 2x and bilinear holds it. Skia's HighQuality downscale is mipmapped,
+        // and CPU Skia (headless, a software window) rebuilds the chain for every new picture: ~90 ms at fit.
+        // Pushed per image and never around them: Avalonia keeps an outer push's mode over an inner one's.
+        void DrawImage(Bitmap b, Rect into) {
+            var m = mode == BitmapInterpolationMode.None || b.PixelSize.Width < into.Width * scaling ? mode : BitmapInterpolationMode.LowQuality;
+            using (c.PushRenderOptions(new RenderOptions { BitmapInterpolationMode = m })) c.DrawImage(b, new Rect(b.Size), into);
         }
     }
 

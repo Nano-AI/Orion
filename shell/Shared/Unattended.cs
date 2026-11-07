@@ -67,6 +67,7 @@ sealed partial class App {
                     Dispatcher.UIThread.RunJobs();
                 }
                 EngineModel.Shared.Render(preview: false);   // a still is for looking at, not for speed
+                Pump(() => !Settled.Pending, 5);               // and its histogram, measured once the render settles
                 window.UpdateLayout();
                 Dispatcher.UIThread.RunJobs();
                 Pump(() => !Library.Thumbnails.Busy);   // read in the background (#399): a still shows them all

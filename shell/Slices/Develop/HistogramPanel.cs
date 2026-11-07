@@ -17,7 +17,8 @@ namespace OrionShell.Develop;
 /// The engine's per-channel histogram of the full render, 128 bins each, red
 /// then green then blue (Engine.histogram). Not refreshed mid-drag: it reads
 /// the whole output texture, and it is a readout nobody watches while a slider
-/// moves (Engine+Render.swift scheduleHistogram). Empty from the moment the
+/// moves (Engine+Render.swift scheduleHistogram); measured as the edit
+/// Settles, so a burst of renders reads it once. Empty from the moment the
 /// photo changes until the full graph has rendered it: a swap at fit renders
 /// only the preview graph, and the full one follows once the hand rests (#324).
 static class Levels {
@@ -26,8 +27,8 @@ static class Levels {
     public static event Action? Updated;
 
     static Levels() {
-        EngineModel.Shared.Rendered += Refresh;
-        EngineModel.Shared.Landed += Refresh;
+        Settled.Fired += Refresh;
+        EngineModel.Shared.Landed += () => { if (_missed) Refresh(); };
         // The last photo's curve is not this one's: say nothing until it is measured.
         EngineModel.Shared.PropertyChanged += (_, e) => {
             if (e.PropertyName == nameof(EngineModel.Current) && Bins.Length > 0) { Bins = []; Updated?.Invoke(); }
@@ -35,11 +36,13 @@ static class Levels {
         Refresh();
     }
 
-    // ponytail: synchronous on every settled render; Swift waits 160 ms. Debounce if typed values or resets feel slow
-    // (a timer would also need flushing before a headless --screenshot).
+    /// A settle came while a region was on the GPU: the read would wait for it, so it reads once that lands.
+    static bool _missed;
+
     static void Refresh() {
-        // A region still on the GPU: the read would wait for it, so it reads once that lands.
-        if (EngineModel.Shared.Interacting || EngineModel.Shared.Busy) return;
+        if (EngineModel.Shared.Interacting) return;
+        if (EngineModel.Shared.Busy) { _missed = true; return; }
+        _missed = false;
         var bins = new uint[BinCount * 3];
         nint engine = EngineModel.Shared.Handle;
         Bins = engine != 0 && DevelopFacade.orion_engine_histogram(engine, bins, BinCount) == 0 ? bins : [];
