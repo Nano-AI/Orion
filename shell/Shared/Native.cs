@@ -126,6 +126,16 @@ public static unsafe partial class Native {
     [LibraryImport(Lib)]
     public static partial int shim_auto_enhance(nint shim);
 
+    /// The white balance under which the patch at (u, v) is neutral, written and pushed.
+    [LibraryImport(Lib)]
+    public static partial int shim_white_balance(nint shim, float u, float v, float radius);
+
+    [LibraryImport(Lib)]
+    public static partial int shim_as_shot(nint shim, out float temperatureK, out float tint);
+
+    [LibraryImport(Lib)]
+    public static partial int orion_white_balance_preset(int index, byte* name, int capacity, out float temperatureK, out float tint);
+
     /// How many OrionMaskComponent fields shim_mask_set knows by name.
     [LibraryImport(Lib)]
     public static partial int shim_mask_field_count();

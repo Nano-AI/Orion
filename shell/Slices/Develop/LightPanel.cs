@@ -4,14 +4,27 @@ namespace OrionShell.Develop;
 
 /// A port of the Swift app's DevelopPanels+Light.swift: white balance, the tone sliders,
 /// highlight recovery and the curve. Ranges and decimals from that file;
-/// a null base is the value the photo opened with (engine.defaults).
+/// a null base is the value the photo opened with (engine.defaults). The white
+/// balance selector and menu are Lightroom's (WhiteBalanceTools).
 [Panel("develop-light", Region.Tools, 10, Tab = "Light")]
 public sealed class LightPanel : StackPanel {
+    readonly ComboBox _whiteBalance;
+    bool _showing;
+
     public LightPanel() {
         Spacing = SectionPlate.Gap;
-        Children.Add(new SectionPlate("White balance", null,
+        var selector = new ToolButton(CanvasTool.WhiteBalance, "eyedropper", "Selector", "Click a neutral", "scope",
+                                      "White balance selector (W): click something that should be neutral");
+        _whiteBalance = Sheets.SheetKit.Menu(WhiteBalanceTools.Choices, 0, i => { if (!_showing) WhiteBalanceTools.Choose(i); });
+        Children.Add(new SectionPlate("White balance",
+            "The selector sets temperature and tint so whatever you click comes out neutral: a gray card, a white wall, " +
+            "a cloud. Auto makes the whole frame gray on average.",
+            Develop.Row(6, [selector], _whiteBalance),
             new AdjustmentSlider("Temperature", "temperature_k", 2000, 12000, " K", 0, tint: TrackTint.Temperature),
             new AdjustmentSlider("Tint", "tint", -1, 1, tint: TrackTint.Tint)));
+        EngineModel.Shared.Opened += ShowWhiteBalance;
+        EngineModel.Shared.Rendered += ShowWhiteBalance;
+        ShowWhiteBalance();
 
         // Auto heads the section whose sliders it moves (Exposure, Whites,
         // Blacks; Lift and Clarity live in Detail). Session.AutoEnhance is stage
@@ -34,6 +47,13 @@ public sealed class LightPanel : StackPanel {
 
         // Below the sliders: the control you reach for when a slider was not specific enough.
         Children.Add(new SectionPlate("Curve", null, new CurveEditor()));
+    }
+
+    /// The menu names the preset the photo is on, or Custom.
+    void ShowWhiteBalance() {
+        _showing = true;
+        _whiteBalance.SelectedIndex = WhiteBalanceTools.Current();
+        _showing = false;
     }
 
     static AdjustmentSlider Tone(string field, string unit = "") {

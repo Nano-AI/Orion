@@ -84,6 +84,11 @@ static class CommandTable {
         Built("reset-adjustments", "Reset adjustments", "Cmd+R", "Engine+Document.swift", () => Editable, EditHistory.ResetEdits),
         Built("rotate-left", "Rotate left", "OemOpenBrackets", "Engine+Geometry.swift", () => Editable, () => Bracket(-1)),
         Built("rotate-right", "Rotate right", "OemCloseBrackets", "Engine+Geometry.swift", () => Editable, () => Bracket(1)),
+        // Lightroom's white balance selector (W) and menu, one command a row but Custom.
+        Built("white-balance-selector", "White balance selector", "W", "WhiteBalance.cs", () => Editable, WhiteBalanceSelector),
+        .. WhiteBalanceTools.Choices.SkipLast(1).Select((c, i) =>
+            Built("white-balance-" + c.ToLowerInvariant().Replace(' ', '-'), $"{c} white balance", null, "WhiteBalance.cs",
+                  () => Editable, () => WhiteBalanceTools.Choose(i))),
 
         // Photo
         // Over the selection when the focus is part of one (cullScope), so the keys and the strip's menu agree.
@@ -151,6 +156,13 @@ static class CommandTable {
         if (E.Tool != CanvasTool.None) { E.Tool = CanvasTool.None; return; }
         CropEdit.Reset();
         Shell?.Select("Light");
+    }
+
+    /// Lightroom's W: on the Light tab, where the white balance is, armed or disarmed.
+    static void WhiteBalanceSelector() {
+        bool armed = E.Tool == CanvasTool.WhiteBalance;
+        Shell?.Select("Light");
+        E.Tool = armed ? CanvasTool.None : CanvasTool.WhiteBalance;
     }
 
     /// `[` and `]` size the brush being painted on the Mask tab, as Lightroom's do; elsewhere they turn the photo.

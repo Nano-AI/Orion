@@ -541,6 +541,35 @@ OrionStatus orion_engine_auto_enhance(OrionEngine* engine, OrionAdjustments* adj
     });
 }
 
+OrionStatus orion_engine_white_balance_at(OrionEngine* engine, float u, float v, float radius,
+                                          OrionAdjustments* adj) {
+    if (engine == nullptr || adj == nullptr) return ORION_ERR_BAD_ARG;
+    return guard(engine, [&]() -> OrionStatus {
+        orion::pipe::Adjustments a = toAdjustments(engine, adj);
+        if (!engine->impl.whiteBalanceAt(u, v, radius, a)) {
+            engine->impl.setError("nothing to balance on there: the patch is clipped or black");
+            return ORION_ERR_BAD_ARG;
+        }
+        adj->temperature_k = a.wb.temperatureK;
+        adj->tint          = a.wb.tint;
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_white_balance_preset(int index, char* name, int capacity,
+                                       float* out_temperature_k, float* out_tint) {
+    const auto& presets = orion::pipe::kWhiteBalancePresets;
+    if (index < 0 || index >= int(std::size(presets))) return ORION_ERR_BAD_ARG;
+    const auto& p = presets[std::size_t(index)];
+    if (name != nullptr && capacity > 0) {
+        std::strncpy(name, p.name, std::size_t(capacity) - 1);
+        name[capacity - 1] = '\0';
+    }
+    if (out_temperature_k != nullptr) *out_temperature_k = p.wb.temperatureK;
+    if (out_tint != nullptr) *out_tint = p.wb.tint;
+    return ORION_OK;
+}
+
 OrionStatus orion_engine_load_lut(OrionEngine* engine, const char* path) {
     if (engine == nullptr || path == nullptr) return ORION_ERR_BAD_ARG;
     return guard(engine, [&]() -> OrionStatus {

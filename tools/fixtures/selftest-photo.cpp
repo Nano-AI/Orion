@@ -7,7 +7,9 @@
 // fit is a region and a full render's memory is worth releasing. Hue runs left
 // to right and brightness bottom to top (so Monochrome has colour to remove and
 // every tone slider has tones to move), with a sharp-edged clipped square for
-// highlight recovery and detail, and a little deterministic noise so the
+// highlight recovery and detail, a gray card under the light the file says it
+// was shot in (camera-neutral, as its AsShotNeutral is) so the white balance
+// selector has a neutral to find, and a little deterministic noise so the
 // denoise and sharpening sliders have something to act on. Same colour metadata as
 // mask-invert.cpp. No EXIF exposure or lens: the writer has none to write.
 #include "util/DngWriter.h"
@@ -31,6 +33,7 @@ int main(int argc, char** argv) {
                 c[k] = level * (0.25f + 0.75f * std::fmin(std::fmax(d - 1.0f, 0.0f), 1.0f));
             }
             const bool square = x > 2600 && x < 3000 && y > 400 && y < 800;
+            if (x > 400 && x < 800 && y > 1500 && y < 1900) c[0] = c[1] = c[2] = 0.12f;
             for (int k = 0; k < 3; ++k) {
                 // An integer hash, not a library generator: the same file on every system.
                 std::uint32_t n = (x * 73856093u) ^ (y * 19349663u) ^ (std::uint32_t(k) * 83492791u);

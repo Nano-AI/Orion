@@ -27,6 +27,7 @@ add_library(orion_engine STATIC
     src/CApiDisplay.cpp
     src/Engine.cpp
     src/EngineMemory.cpp
+    src/EngineWhiteBalance.cpp
     src/ResourcePaths.cpp
     src/gpu/Gpu.cpp
     src/gpu/Readback.cpp
@@ -41,6 +42,7 @@ add_library(orion_engine STATIC
     src/pipe/DevelopLocal.cpp
     src/pipe/DevelopDenoiseLocal.cpp
     src/pipe/DevelopMask.cpp
+    src/pipe/DevelopNeutral.cpp
     src/pipe/DevelopOutput.cpp
     src/pipe/DisplayCopy.cpp
     src/pipe/CubeLut.cpp

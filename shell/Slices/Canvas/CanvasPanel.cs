@@ -384,6 +384,12 @@ public sealed class CanvasPanel : Panel {
             engine.Tool = CanvasTool.None;
             return;
         }
+        // The white balance selector: one pick, then disarmed, as Lightroom's.
+        if (engine.Tool == CanvasTool.WhiteBalance) {
+            if (Uv(p) is { } at) Develop.WhiteBalanceTools.Pick(at);
+            engine.Tool = CanvasTool.None;
+            return;
+        }
         if (engine.Tool == CanvasTool.Targeted && Uv(p) is { } uv && CanvasNative.Sample(uv) is { } s
             && ColorLoupe.Hue(s.Scene) is { } hue) {
             _band = ColorLoupe.Band(hue);

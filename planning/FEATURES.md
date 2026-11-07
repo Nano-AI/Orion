@@ -40,7 +40,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | Feature | Status | Notes |
 |---|---|---|
 | Exposure, contrast, highlights/shadows, whites/blacks | M1 | All scene-linear. ⚠ The four tone bands are versioned per photograph since #276: `process` 1 is the bands as shipped, 2 adds an identity band at middle grey so a midtone face is off the Highlights flank; a fresh photograph gets 2, a sidecar keeps its own, and only `set process` moves it (no panel affordance yet) |
-| White balance (temp/tint, eyedropper, presets) | M1 | ⚠ **Corrected 2026-08-10, #211: only temp/tint shipped.** The eyedropper and the presets this row has claimed since scope lock exist nowhere in the tree — `DevelopPanels+Light.swift` is two sliders. Queued **M6, S6.1**; the click-a-neutral inversion needs a `research/` entry before code |
+| White balance (temp/tint, eyedropper, presets) | M1 | ✅ **Built 2026-11-07** (S6.1): the selector (W, a click makes the patch neutral, solved through the DNG temperature/tint model and checked on a re-render) and Lightroom's menu (As shot, Auto as grey world, Daylight, Cloudy, Shade, Tungsten, Fluorescent, Flash) in the Light tab, `research/white-balance.md` |
 | B&W conversion + per-band gray mix | M6 | ✅ **Built 2026-11-07** (S6.2): Treatment (Color or Black & white) and eight band sliders in the Color tab, gray = Rec.2020 Y times a per-band gain in stops after every colour control and before the grade (`ops/bw_ops.slang`, `research/bw-mix.md`); the Monochrome preset turns it on |
 | Vibrance / saturation | M1 | |
 | Tone curve (parametric + point, per-channel) | M2 | |

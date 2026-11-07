@@ -1453,6 +1453,15 @@ better or worse relative to the others.
 
 ---
 
+## §34 - The white balance selector's own numbers - added 2026-11-07
+
+[white-balance.md](white-balance.md), `DevelopNeutral.cpp`, `EngineWhiteBalance.cpp`, `WhiteBalance.cs`.
+The model, the neutral condition and grey world are sourced; these are not.
+
+- **Chosen:** the patch is 0.4 % of the frame's width either side of the click (about 24 px on a 6000 px frame, 6 on the preview); a pixel within 5 % of the clip level or with a channel at or below 1e-4 is left out; a patch more than half left out is refused, the whole frame when 99 % is; up to four solve-and-render passes, stopping when the answer moves less than 1 K and 0.001 tint; the result is clamped to the Temperature slider's 2000-12000 K.
+- **Chosen, presets:** Flash at 5500 K on the Planckian is Lightroom's value with no standard behind it; Lightroom's temperature list itself is not published.
+- **What would settle it:** Lightroom's selector measured on a gray card at several sizes for its sampling area; a published flash spectrum for Flash's chromaticity.
+
 ## 19. The inspection verbs' constants - added 2026-09-14
 
 Decision #278, the Swift app's `RegionStats.swift` and the Swift app's `Scenario+Report.swift`.

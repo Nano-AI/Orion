@@ -129,6 +129,7 @@ static partial class SelfTest {
         ClippingChecks();
         ZoomPresetChecks();
         SideBySideChecks();
+        WhiteBalanceChecks();   // before LibraryChecks, which leaves the photo list on a deleted folder
         ToolsChecks();
         ColorChecks();
         MaskUxChecks();
