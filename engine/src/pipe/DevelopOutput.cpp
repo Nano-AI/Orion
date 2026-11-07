@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iterator>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -131,11 +132,11 @@ void DevelopPipeline::buildOutputNodes() {
     // that survived the whole pipeline in float gets quantised on the way out.
     // Half float rather than 16-bit integer because it is guaranteed
     // read-write on Metal, and because it holds the shadows better.
-    // The creative LUT's grid, allocated for the largest edge Orion accepts so
-    // that loading a different LUT is an upload rather than a recompile. A 65
-    // grid is 4.4 MB, which is nothing beside the frame buffers.
-    auxCube_ = pipeline_.addAuxTexture(kMaxCubeSize, kMaxCubeSize * kMaxCubeSize,
-                                       PixelFormat::RGBA32Float);
+    // The creative LUT's grid: 1x1 until a LUT loads, then the largest edge
+    // Orion accepts, so loading another is an upload rather than a recompile.
+    // 4.4 MB a graph, three graphs a photo, kept photos too, for a LUT that
+    // most photographs never load.
+    auxCube_ = pipeline_.addAuxTexture(1, 1, PixelFormat::RGBA32Float);
     // ⚠ **Float, not eight bits, and unconditionally.** Grain has to be added
     // to unquantised values or it is noise on top of banding, so the display
     // node no longer quantises — `develop:grain` below does, and it inherited
@@ -147,11 +148,9 @@ void DevelopPipeline::buildOutputNodes() {
                                  PixelFormat::RGBA16Float, {},
                                  {auxCurveLut_, auxCube_}});
 
-    // The grain plate: a stacked mip chain in one texture, uploaded once and
-    // never touched again. See GrainPlate.h for why the chain is stacked by
-    // hand rather than mipmapped, and why the levels are not renormalized.
-    auxGrainPlate_ = pipeline_.addAuxTexture(grain::kPlateSize, grain::kPlateHeight,
-                                             PixelFormat::R32Float);
+    // The grain plate: 1x1 of this graph's own until grain is on, then the
+    // device's one plate (`attachGrainPlate`).
+    auxGrainPlate_ = pipeline_.addAuxTexture(1, 1, PixelFormat::R32Float);
     nGrain_ = pipeline_.add({"develop:grain", "grain", {nDisplay_},
                              PixelFormat::RGBA8Unorm, {}, {auxGrainPlate_}});
 
@@ -162,19 +161,30 @@ void DevelopPipeline::buildOutputNodes() {
                                 PixelFormat::RGBA8Unorm, {}, {}});
 }
 
-/// The grain plate. After `compile` rather than beside the node, because it
-/// is an upload and not a declaration — see GrainPlate.h for why the mip
-/// chain is stacked by hand rather than mipmapped.
+namespace {
+/// The grain plate, a stacked mip chain in one texture (GrainPlate.h says why
+/// by hand), one per backend's device: there is one device per backend in a
+/// process (DawnDevice.cpp's `makeDawnDevice`, Metal's default device), and
+/// the tests mix the two on macOS. Its seed is fixed, so every graph of every
+/// photo reads the same 33 MB: one upload, held while a graph holds it.
+std::shared_ptr<gpu::Texture> sharedGrainPlate(gpu::Device& device) {
+    static std::mutex lock;
+    static std::weak_ptr<gpu::Texture> plates[2];
+    const std::lock_guard<std::mutex> hold(lock);
+    auto& slot = plates[device.backend() == gpu::Backend::Metal ? 0 : 1];
+    if (auto plate = slot.lock()) return plate;
+    // Built once a process (#393): ~70 ms of CPU a build.
+    static const std::vector<float> texels = grain::buildPlate();
+    std::shared_ptr<gpu::Texture> plate =
+        gpu::Texture::create(device, grain::kPlateSize, grain::kPlateHeight, gpu::PixelFormat::R32Float);
+    plate->upload(texels.data(), static_cast<std::size_t>(grain::kPlateSize) * sizeof(float));
+    slot = plate;
+    return plate;
+}
+}  // namespace
 
-void DevelopPipeline::uploadGrainPlate() {
-    // One upload per graph, because the aux texture is per `Pipeline`. The
-    // plate itself is built once a process (#393): its seed is fixed, so
-    // every build is the same 32 MB, and building it cost ~70 ms of CPU each
-    // time, twice an open (the full graph and the preview), on every photo the
-    // browsing cache decodes.
-    static const std::vector<float> plate = grain::buildPlate();
-    pipeline_.updateAux(auxGrainPlate_, plate.data(),
-                        static_cast<std::size_t>(grain::kPlateSize) * sizeof(float));
+void DevelopPipeline::attachGrainPlate() {
+    pipeline_.shareAux(auxGrainPlate_, sharedGrainPlate(pipeline_.device()));
 }
 
 void DevelopPipeline::applyGrade(const Adjustments& adj,
@@ -603,6 +613,7 @@ void DevelopPipeline::setCreativeLut(const CubeLut& lut) {
         }
     }
 
+    pipeline_.resizeAux(auxCube_, kMaxCubeSize, kMaxCubeSize * kMaxCubeSize);
     pipeline_.updateAux(auxCube_, grid.data(),
                         static_cast<std::size_t>(kMaxCubeSize) * 4 * sizeof(float));
 
@@ -619,6 +630,7 @@ void DevelopPipeline::clearCreativeLut() {
     lutMin_ = {0.0f, 0.0f, 0.0f};
     lutMax_ = {1.0f, 1.0f, 1.0f};
     pushDisplayParams(lastAdj_);
+    pipeline_.resizeAux(auxCube_, 1, 1);
 }
 
 void DevelopPipeline::setWideOutput(bool wide) {
@@ -660,6 +672,7 @@ void DevelopPipeline::retargetOutputChain(const Adjustments& adj) {
     const auto narrowFmt = gpu::PixelFormat::RGBA8Unorm;
     const auto outFmt    = wideOutput_ ? wideFmt : narrowFmt;
 
+    if (graining_) attachGrainPlate();
     pipeline_.setEnabled(nGrain_, graining_);
     pipeline_.setNodeFormat(nDisplay_, graining_ ? wideFmt : outFmt);
     pipeline_.setNodeFormat(nGrain_, outFmt);

@@ -394,7 +394,9 @@ BayerImage decimate(const BayerImage& image, int scale) {
     BayerImage out = image;
     out.width  = outCellsX * 2;
     out.height = outCellsY * 2;
-    out.samples.assign(std::size_t(out.width) * out.height, 0);
+    // A new vector, not `assign`: that keeps the copied frame's capacity, and the
+    // engine keeps this one for a kept photo's re-upload (85 MB held for 5 at 42 MP).
+    out.samples = std::vector<std::uint16_t>(std::size_t(out.width) * out.height, 0);
 
     // Output pixel (ox, oy) has phase (ox & 1, oy & 1) and is the one
     // same-phase input at the middle of output cell (ox / 2, oy / 2) — one
@@ -458,7 +460,7 @@ LinearImage decimate(const LinearImage& image, int scale) {
     LinearImage out = image;
     out.width  = outW;
     out.height = outH;
-    out.rgba.assign(out.pixelCount() * 4, 0);
+    out.rgba = decltype(out.rgba)(out.pixelCount() * 4, 0);   // a new vector, as the mosaic's
 
     constexpr std::uint16_t kHalfOne = 0x3c00;
     const float inv = 1.0f / static_cast<float>(scale * scale);

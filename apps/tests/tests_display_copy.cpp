@@ -158,6 +158,7 @@ void testDisplayCopyGpu() {
 
         // ── The newest wins; older copies are dropped, never queued ─────────
         auto src8 = gpu::Texture::create(*device, kW, kH, gpu::PixelFormat::RGBA8Unorm);
+        const std::uint64_t holding = device->textureBytes();
         std::uint64_t last = 0;
         for (int k = 1; k <= 5; ++k) {   // five begun, three buffers: the ring reuses without a take
             std::vector<std::uint8_t> flat(std::size_t(kW) * kH * 4, std::uint8_t(40 * k));
@@ -171,6 +172,8 @@ void testDisplayCopyGpu() {
         report(fifth, "after five begun, the one handed out is the fifth",
                "ticket " + std::to_string(named) + " of " + std::to_string(last) + ", pixel " + std::to_string(newest[0]));
         report(copy.readback().newest(false, lw, lh) == 0, "and nothing older is left to hand out");
+        report(holding - device->textureBytes() == level2.size(),
+               "an 8-bit picture at level 0 is copied as it is, and the level-2 target goes");
 
         // ── Tickets keep counting across a release: no copy is mistaken for an older one
         const auto beforeRelease = copy.begin(*src8, kW, kH, 0, w, h);

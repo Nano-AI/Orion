@@ -46,8 +46,8 @@ void DevelopPipeline::buildMaskNodes() {
     // and a person on another. Allocated at `kMaxMatteEdge` on the long side
     // rather than at the frame's: a segmentation network runs at a fixed
     // internal resolution far below 24 MP, and the guided refinement is what
-    // recovers the boundary afterwards. Four of these cost about 4 MB together,
-    // against 48 MB for one at full resolution.
+    // recovers the boundary afterwards. One costs 1.4 MB at 3:2 against 48 MB
+    // at full resolution, and is 1x1 until a matte is uploaded into it.
     // ⚠ **Rounded, not truncated, and the producer must ask rather than derive.**
     // `MatteGeometry.previewSize` sizes the picture the model sees by rounding
     // the short edge; this sized the texture by truncating it. On a 3:2 sensor
@@ -67,16 +67,14 @@ void DevelopPipeline::buildMaskNodes() {
 
     int prevMask = nMaskBase_;
     for (int i = 0; i < kMaxMaskComponents; ++i) {
-        auxMatte_[i] = pipeline_.addAuxTexture(matteW_, matteH_,
-                                               PixelFormat::R16Float);
+        auxMatte_[i] = pipeline_.addAuxTexture(1, 1, PixelFormat::R16Float);
         // One texel per dab. 256 x 64 is 16,384 of them for 128 KB, against the
         // 256 a four-kilobyte constant block could hold.
         // ⚠ RGBA rather than RG: the third channel carries whether the dab
         // adds coverage or takes it away. 256 KB a component against 128, for
         // the ability to erase — which is the difference between a brush and a
-        // one-way stamp.
-        auxDabs_[i] = pipeline_.addAuxTexture(params::kDabStride, params::kDabRows,
-                                              PixelFormat::RGBA32Float);
+        // one-way stamp. 1x1, as the boxes below, until a stroke is uploaded.
+        auxDabs_[i] = pipeline_.addAuxTexture(1, 1, PixelFormat::RGBA32Float);
         // One box per run of 64 dabs: (minX, minY, maxX, maxY) of the centers.
         // 256 texels, 4 KB. research/brush-acceleration.md.
         //
@@ -85,8 +83,7 @@ void DevelopPipeline::buildMaskNodes() {
         // limit, of which this struct already spends 152 bytes a component — and
         // scattering a four-float box across four dab texels would cost four
         // fetches to read the thing that exists to save fetches.
-        auxDabBounds_[i] = pipeline_.addAuxTexture(params::kMaxDabBlocks, 1,
-                                                   PixelFormat::RGBA32Float);
+        auxDabBounds_[i] = pipeline_.addAuxTexture(1, 1, PixelFormat::RGBA32Float);
     }
     // The incremental brush accumulator — one texture, for whichever component
     // is being painted on. research/brush-acceleration.md, decision #108.
@@ -470,6 +467,8 @@ void DevelopPipeline::applyMaskComponents(const Adjustments& adj,
                     pending.valid = m.accumUse != 0;
                 }
 
+                pipeline_.resizeAux(auxDabs_[std::size_t(i)], params::kDabStride, params::kDabRows);
+                pipeline_.resizeAux(auxDabBounds_[std::size_t(i)], params::kMaxDabBlocks, 1);
                 pipeline_.updateAux(auxDabs_[std::size_t(i)], texels.data(),
                                     std::size_t(params::kDabStride) * 4 * sizeof(float));
 
@@ -673,6 +672,7 @@ bool DevelopPipeline::setMaskMatte(int component, const float* alpha,
         matteLive_[slot][0] = 0;
         matteLive_[slot][1] = 0;
         matteDirty_[slot] = true;
+        pipeline_.resizeAux(auxMatte_[slot], 1, 1);
         return true;
     }
 
@@ -689,6 +689,7 @@ bool DevelopPipeline::setMaskMatte(int component, const float* alpha,
     // Uploading only the live rows would leave whatever the last matte wrote
     // outside them, and the bilinear tap at the right and bottom edges reaches
     // one texel past — so the whole texture is written every time.
+    pipeline_.resizeAux(auxMatte_[slot], matteW_, matteH_);
     std::vector<__fp16> full(std::size_t(matteW_) * matteH_, __fp16(0.0f));
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {

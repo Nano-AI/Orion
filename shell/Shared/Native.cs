@@ -108,6 +108,10 @@ public static unsafe partial class Native {
     [LibraryImport(Lib)]
     public static partial int orion_engine_lens_profile(nint engine, [Out] byte[] profile);
 
+    /// An idle canvas's spare back to the driver; `full` nonzero, the full graph's outputs too.
+    [LibraryImport(Lib)]
+    public static partial int orion_engine_trim(nint engine, int full);
+
     /// GPU memory the process's device holds; 0 on Metal, where the footprint counts it.
     [LibraryImport(Lib)]
     public static partial int orion_engine_gpu_memory(nint engine, out ulong bytes);

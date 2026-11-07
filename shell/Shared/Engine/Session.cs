@@ -70,6 +70,7 @@ public sealed partial class Session : IDisposable {
     /// `ms`: the GPU's milliseconds, 0 when nothing was dirty.
     public Graph Render(bool preview, out double ms) {
         Interlocked.Increment(ref _renders);
+        RenderCount++;
         var graph = (Graph)Native.shim_render(Shim, preview ? 1 : 0, out ms);
         if (graph == Graph.Full) RenderedFull = true;
         return graph;
@@ -83,6 +84,7 @@ public sealed partial class Session : IDisposable {
     /// says when the GPU is done.
     public Graph RenderRegion(Avalonia.Rect uv, PixelSize pixels, bool interacting = false, bool wait = true) {
         Interlocked.Increment(ref _renders);
+        RenderCount++;
         return (Graph)Native.shim_render_region(Shim, (float)uv.X, (float)uv.Y, (float)uv.Width, (float)uv.Height,
                                                 pixels.Width, pixels.Height, (interacting ? 1 : 0) | (wait ? 0 : 2), out _);
     }
@@ -95,6 +97,8 @@ public sealed partial class Session : IDisposable {
     /// must cost none (the compare divider's drag) is measured by.
     public static int Renders => _renders;
     static int _renders;
+    /// This session's renders, on its one thread at a time.
+    public int RenderCount { get; private set; }
 
     /// Has rendered the full graph since it was last lightened: its
     /// intermediates (1.35 GB, #318) are allocated and the preview picture may

@@ -123,10 +123,19 @@ public:
     /// Frame pixels per region pixel, per axis, that the last region chose.
     [[nodiscard]] int regionStep() const noexcept { return regionStep_; }
 
-    /// Both graphs give their render textures back to Metal and keep the
-    /// decoded photo: what a cache does to a photo it holds but is not
-    /// showing (decision #318). The next render of either rebuilds it.
+    /// Every graph gives back what it holds on the device, the sources
+    /// included, and the decoded photo stays on the CPU: what a cache does to a
+    /// photo it holds but is not showing (decision #318). The next render of
+    /// either graph uploads its source again and rebuilds the rest; a region
+    /// reloads its window. EngineMemory.cpp.
     void releaseRenderMemory() noexcept;
+
+    /// What an idle canvas gives back: every graph's idle pooled textures and,
+    /// when memory is short (`memoryShort`), the full graph's cache but for the
+    /// picture and its pinned outputs. `full`: the full graph's outputs go
+    /// whatever the pressure, as past fit, for a canvas that shows only the
+    /// preview meanwhile (side by side at fit). EngineMemory.cpp.
+    void trim(bool full) noexcept;
 
     /// The canvas's copy of a render (#386), made on first use. Its textures and
     /// copies in flight go with the render memory; its kernel and tickets stay.
@@ -287,6 +296,8 @@ private:
     // windows from (2 bytes a pixel, 48 MB at 24 MP); read windows back from
     // the full graph's source texture if that ever matters.
     std::shared_ptr<const raw::BayerImage> mosaic_;
+    /// The preview graph's source as uploaded, for its upload after a release.
+    std::shared_ptr<const void>            previewSource_;
     int                                    regionStep_ = 0;
     std::uint32_t                          regionX_ = 0, regionY_ = 0;
     bool                                   regionLoaded_ = false;
@@ -304,6 +315,9 @@ private:
     /// still refuses, the message naming the effect, need and free (#406).
     double renderLean(const std::function<void()>& giveBack);
     void rereleaseFull() noexcept;
+    /// The driver's free count under a quarter of the card, or the rest of the
+    /// device already past the full graph's budget (#406).
+    [[nodiscard]] bool memoryShort() const noexcept;
     Region                                 regionView_{};
     /// What `setAdjustments` last pushed, for the region graph's own apply.
     pipe::Adjustments                      adj_{};

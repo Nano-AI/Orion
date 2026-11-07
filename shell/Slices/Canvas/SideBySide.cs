@@ -111,6 +111,7 @@ static class SideBySide {
         Right.View.Reset();
         CanvasState.Viewport.Reset();   // the canvas under the panes renders nothing past fit meanwhile
         Borrow(candidate, wait);
+        E.Session?.Trim(full: true);   // at fit both panes show previews: the select's full graph goes till a render needs it
         Post();
         Changed?.Invoke();
     }

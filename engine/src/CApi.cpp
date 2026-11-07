@@ -378,6 +378,12 @@ OrionStatus orion_engine_release_render_memory(OrionEngine* engine) {
     return ORION_OK;
 }
 
+OrionStatus orion_engine_trim(OrionEngine* engine, int full) {
+    if (engine == nullptr) return ORION_ERR_BAD_ARG;
+    engine->impl.trim(full != 0);   // noexcept: nothing to guard
+    return ORION_OK;
+}
+
 OrionStatus orion_engine_gpu_memory(OrionEngine* engine, uint64_t* out_bytes) {
     if (engine == nullptr || out_bytes == nullptr) return ORION_ERR_BAD_ARG;
     *out_bytes = engine->impl.device().allocatedBytes();   // noexcept

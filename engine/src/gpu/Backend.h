@@ -98,7 +98,9 @@ struct Readback::Slot {
 
 /// The driver's own count of what the card can still give, device-wide
 /// (VramFree.cpp, #406): NVML or amdgpu's sysfs on Linux, else Device::kUnknown.
-std::uint64_t driverFreeBytes(std::uint32_t vendorId, std::uint32_t deviceId) noexcept;
+/// `total`, when given, gets the card's size, 0 where the count is unknown.
+std::uint64_t driverFreeBytes(std::uint32_t vendorId, std::uint32_t deviceId,
+                              std::uint64_t* total = nullptr) noexcept;
 
 std::unique_ptr<Device::Impl> makeMetalDevice();
 /// Throws std::runtime_error when the engine was built without Dawn.

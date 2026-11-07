@@ -90,6 +90,7 @@ void Pipeline::compile(std::uint32_t width, std::uint32_t height) {
     for (const auto& spec : auxSpecs_) {
         aux_.push_back(gpu::Texture::create(device_, spec.width, spec.height, spec.format));
     }
+    auxShared_.assign(aux_.size(), false);
 
     libraries_.clear();
     kernels_.clear();
@@ -300,6 +301,25 @@ void Pipeline::resizeAux(int auxId, std::uint32_t width, std::uint32_t height) {
     spec.height = height;
     aux_[static_cast<std::size_t>(auxId)] =
         gpu::Texture::create(device_, width, height, spec.format);
+    auxShared_[static_cast<std::size_t>(auxId)] = false;
+}
+
+void Pipeline::shareAux(int auxId, std::shared_ptr<gpu::Texture> texture) {
+    if (auxId < 0 || auxId >= static_cast<int>(aux_.size())) {
+        throw std::runtime_error("shareAux: bad aux id");
+    }
+    const auto i = static_cast<std::size_t>(auxId);
+    if (texture == aux_[i]) return;
+    finishPending();
+    auxShared_[i] = texture != nullptr;
+    if (!texture) texture = gpu::Texture::create(device_, 1, 1, auxSpecs_[i].format);
+    auxSpecs_[i].width  = texture->width();
+    auxSpecs_[i].height = texture->height();
+    aux_[i] = std::move(texture);
+    for (int id : order_) {
+        const auto& a = nodes_[static_cast<std::size_t>(id)].aux;
+        if (std::find(a.begin(), a.end(), auxId) != a.end()) markDownstreamDirty(id);
+    }
 }
 
 std::uint32_t Pipeline::auxWidth(int auxId) const {
@@ -320,6 +340,7 @@ bool Pipeline::nodeDirty(int nodeId) const {
 void Pipeline::setSource(const void* samples, std::size_t bytesPerRow) {
     if (!compiled_) throw std::runtime_error("setSource before compile()");
     finishPending();
+    if (!source_) source_ = gpu::Texture::create(device_, width_, height_, sourceFormat_, /*linear=*/true);
     source_->upload(samples, bytesPerRow);
     std::fill(dirty_.begin(), dirty_.end(), true);
 }
@@ -519,6 +540,20 @@ void Pipeline::releaseOutputs() noexcept {
     std::fill(everFreed_.begin(), everFreed_.end(), false);
 }
 
+void Pipeline::releaseCache() noexcept {
+    try { finishPending(); } catch (...) {}   // failed work holds nothing worth keeping
+    for (std::size_t i = 0; i < ownedOutputs_.size(); ++i) {
+        if (isPinnedOrTerminal(int(i))) continue;
+        outputs_[i] = nullptr;
+        pool_.release(std::move(ownedOutputs_[i]));
+    }
+    pool_.shrink();
+    // ⚠ Dirty, though nothing changed: a clean output rebuilt by `ensure` would
+    // rerun the brush kernel on its accumulator unasked (`nodeDirty`'s note).
+    std::fill(dirty_.begin(), dirty_.end(), true);
+    std::fill(everFreed_.begin(), everFreed_.end(), false);
+}
+
 void Pipeline::runDirty() {
     // ⚠ What a dirty node holds is never read again: every consumer of a dirty
     // node is dirty too (`markDownstreamDirty`). Handed back now rather than
@@ -696,7 +731,9 @@ std::size_t Pipeline::allocatedBytes() const noexcept {
 
 std::size_t Pipeline::auxBytes() const noexcept {
     std::size_t total = 0;
-    for (const auto& t : aux_) { if (t) total += t->sizeBytes(); }
+    for (std::size_t i = 0; i < aux_.size(); ++i) {
+        if (aux_[i] && !auxShared_[i]) total += aux_[i]->sizeBytes();
+    }
     return total;
 }
 

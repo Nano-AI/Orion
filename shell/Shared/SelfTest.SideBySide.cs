@@ -27,7 +27,11 @@ static partial class SelfTest {
             engine.Open(0);
             Arrived(engine);
             window = Show(new SideBySidePanel());
+            engine.Render(preview: false);
+            bool hadFull = engine.Session?.Size(Graph.Full) is { Width: > 0 };
             Check(Commands.Run("compare-side-by-side") == "ran compare-side-by-side" && SideBySide.On, "C opens the side-by-side compare");
+            var after = engine.Session?.Size(Graph.Full);
+            Check(hadFull && after is { Width: 0 }, $"at fit the select's full graph is given back: both panes show previews (rendered {hadFull}, after {after})");
             var (l, r) = (SideBySide.Left, SideBySide.Right);
             Pump(() => r.Session != null && l.Preview != null && r.Preview != null, 60);
             window.UpdateLayout();
@@ -35,12 +39,11 @@ static partial class SelfTest {
             l.View.Pan(new Vector(0.05, -0.03));
             window.UpdateLayout();
             Pump(() => l.Rendered != null && r.Rendered != null);
-            Native.orion_engine_gpu_memory(l.Session?.Handle ?? 0, out ulong gl);
-            Native.orion_engine_gpu_memory(r.Session?.Handle ?? 0, out ulong gr);
+            Native.orion_engine_gpu_memory(l.Session?.Handle ?? 0, out ulong gpu);   // the process's one device: both engines
             double diff = Differ(l.Region, r.Region);
             Check(r.View.Zoom == l.View.Zoom && r.View.Center == l.View.Center && l.View.PastFit && l.RegionUv == r.RegionUv && diff < 0.5,
                   $"linked, a zoom and pan on one side shows the same region on both ({l.RegionUv} and {r.RegionUv}, " +
-                  $"mean difference {diff:0.00}; GPU {gl >> 20} + {gr >> 20} MB)");
+                  $"mean difference {diff:0.00}; GPU {gpu >> 20} MB, both engines)");
             Commands.Run("compare-link");
             var held = l.View.Center;
             r.View.Pan(new Vector(0.1, 0));

@@ -119,6 +119,11 @@ public sealed partial class Session {
     /// Read before it returns null. This session's CPU bitmaps are untouched.
     public void ReleaseRenderMemory() => Native.orion_engine_release_render_memory(Native.shim_engine(Shim));
 
+    /// What an idle canvas gives back: the pools' idle textures, and the full graph's
+    /// cache when memory is short, never the picture. `full`: the full graph's outputs
+    /// whatever the pressure, for a canvas that shows only the preview meanwhile.
+    public void Trim(bool full) => Native.orion_engine_trim(Native.shim_engine(Shim), full ? 1 : 0);
+
     /// The preview graph's picture: the image region, not the square texture
     /// it sits in, and what Read(Graph.Preview) returns. Empty when the photo
     /// has no preview graph (Render then falls back to the full one).

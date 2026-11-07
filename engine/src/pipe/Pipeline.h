@@ -72,6 +72,8 @@ public:
     Pipeline(const Pipeline&)            = delete;
     Pipeline& operator=(const Pipeline&) = delete;
 
+    [[nodiscard]] gpu::Device& device() const noexcept { return device_; }
+
     /// Returns the new node's id. Inputs must already have been added — the
     /// graph is built in dependency order, then verified by compile().
     int add(Node node);
@@ -114,6 +116,12 @@ public:
     /// Uploads the source mosaic. Marks the whole graph dirty.
     void setSource(const void* samples, std::size_t bytesPerRow);
 
+    /// Drops the source texture until the next `setSource`, which allocates it
+    /// again (#318): a kept photo's mosaic lives on the CPU. ⚠ A render before
+    /// that reads a null source; `DevelopPipeline::render` refuses it.
+    void releaseSource() noexcept { source_.reset(); }
+    [[nodiscard]] bool hasSource() const noexcept { return source_ != nullptr; }
+
     /// What the source texture is. R16Uint — one mosaic sample per pixel —
     /// unless a graph whose source is already demosaiced says otherwise.
     /// Must be called before compile(); the texture is allocated there.
@@ -141,6 +149,13 @@ public:
     void resizeAux(int auxId, std::uint32_t width, std::uint32_t height);
 
     [[nodiscard]] std::uint32_t auxWidth(int auxId) const;
+
+    /// Binds a texture other graphs share (the grain plate, one per device) in
+    /// place of this aux slot's own, and dirties its readers; null puts back
+    /// one of its own at 1x1. A shared texture is not this graph's: `auxBytes`
+    /// leaves it out, so the memory rule counts it once, with the rest of the
+    /// device.
+    void shareAux(int auxId, std::shared_ptr<gpu::Texture> texture);
 
     /// Whether a node will run at the next render.
     ///
@@ -193,6 +208,7 @@ public:
     /// min(this, what the device can still give plus what the graph holds).
     /// 2.5e9 by decision #406; tests lower it.
     void setMemoryBudget(std::uint64_t bytes) noexcept { budgetCap_ = bytes; }
+    [[nodiscard]] std::uint64_t memoryBudget() const noexcept { return budgetCap_; }
 
     /// What the rule decided for the last render (`decideMemory`): the
     /// budget, the planned peak under the caching policy, the planned peak
@@ -210,6 +226,15 @@ public:
     /// kept decoded but not shown (decision #318); the next render rebuilds
     /// everything, through the same path a first render takes.
     void releaseOutputs() noexcept;
+
+    /// `releaseOutputs` but for the picture and the pinned outputs, which
+    /// readers outside the graph still read: an idle canvas short of memory
+    /// keeps what it shows and what the eyedropper samples (#406).
+    void releaseCache() noexcept;
+
+    /// The pool's idle textures go back to the driver (after `Device::reclaim`
+    /// on Dawn). An ordinary render never does this; an idle canvas does.
+    void trimPool() noexcept { pool_.shrink(); }
 
     /// Executes every dirty node in one command buffer.
     /// Returns the GPU-side duration in milliseconds, 0 when nothing was dirty.
@@ -460,7 +485,8 @@ private:
 
     struct AuxSpec { std::uint32_t width, height; gpu::PixelFormat format; };
     std::vector<AuxSpec>                       auxSpecs_;
-    std::vector<std::unique_ptr<gpu::Texture>> aux_;
+    std::vector<std::shared_ptr<gpu::Texture>> aux_;
+    std::vector<bool>                          auxShared_;   // `shareAux`'s, not counted
 
     std::unique_ptr<gpu::Texture> source_;
     gpu::PixelFormat sourceFormat_ = gpu::PixelFormat::R16Uint;

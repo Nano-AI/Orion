@@ -21,7 +21,30 @@ public sealed class EngineModel : INotifyPropertyChanged {
     readonly SessionCache _source;
     Session? _session;
 
-    public EngineModel() => _source = new SessionCache(_list);
+    public EngineModel() {
+        _source = new SessionCache(_list);
+        Rendered += ArmIdleTrim;
+    }
+
+    /// How long the photo on screen goes without a render before its engine gives back
+    /// what its pools hold idle (Session.Trim): past the pause between two slider moves,
+    /// whose next tick would reuse those textures, and well inside the time a photo is looked at.
+    internal static readonly TimeSpan IdleTrimAfter = TimeSpan.FromSeconds(3);
+    DispatcherTimer? _idleTrim;
+    int _rendersSeen;
+
+    /// Its next render, by anyone (a side-by-side pane too), puts the trim off another IdleTrimAfter.
+    void ArmIdleTrim() {
+        _rendersSeen = _session?.RenderCount ?? 0;
+        _idleTrim ??= new DispatcherTimer(IdleTrimAfter, DispatcherPriority.Background, (t, _) => {
+            if (_session is not { } s) { ((DispatcherTimer)t!).Stop(); return; }
+            if (s.RenderCount != _rendersSeen) { _rendersSeen = s.RenderCount; return; }
+            ((DispatcherTimer)t!).Stop();
+            s.Trim(full: false);
+        });
+        _idleTrim.Stop();
+        _idleTrim.Start();
+    }
 
     /// A sidecar write that escaped to the full name says so on the status line (#405).
     /// Posted, so a write flushed on a photo switch is not cleared by the open after it.

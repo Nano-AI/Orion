@@ -344,6 +344,9 @@ void testBayerDecimation() {
         report(out.samples[0] == 500,
                "and an output sample is the middle same-phase input, not a mean",
                std::to_string(out.samples[0]));
+        // A kept photo keeps its preview mosaic for the re-upload (#318): its size, not the frame's.
+        report(out.samples.capacity() == out.samples.size(), "and holds its own samples, not the frame's",
+               std::to_string(out.samples.capacity()) + " allocated");
     }
 
     // Every output sample against the definition, on a mosaic whose values all
