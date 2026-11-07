@@ -214,18 +214,15 @@ typedef struct OrionAdjustments {
      * that multiply zero, and it never switches the grading node on. */
     float grade_balance;
 
-    /* The CREATIVE vignette -- research/vignette.md, decision #103.
-     *
+    /* The CREATIVE vignette: research/vignette.md, decision #103.
      * Not lens_vignette above. That one divides out a falloff a lens measured;
      * this one puts one in on purpose, after the grade, centred on the CROP
      * rather than on the frame. A photograph can carry both and they never read
      * each other.
-     *
      * vignette_amount is the exposure change at the corner of the composition
      * in STOPS -- negative darkens, which is the usual direction. Zero is not
      * merely a silent vignette: it skips the falloff and, with the grading
      * wheels centred, disables the node.
-     *
      * vignette_field_angle is the half-diagonal field angle in DEGREES of the
      * lens whose natural cos^4 falloff is being imitated -- wide reaches well
      * into the frame, narrow stays in the extreme corners. */
@@ -374,37 +371,30 @@ OrionStatus orion_engine_open_raw(OrionEngine* engine, const char* path);
  * pairs in normalized coordinates of the displayed picture — the same space the
  * gradient masks are placed in, so the engine puts them where develop:linear
  * can use them and the caller never sees that transform.
- *
  * `component` indexes mask_components; out of range is ORION_ERR_BAD_ARG rather
  * than a clamp, because paint landing in the wrong component is worse than
  * nothing happening. The points are copied, so the caller's buffer need not
- * outlive the call. Passing NULL or count <= 0 clears the stroke.
- *
+ * outlive the call. Passing NULL or count <= 0 clears the stroke. `erase` is
+ * one value per dab: nonzero takes coverage away instead of laying it down, so
+ * one component can be painted into and rubbed back out; NULL paints throughout.
  * This does not itself dirty anything: bump that component's brush_revision and
  * push the adjustments, which is what makes the change visible. Two calls are
- * deliberate — a drag sets the stroke once per frame and the revision is what
+ * deliberate: a drag sets the stroke once per frame and the revision is what
  * the engine compares, so the stroke never has to be walked to decide whether
  * it moved. */
-/// `erase` is one value per dab: nonzero takes coverage away instead of laying
-/// it down, so one component can be painted into and rubbed back out. Null
-/// means the whole stroke paints.
 OrionStatus orion_engine_set_brush_stroke(OrionEngine* engine, int component,
                                           const float* xy, const float* erase,
                                           int count);
 
-/* Uploads a raster matte for one component — kind 4, research/masking.md §5.
- *
+/* Uploads a raster matte for one component: kind 4, research/masking.md §5.
  * `alpha` is row-major, top-left origin, `width * height` floats in 0..1.
- *
  * ⚠ It must be in FRAME coordinates: the whole uncropped, unturned sensor
  * frame, which is the space masks are applied in. A producer working from the
  * displayed picture has to undo the crop, the straighten and the quarter turns
  * itself. The kernel does no correction, deliberately — that is what lets a
  * matte survive a crop and a rotation the way a gradient does.
- *
  * Larger than orion_engine_max_matte_size on either axis is ORION_ERR_BAD_ARG
  * rather than a silent downscale. Pass NULL to clear.
- *
  * Like the brush stroke, this does not itself dirty anything: set the
  * component's kind to 4 and push the adjustments. */
 OrionStatus orion_engine_set_mask_matte(OrionEngine* engine, int component,
@@ -518,19 +508,27 @@ OrionStatus orion_engine_preview_size(const OrionEngine* engine,
  * result is never softer than the screen. Canvas only, like the preview.
  *
  * ORION_ERR_BAD_ARG is this call's "render the whole graph instead", as it is
- * the preview's "no preview graph": returned when this edit uses something the
- * region graph cannot render exactly (masks, spots, grain, the creative
- * vignette, dehaze, clarity, fusion, highlight recovery, highlights/shadows,
- * the crop tool's canvas) or the photo is not a mosaic.
- * Nonzero `interacting` (a drag) also refuses a denoised edit zoomed out past
- * 100%, which renders at step 1 and would cost more than the preview: render
- * the preview for the drag, and the region again when it ends. INTERNAL (out
- * of memory, a lost device) is a failure: the whole graph needs more memory
- * than the region, so do not answer it with that. */
+ * the preview's "no preview graph": this edit uses something the region graph
+ * cannot render exactly (masks, spots, grain, the creative vignette, dehaze,
+ * clarity, fusion, highlight recovery, highlights/shadows, the crop tool's
+ * canvas) or the photo is not a mosaic. ORION_REGION_INTERACTING in `flags` (a
+ * drag) also refuses a denoised edit zoomed out past 100%, which renders at
+ * step 1 and would cost more than the preview: render the preview for the
+ * drag, and the region again when it ends. INTERNAL (out of memory, a lost
+ * device) is a failure: the whole graph needs more memory than the region, so
+ * do not answer it with that. ORION_REGION_NO_WAIT submits the render and
+ * returns with *out_ms 0: a read or a display copy of it after this queues
+ * behind it, and orion_engine_region_busy says when the GPU is done. */
+#define ORION_REGION_INTERACTING 1
+#define ORION_REGION_NO_WAIT     2
 OrionStatus orion_engine_render_region(OrionEngine* engine, float x, float y,
                                        float w, float h, unsigned out_w,
-                                       unsigned out_h, int interacting,
+                                       unsigned out_h, int flags,
                                        double* out_ms);
+
+/* *out_busy 1 while a NO_WAIT region is still on the GPU, 0 once it is done
+ * or there is none; INTERNAL when it failed there. Never waits. */
+OrionStatus orion_engine_region_busy(OrionEngine* engine, int* out_busy);
 
 /* The region graph's output texture (id<MTLTexture>) and the part of it that
  * holds the last region: top-left out_w x out_h, as asked, capped at the

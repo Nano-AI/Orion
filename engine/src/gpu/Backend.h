@@ -55,6 +55,9 @@ struct CommandBuffer::Impl {
     virtual void commitAndWait() = 0;
     /// Without the wait where the backend can (#386); Metal's readback is synchronous.
     virtual void commit() { commitAndWait(); }
+    /// `commit`, and `finished` then answers for this work; Metal waits here.
+    virtual void commitTracked() { commitAndWait(); }
+    virtual bool finished(bool /*wait*/) { return true; }
     double gpuMs = 0.0;
 };
 

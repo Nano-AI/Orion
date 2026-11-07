@@ -29,6 +29,15 @@ struct DawnCommandBuffer final : CommandBuffer::Impl {
     std::shared_ptr<Context> ctx;
     std::vector<Recorded>    recorded;
     std::vector<std::uint8_t> params;   // every block, each on a 256-byte boundary
+    // commitTracked's completion. Shared with the callback, which a WaitAnyOnly
+    // future runs only inside a WaitAny, possibly after this buffer is gone.
+    std::shared_ptr<bool> succeeded;
+    wgpu::Future done{};
+    std::chrono::steady_clock::time_point submitted;
+
+    ~DawnCommandBuffer() override {
+        try { finished(true); } catch (...) {}   // a lost device: nothing left to wait for
+    }
 
     void dispatch(const Kernel& kernel, const std::vector<const Texture*>& textures,
                   const void* data, std::size_t dataBytes,
@@ -90,7 +99,32 @@ struct DawnCommandBuffer final : CommandBuffer::Impl {
         scope.check("GPU work failed");
     }
 
+    void commitTracked() override {
+        if (recorded.empty()) return;
+        submitted = std::chrono::steady_clock::now();
+        ErrorScope scope(*ctx);
+        submit();
+        succeeded = std::make_shared<bool>(false);
+        done = ctx->queue.OnSubmittedWorkDone(wgpu::CallbackMode::WaitAnyOnly,
+            [ok = succeeded](wgpu::QueueWorkDoneStatus st, wgpu::StringView) {
+                *ok = st == wgpu::QueueWorkDoneStatus::Success;
+            });
+        scope.check("GPU work failed");
+    }
+
+    bool finished(bool wait) override {
+        if (!succeeded) return true;
+        if (ctx->instance.WaitAny(done, wait ? UINT64_MAX : 0) == wgpu::WaitStatus::TimedOut) return false;
+        const bool ok = *succeeded;
+        succeeded.reset();
+        gpuMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - submitted).count();
+        if (!ok) throw std::runtime_error("GPU work failed: the queue did not finish");
+        return true;
+    }
+
     void commitAndWait() override {
+        // Nothing recorded: a submit would only wait on work queued before it.
+        if (recorded.empty()) { gpuMs = 0.0; return; }
         const auto start = std::chrono::steady_clock::now();
         ErrorScope scope(*ctx);
         submit();

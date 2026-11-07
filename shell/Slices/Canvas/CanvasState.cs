@@ -33,6 +33,11 @@ sealed class Viewport(Action? shown = null) {
     public int Percent => (int)Math.Round(FitScale * Zoom * 100);
     /// A hand or a spring is moving it: the full-size render waits for rest (#318).
     public bool Live => _hand || Motion.IsRunning(this);
+    /// A hand holds it, still or moving.
+    public bool Held => _hand;
+    /// Where the spring a release started will stop: its zoom and centre. Null
+    /// once anything else moves the view.
+    public (double Zoom, Point Center)? Landing { get; private set; }
     /// Where the hand has put the center, before the rubber band.
     public Point Raw => _raw;
     /// Visible fraction of the image on each axis, at the zoom on screen.
@@ -61,13 +66,13 @@ sealed class Viewport(Action? shown = null) {
     /// side-by-side compare's link (#400). Its own motion stops; the leader's carries both.
     public void Mirror(Viewport leader) {
         Motion.Stop(this);
-        (_hand, _log, _raw) = (false, leader._log, leader._raw);
+        (_hand, _log, _raw, Landing) = (false, leader._log, leader._raw, null);
         Show();
     }
 
     void Jump(double log, Point center) {
         Motion.Stop(this);
-        _hand = false;
+        (_hand, Landing) = (false, null);
         _log = log;
         var v = VisibleAt(Math.Exp(log));
         _raw = new Point(Axis(center.X, v.Width, false), Axis(center.Y, v.Height, false));
@@ -83,7 +88,7 @@ sealed class Viewport(Action? shown = null) {
     }
 
     /// A hand takes hold: a spring in flight stops where it is, and the hand carries on from there.
-    public void Begin() { if (_locked) return; Motion.Stop(this); _hand = true; }
+    public void Begin() { if (_locked) return; Motion.Stop(this); (_hand, Landing) = (true, null); }
 
     /// Zooms about a normalized view point, keeping the image point under it still
     /// wherever the picture fills that axis: Swift's formula, solved from the
@@ -123,6 +128,7 @@ sealed class Viewport(Action? shown = null) {
         double toLog = Math.Clamp(_log, 0, Math.Log(MaxZoom));
         var v = VisibleAt(Math.Exp(toLog));
         var to = new Point(Axis(_raw.X + Projected(velocity.X), v.Width, false), Axis(_raw.Y + Projected(velocity.Y), v.Height, false));
+        Landing = (Math.Exp(toLog), to);
         Spring log = new(_log), x = new(_raw.X, velocity.X), y = new(_raw.Y, velocity.Y);
         Motion.Run(this, dt => {
             bool moving = log.Step(toLog, dt, 0.35, 1e-4) | x.Step(to.X, dt, 0.35, 1e-5) | y.Step(to.Y, dt, 0.35, 1e-5);
@@ -138,6 +144,7 @@ sealed class Viewport(Action? shown = null) {
     public void AnimateZoom(double zoom, Point anchor) {
         if (_locked) return;
         Motion.Stop(this);
+        Landing = null;
         double to = Math.Log(Math.Clamp(zoom, 1, MaxZoom));
         Spring log = new(_log);
         Motion.Run(this, dt => {
@@ -156,16 +163,18 @@ sealed class Viewport(Action? shown = null) {
     static Size FitCoverage(double imageAspect, double viewAspect) =>
         imageAspect > viewAspect ? new Size(1, viewAspect / imageAspect) : new Size(imageAspect / viewAspect, 1);
 
-    /// How much of the view the image covers, per axis.
-    public Size QuadScale(double imageAspect, double viewAspect) {
+    /// How much of the view the image covers, per axis, at `zoom` (the one on screen by default).
+    public Size QuadScale(double imageAspect, double viewAspect, double? zoom = null) {
         var b = FitCoverage(imageAspect, viewAspect);
-        return new Size(Math.Min(1, b.Width * Zoom), Math.Min(1, b.Height * Zoom));
+        double z = zoom ?? Zoom;
+        return new Size(Math.Min(1, b.Width * z), Math.Min(1, b.Height * z));
     }
 
-    /// Visible fraction of the image on each axis.
-    public Size VisibleFraction(double imageAspect, double viewAspect) {
+    /// Visible fraction of the image on each axis, at `zoom` (the one on screen by default).
+    public Size VisibleFraction(double imageAspect, double viewAspect, double? zoom = null) {
         var b = FitCoverage(imageAspect, viewAspect);
-        return new Size(Math.Min(1, 1 / (Zoom * b.Width)), Math.Min(1, 1 / (Zoom * b.Height)));
+        double z = zoom ?? Zoom;
+        return new Size(Math.Min(1, 1 / (z * b.Width)), Math.Min(1, 1 / (z * b.Height)));
     }
 }
 
@@ -391,19 +400,20 @@ static class CanvasState {
     public static Rect DrawnFrame(Size size) => ImageAspect > 0 && size.Height > 0 ? Whole(size).Intersect(new Rect(size)) : default;
 
     /// The whole picture's rectangle in the view: past fit, mostly off screen.
-    public static Rect Whole(Size size) {
-        var map = Map(size);
+    /// At `at`, a zoom and centre other than the ones on screen (a spring's landing).
+    public static Rect Whole(Size size, (double Zoom, Point Center)? at = null) {
+        var map = Map(size, at);
         return new Rect(map.ToView(new Point(0, 0)), map.ToView(new Point(1, 1)));
     }
 
     /// `pictureMap`: normalized picture ↔ view, zoom, pan and the frame map included.
-    public static PictureMap Map(Size size) {
+    public static PictureMap Map(Size size, (double Zoom, Point Center)? at = null) {
         double a = ImageAspect;
         if (a <= 0 || size.Width <= 0 || size.Height <= 0)
             return new PictureMap(default, new Size(1, 1), default, FrameDisplayMap.Identity);
         double va = size.Width / size.Height;
-        return CanvasLayout.Map(Viewport.QuadScale(a, va), Viewport.VisibleFraction(a, va), Viewport.Center, size,
-                                CanvasNative.DisplayMap());
+        return CanvasLayout.Map(Viewport.QuadScale(a, va, at?.Zoom), Viewport.VisibleFraction(a, va, at?.Zoom), at?.Center ?? Viewport.Center,
+                                size, CanvasNative.DisplayMap());
     }
 }
 

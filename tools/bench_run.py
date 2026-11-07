@@ -221,7 +221,8 @@ def run_app(app: Path, scenario: str, photos: list[Path], out: Path, timeout: fl
 # interval because it includes the headless raster, which is not a product number.
 PAN_KEYS = {"ui_median_ms": "ui_ms", "ui_p95_ms": "ui_p95_ms", "ui_max_ms": "ui_max_ms", "move_ms": "move_ms",
             "draw_ms": "draw_ms", "engine_ms": "engine_ms", "copy_ms": "copy_ms", "stalls": "stalls_count",
-            "renders": "renders", "copies": "copies", "interval_median_ms": "interval_median"}
+            "renders": "renders", "copies": "copies", "interval_median_ms": "interval_median", "sharp": "sharp_share",
+            "to_sharp_ms": "to_sharp_ms"}
 
 
 def pan_lines(stdout: str) -> dict[str, float]:

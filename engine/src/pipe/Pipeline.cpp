@@ -13,7 +13,21 @@ namespace orion::pipe {
 Pipeline::Pipeline(gpu::Device& device, std::string shaderDir)
     : device_(device), shaderDir_(std::move(shaderDir)), pool_(device) {}
 
-Pipeline::~Pipeline() = default;
+Pipeline::~Pipeline() {
+    try { finishPending(); } catch (...) {}   // a lost device: nothing left to wait for
+}
+
+bool Pipeline::busy() {
+    if (!pending_ || !pending_->finished(false)) return pending_ != nullptr;
+    pending_.reset();
+    return false;
+}
+
+void Pipeline::finishPending() {
+    if (!pending_) return;
+    const auto done = std::move(pending_);
+    done->finished(true);
+}
 
 int Pipeline::add(Node node) {
     if (compiled_) throw std::runtime_error("cannot add nodes after compile()");
@@ -266,6 +280,7 @@ void Pipeline::updateAux(int auxId, const void* data, std::size_t bytesPerRow) {
     if (auxId < 0 || auxId >= static_cast<int>(aux_.size())) {
         throw std::runtime_error("updateAux: bad aux id");
     }
+    finishPending();
     aux_[auxId]->upload(data, bytesPerRow);
 
     for (int id : order_) {
@@ -280,6 +295,7 @@ void Pipeline::resizeAux(int auxId, std::uint32_t width, std::uint32_t height) {
     }
     auto& spec = auxSpecs_[static_cast<std::size_t>(auxId)];
     if (spec.width == width && spec.height == height) return;
+    finishPending();
     spec.width  = width;
     spec.height = height;
     aux_[static_cast<std::size_t>(auxId)] =
@@ -303,6 +319,7 @@ bool Pipeline::nodeDirty(int nodeId) const {
 
 void Pipeline::setSource(const void* samples, std::size_t bytesPerRow) {
     if (!compiled_) throw std::runtime_error("setSource before compile()");
+    finishPending();
     source_->upload(samples, bytesPerRow);
     std::fill(dirty_.begin(), dirty_.end(), true);
 }
@@ -491,6 +508,7 @@ void Pipeline::setCostWeight(int nodeId, float weight) {
 }
 
 void Pipeline::releaseOutputs() noexcept {
+    try { finishPending(); } catch (...) {}   // failed work holds nothing worth keeping
     for (std::size_t i = 0; i < ownedOutputs_.size(); ++i) {
         outputs_[i] = nullptr;
         pool_.release(std::move(ownedOutputs_[i]));
@@ -557,8 +575,9 @@ void Pipeline::runDirty() {
     }
 }
 
-double Pipeline::render() {
+double Pipeline::render(bool wait) {
     if (!compiled_) throw std::runtime_error("render before compile()");
+    finishPending();
 
     // Indexed by node id, not pushed in topological order — nothing reads
     // `lastRun()` by position, only by name or by counting `executed`, and
@@ -580,18 +599,21 @@ double Pipeline::render() {
     try {
         runDirty();
         total = submittedMs_;
-        if (batch_) {
-            batch_->commitAndWait();
-            total += batch_->gpuMilliseconds();
+        const bool ran = std::any_of(lastRun_.begin(), lastRun_.end(), [](const NodeTiming& t) { return t.executed; });
+        if (batch_ && ran && !wait) {
+            batch_->commitTracked();
+            pending_ = std::move(batch_);
+        } else if (batch_) {
+            batch_->commitAndWait();   // empty, it still ends Metal's encoder
+            if (ran) total += batch_->gpuMilliseconds();
         }
     } catch (...) {
         batch_.reset();
         throw;
     }
-    if (batch_) {
-        batch_.reset();
-    } else {
-        // Profiling: every dispatch above already timed itself.
+    batch_.reset();
+    if (profiling_) {
+        // Every dispatch above already timed itself.
         for (const auto& t : lastRun_) total += t.ms;
     }
     std::fill(dirty_.begin(), dirty_.end(), false);

@@ -9,23 +9,28 @@ namespace OrionShell.CanvasSlice;
 /// render is copied to the CPU at the size the canvas shows it: reduced and
 /// converted on the GPU, read back without waiting (orion_engine_display_*), and
 /// written straight into one bitmap. The canvas draws the newest copy that has
-/// landed and never queues behind the engine: while a hand drags it does not wait
-/// for a copy in flight, shows the one before (a render behind at most) and looks
-/// again a moment later; at rest, or with no copy of this photo yet, it waits for
-/// the copy of the render on screen, a screen-sized readback.
+/// landed and never queues behind the engine: holding a copy of this photo, it
+/// does not wait for one in flight (a region still rendering, EngineModel), shows
+/// the one before, where its pixels belong, and looks again a moment later; with
+/// none yet, it waits for the copy of the render on screen, a screen-sized readback.
 sealed class CopiedPicture : IDisposable {
     WriteableBitmap? _bitmap;
     Session? _session, _held;   // whose render was copied last; whose copy the bitmap holds
     Graph _graph;
     int _level, _renders;
     ulong _begun, _taken;
-    double _aspect, _pixels = double.PositiveInfinity;
+    double _pixels = double.PositiveInfinity;
     bool _looking;
     static bool _said;
-    readonly int[] _renderOf = new int[4];   // by ticket % 4: which render a copy in flight is of
+    // By ticket % 4: which render a copy in flight is of, and the part of the picture it shows.
+    readonly int[] _renderOf = new int[4];
+    readonly Avalonia.Rect[] _uvOf = new Avalonia.Rect[4];
 
     /// A copy landed after the canvas last looked: it draws again.
     public event Action? Arrived;
+    /// The part of the displayed picture the held copy shows: where the canvas
+    /// draws it, which is not the shown render's while a newer one is in flight.
+    public Avalonia.Rect Uv { get; private set; }
     /// A new copy in the same bitmap, each take: what CanvasPanel's Halvings keys on.
     public int Version { get; private set; }
 
@@ -44,6 +49,11 @@ sealed class CopiedPicture : IDisposable {
     public static int Behind { get; private set; }
     public static Avalonia.PixelSize Size { get; private set; }
 
+    /// Whether a window shows the canvas this copies for. A hidden one begins no
+    /// copies: three staging slots serve every canvas on the engine, and a copy
+    /// begun for nobody supersedes the shown canvas's before it lands.
+    internal Func<bool> Showing = () => true;
+
     public CopiedPicture() => EngineModel.Shared.Shown.Changed += Changed;
     public void Dispose() => EngineModel.Shared.Shown.Changed -= Changed;
 
@@ -58,7 +68,7 @@ sealed class CopiedPicture : IDisposable {
         var shown = EngineModel.Shared.Shown;
         // The shared surface takes this render; a copy from before it would be stale if the surface fails.
         if (shown.OnGpu) (_session, _held) = (null, null);
-        else if (shown.Live is { Handle: not 0 } s) Begin(s, shown.Graph);
+        else if (shown.Live is { Handle: not 0 } s && Showing()) Begin(s, shown.Graph);
     }
 
     /// False when the engine would not copy (BAD_ARG, a lost device): the canvas draws Shown.Bitmap.
@@ -73,25 +83,29 @@ sealed class CopiedPicture : IDisposable {
         }
         (_session, _graph) = (s, graph);
         _renderOf[_begun % 4] = _renders;
+        _uvOf[_begun % 4] = EngineModel.Shared.Shown.Uv;
         Begun++;
         return true;
     }
 
     /// From CanvasPanel.Draw: the newest copy of the shown render, `pixels` wide
-    /// on screen, or null where this does not hold one (a kept picture, the shared
-    /// surface's, a crop that changed the shape, a copy that failed) and the canvas
-    /// draws Shown.Bitmap.
-    public Bitmap? For(ShownPicture shown, double pixels, bool interacting) {
+    /// on screen, to draw at Uv of `whole` (the picture's rectangle), or null
+    /// where this does not hold one (a kept picture, the shared surface's, a
+    /// crop that changed the shape, a copy that failed) and the canvas draws
+    /// Shown.Bitmap. `live`: a hand, a spring or a slider is moving, and a zoom
+    /// across a halving keeps the copy it has, scaled, until it rests.
+    public Bitmap? For(ShownPicture shown, Avalonia.Size whole, double pixels, bool live) {
         _pixels = pixels;
         if (shown.OnGpu || shown.Live is not { Handle: not 0 } s) return null;
         var size = s.Size(shown.Graph);
         if (size.Width <= 0 || size.Height <= 0) return null;
         // A render nobody copied (the shared surface had it), or a canvas that crossed a halving: copy it now.
-        if ((s != _session || shown.Graph != _graph || Level(size.Width, pixels) != _level) && !Begin(s, shown.Graph))
-            return null;
-        if (_taken != _begun || _held != s) Take(s, wait: !interacting || _held != s);
-        bool holds = _held == s && Math.Abs(_aspect * size.Height / size.Width - 1) < 0.01;
-        return holds ? _bitmap : null;
+        bool crossed = !live && Level(size.Width, pixels) != _level;
+        if ((s != _session || shown.Graph != _graph || crossed) && !Begin(s, shown.Graph)) return null;
+        if (_taken != _begun || _held != s) Take(s, wait: _held != s);
+        if (_held != s || _bitmap == null) return null;
+        double drawn = Uv.Width * whole.Width / (Uv.Height * whole.Height);
+        return Math.Abs((double)_bitmap.PixelSize.Width / _bitmap.PixelSize.Height / drawn - 1) < 0.01 ? _bitmap : null;
     }
 
     void Take(Session s, bool wait) {
@@ -106,10 +120,9 @@ sealed class CopiedPicture : IDisposable {
             return;
         }
         if (ticket > 0) {
-            (_taken, _held) = ((ulong)ticket, s);
-            _aspect = (double)_bitmap!.PixelSize.Width / _bitmap.PixelSize.Height;
+            (_taken, _held, Uv) = ((ulong)ticket, s, _uvOf[ticket % 4]);
             Behind = _renders - _renderOf[ticket % 4];
-            Size = _bitmap.PixelSize;
+            Size = _bitmap!.PixelSize;
             Version++;
             Taken++;
         }

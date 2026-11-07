@@ -365,15 +365,16 @@ int shim_render(Shim* s, int preview, double* gpu_ms) {
 // pixels: the canvas's view past fit (#22). 3 on success; 0 when the engine
 // says this edit needs the whole graph (BAD_ARG, orion.h), and the caller
 // renders that instead; -1 when the render failed (out of memory, a lost
-// device), which the whole graph, at 3.3 GB, would only fail harder.
-int shim_render_region(Shim* s, float x, float y, float w, float h, int out_w, int out_h, int interacting,
+// device), which the whole graph, at 3.3 GB, would only fail harder. `flags`:
+// orion.h's ORION_REGION_*.
+int shim_render_region(Shim* s, float x, float y, float w, float h, int out_w, int out_h, int flags,
                        double* gpu_ms) {
     if (out_w <= 0 || out_h <= 0) return 0;
     shim_settle(s);
     const bool overlay = s->overlay && s->adj.mask_count > 0;
     if (overlay) return 0;   // a mask is on: the region graph refuses those anyway
     const OrionStatus st = orion_engine_render_region(s->engine, x, y, w, h, unsigned(out_w), unsigned(out_h),
-                                                      interacting, gpu_ms);
+                                                      flags, gpu_ms);
     return st == ORION_OK ? 3 : st == ORION_ERR_BAD_ARG ? 0 : -1;
 }
 

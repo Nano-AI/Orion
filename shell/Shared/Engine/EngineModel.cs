@@ -63,34 +63,108 @@ public sealed class EngineModel : INotifyPropertyChanged {
 
     /// What the canvas shows of the picture past fit: the part, normalized,
     /// and the device pixels it covers. Renders past fit ask for this and a
-    /// margin round it (#22, ViewRegion). Set by the canvas whenever the view
-    /// is at rest, never while a hand or a spring moves it (#401): a pan moves
-    /// the pixels already rendered, over the preview where it uncovers more,
-    /// and a view that comes to rest outside what is rendered renders once.
+    /// margin round it (#22, ViewRegion). Set by the canvas on every change.
+    /// A pan moves the pixels already rendered, over the preview where it
+    /// uncovers more (#401); a view the shown region does not cover renders a
+    /// region round it, which never holds the UI thread for the GPU: the copy
+    /// lands behind it and the canvas draws the last one meanwhile. While a
+    /// hand pans (Pan), a region the moment the last has landed, newest view
+    /// winning; at rest, where a spring will stop (Land) and under a hand held
+    /// still (Rested), the rest render, with its wider margin.
     public (Avalonia.Rect Uv, Avalonia.PixelSize Pixels)? View {
         get => _view;
         set {
             if (_view == value) return;
             _view = value;
-            if (!ZoomedPastFit || _session == null) return;
-            _viewRest?.Stop();
-            // Nothing a render would add: the whole picture at full size, or a region that holds this view at its detail.
-            if (Shown.Graph == Graph.Full || Shown.Graph == Graph.Region && _region is { } had && value is { } now && ViewRegion.Covers(had, now))
-                return;
-            _viewRest ??= new DispatcherTimer(TimeSpan.FromMilliseconds(150), DispatcherPriority.Background, (t, _) => {
-                // A hand that took hold since: it moves pixels, and this renders once it rests again.
-                if (ViewHeld?.Invoke() == true) return;
-                ((DispatcherTimer)t!).Stop();
-                if (ZoomedPastFit && !Interacting && _session != null) Render(preview: false);
-            });
-            _viewRest.Start();
+            if (ViewHeld?.Invoke() != true) Rested();
         }
     }
     (Avalonia.Rect Uv, Avalonia.PixelSize Pixels)? _view, _region;   // _region: what the shown region was asked for
-    /// Set by the canvas: a hand or a spring holds the view now, and a render for its last rest waits.
+    /// Set by the canvas: a hand or a spring holds the view now.
     public Func<bool>? ViewHeld { get; set; }
-    DispatcherTimer? _viewRest;
     static readonly TimeSpan Rest = TimeSpan.FromMilliseconds(300);
+
+    /// The canvas: a hand moved the view.
+    public void Pan() {
+        if (_view is { } now && ZoomedPastFit && _session != null && !_refused && !Covered(now, rest: false) && Panned(now)) Ask(now, rest: false);
+    }
+
+    /// The view is at rest, or a hand has held it still long enough to count as rest.
+    public void Rested() {
+        if (_view is { } now && ZoomedPastFit && _session != null && !Covered(now, rest: true)) Ask(now, rest: true);
+    }
+
+    /// The canvas: a spring will bring the view to rest at `view`. It renders now,
+    /// so the picture is sharp when the glide ends.
+    public void Land((Avalonia.Rect Uv, Avalonia.PixelSize Pixels) view) {
+        if (ZoomedPastFit && _session != null && !Covered(view, rest: true)) Ask(view, rest: true);
+    }
+
+    /// Nothing a render would add: the whole picture at full size, or a region
+    /// that holds this view at its detail; at `rest`, a region rendered at rest,
+    /// whose margin is the wider one.
+    bool Covered((Avalonia.Rect Uv, Avalonia.PixelSize Pixels) view, bool rest) =>
+        Shown.Graph == Graph.Full || Shown.Graph == Graph.Region && _region is { } had && (!rest || _regionRested) && ViewRegion.Covers(had, view);
+
+    /// The view moved at the shown region's scale: a pan, which renders under
+    /// the hand. A zoom keeps the picture it has, scaled, until it rests (the
+    /// region graph rebuilds at every new size and step).
+    bool Panned((Avalonia.Rect Uv, Avalonia.PixelSize Pixels) view) =>
+        Shown.Graph == Graph.Region && _region is { } had && ViewRegion.SameScale(had, view);
+
+    /// The view a render waits for, the newest asked: submitted at Render
+    /// priority, after the frame's own work, and once the region in flight has landed.
+    (Avalonia.Rect Uv, Avalonia.PixelSize Pixels)? _asked;
+    bool _askedRest, _posted, _regionRested, _refused;   // _refused: the region refused a hand's render; until the next shown
+    DispatcherTimer? _landing;
+
+    void Ask((Avalonia.Rect Uv, Avalonia.PixelSize Pixels) view, bool rest) {
+        (_asked, _askedRest) = (view, rest);
+        if (_posted) return;
+        _posted = true;
+        Dispatcher.UIThread.Post(Submit, DispatcherPriority.Render);
+    }
+
+    void Submit() {
+        _posted = false;
+        if (_asked is not { } view || _session is not { } s) return;
+        if (!ZoomedPastFit || Interacting) { _asked = null; return; }   // the edit's own renders show the view
+        if (s.Busy) { Watch(); return; }
+        _asked = null;
+        if (Covered(view, _askedRest)) return;
+        if (_askedRest) Render(preview: false, ViewRegion.Around(view, ViewRegion.RestMargin));
+        else Hand(s, ViewRegion.Around(view, ViewRegion.HandMargin));
+    }
+
+    /// A region round where a hand is panning to: never the whole graph, which
+    /// would hold the hand. An edit the region refuses while a hand moves
+    /// (denoise past 100%, Engine::renderRegion) waits for the rest render.
+    void Hand(Session s, (Avalonia.Rect Uv, Avalonia.PixelSize Pixels) region) {
+        HandRenders++;
+        var sw = Stopwatch.StartNew();
+        if (s.RenderRegion(region.Uv, region.Pixels, interacting: true, wait: false) == Graph.Region) Present(s, Graph.Region, region, sw, rested: false);
+        else _refused = true;
+    }
+
+    /// Regions rendered under a moving hand: what the selftest counts.
+    public int HandRenders { get; private set; }
+
+    /// Polls the region in flight every 2 ms until it lands, then submits what waited for it.
+    void Watch() {
+        _landing ??= new DispatcherTimer(TimeSpan.FromMilliseconds(2), DispatcherPriority.Render, (t, _) => {
+            if (_session?.Busy == true) return;
+            ((DispatcherTimer)t!).Stop();
+            Landed?.Invoke();
+            if (_asked != null) Submit();
+        });
+        _landing.Start();
+    }
+
+    /// The last region rendered without waiting is off the GPU: what must not
+    /// wait behind it (the histogram's read drains the queue) runs now.
+    public event Action? Landed;
+    /// A region rendered without waiting is still on the GPU.
+    public bool Busy => _session?.Busy == true;
     /// The status line's message: a stub saying it is not built, until the next open.
     public string Status { get; private set; } = "";
 
@@ -227,8 +301,10 @@ public sealed class EngineModel : INotifyPropertyChanged {
 
     /// Hands the photo on screen back to the source.
     public void Close() {
-        _viewRest?.Stop();   // a rest's render belongs to the photo it was for
+        _asked = null;   // a view's render belongs to the photo it was for
+        _landing?.Stop();
         _region = null;
+        _previewRead = false;
         if (_session != null) {
             Leaving?.Invoke();
             _source.Release(_session);
@@ -304,24 +380,39 @@ public sealed class EngineModel : INotifyPropertyChanged {
     /// copy (SharedPicture, #317) or copies it at the size it shows it, without
     /// waiting (CopiedPicture, #386). Copy is what showing it cost this thread,
     /// that copy's start included; a reader with no canvas copies on first ask.
-    public (double Render, double Copy) Render(bool preview) {
-        if (_session is not { } s) return (0, 0);
-        var sw = Stopwatch.StartNew();
+    public (double Render, double Copy) Render(bool preview) =>
         // Past fit, only what is on screen, at the screen's resolution, drag or
         // rest (#22); the whole graph when the engine says this edit needs it.
         // At rest, with a margin round the view; a drag's ticks, the view alone, as fast as it can be.
-        var view = ZoomedPastFit ? View : null;
-        if (view is { } seen && !Interacting) view = ViewRegion.Around(seen);
-        var graph = view is { } v ? s.RenderRegion(v.Uv, v.Pixels, Interacting) : Graph.None;
-        if (graph == Graph.Region && !Interacting) {
-            // The small whole-frame pass: what the histogram reads while the
-            // full graph waits, and the picture under a pan until the next region.
-            if (s.Render(preview: true) == Graph.Preview) s.Read(Graph.Preview);
+        Render(preview, ZoomedPastFit && View is { } seen ? Interacting ? seen : ViewRegion.Around(seen, ViewRegion.RestMargin) : null);
+
+    (double Render, double Copy) Render(bool preview, (Avalonia.Rect Uv, Avalonia.PixelSize Pixels)? view) {
+        if (_session is not { } s) return (0, 0);
+        var sw = Stopwatch.StartNew();
+        var graph = Graph.None;
+        if (view is { } v) {
+            // Before the region, whose submit this read would otherwise wait behind.
+            if (!Interacting) Preview(s);
+            graph = s.RenderRegion(v.Uv, v.Pixels, Interacting, wait: false);
         }
         if (graph == Graph.None) graph = s.Render(preview);
         // Out of GPU memory: the decoded neighbours are a convenience, the photo on
         // screen is not. Once more without them (#392).
         if (graph == Graph.None && s.LastError.Contains(OutOfGpuMemory) && _source.Shed()) graph = s.Render(preview);
+        if (view == null || Interacting) _previewRead = false;
+        return Present(s, graph, graph == Graph.Region ? view : null, sw, rested: !Interacting);
+    }
+
+    /// The small whole-frame pass: what the histogram reads while the full
+    /// graph waits, and the picture under a pan until the next region. Read
+    /// only when it rendered, or an edit since its last read went elsewhere.
+    void Preview(Session s) {
+        if (s.Render(preview: true, out double ms) == Graph.Preview && (ms > 0 || !_previewRead || s.Picture == null)) s.Read(Graph.Preview);
+        _previewRead = true;
+    }
+    bool _previewRead;
+
+    (double Render, double Copy) Present(Session s, Graph graph, (Avalonia.Rect Uv, Avalonia.PixelSize Pixels)? region, Stopwatch sw, bool rested) {
         double render = sw.Elapsed.TotalMilliseconds;
         sw.Restart();
         var size = s.Size(graph);
@@ -329,13 +420,14 @@ public sealed class EngineModel : INotifyPropertyChanged {
             SetTiming("render failed: " + s.LastError);
             return (render, 0);
         }
-        _region = graph == Graph.Region ? view : null;
-        Shown.ShowLive(s, graph, graph == Graph.Region ? view!.Value.Uv : null);
+        (_region, _regionRested, _refused) = (region, rested, false);
+        Shown.ShowLive(s, graph, region?.Uv);
         double copy = sw.Elapsed.TotalMilliseconds;
         Last = (render, copy);
         SetTiming($"{graph.ToString().ToLowerInvariant()} {size.Width}×{size.Height} · engine {render:0.0} ms · " +
                   (Shown.OnGpu ? "on the GPU" : $"copy {copy:0.0} ms"));
         Changed(nameof(Picture));
+        if (graph == Graph.Region) Watch();
         Rendered?.Invoke();
         return (render, copy);
     }
