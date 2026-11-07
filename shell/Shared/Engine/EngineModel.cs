@@ -164,6 +164,7 @@ public sealed class EngineModel : INotifyPropertyChanged {
     /// (denoise past 100%, Engine::renderRegion) waits for the rest render.
     void Hand(Session s, (Avalonia.Rect Uv, Avalonia.PixelSize Pixels) region) {
         HandRenders++;
+        Rendering?.Invoke();
         var sw = Stopwatch.StartNew();
         if (s.RenderRegion(region.Uv, region.Pixels, interacting: true, wait: false) == Graph.Region) Present(s, Graph.Region, region, sw, rested: false);
         else _refused = true;
@@ -204,6 +205,8 @@ public sealed class EngineModel : INotifyPropertyChanged {
 
     /// A photo opened: panels re-read their values (and their detents).
     public event Action? Opened;
+    /// A render is starting; Rendered follows unless it fails.
+    public event Action? Rendering;
     /// Any render finished: canvas and readouts repaint.
     public event Action? Rendered;
     /// Adjustments changed under the panels rather than through their own Set
@@ -411,6 +414,7 @@ public sealed class EngineModel : INotifyPropertyChanged {
 
     (double Render, double Copy) Render(bool preview, (Avalonia.Rect Uv, Avalonia.PixelSize Pixels)? view) {
         if (_session is not { } s) return (0, 0);
+        Rendering?.Invoke();
         var sw = Stopwatch.StartNew();
         var graph = Graph.None;
         if (view is { } v) {

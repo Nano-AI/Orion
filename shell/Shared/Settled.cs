@@ -15,20 +15,29 @@ static class Settled {
     public static bool Pending => _fired != _rendered;
 
     static int _rendered, _fired;
-    static readonly Stopwatch Since = new();   // since the last render of any kind, a drag's included
+    static bool _quiet = true;
+    // From the end of the last render of any kind, a drag's included, to the start of the next: a slow
+    // GPU (WARP) spends longer than After inside each render of a burst, and that is not a pause.
+    static readonly Stopwatch Since = new();
 
     // A delay posted back, not a DispatcherTimer: headless, only Dispatcher.MainLoop fires
     // timers (SelfTest.CanvasUx's Frames), and the selftest and the stills pump with RunJobs.
-    static Settled() => EngineModel.Shared.Rendered += () => {
-        bool quiet = !Since.IsRunning || Since.Elapsed >= After;
-        Since.Restart();
+    static Settled() {
+        EngineModel.Shared.Rendering += () => _quiet = !Since.IsRunning || Since.Elapsed >= After;
+        EngineModel.Shared.Rendered += () => {
+            Settle();
+            Since.Restart();   // after Fire: its readers' wait on the GPU is no pause either
+        };
+    }
+
+    static void Settle() {
         if (EngineModel.Shared.Interacting) return;
         int render = ++_rendered;
-        if (quiet && _fired == render - 1) { Fire(render); return; }
+        if (_quiet && _fired == render - 1) { Fire(render); return; }
         Task.Delay(After).ContinueWith(_ => Dispatcher.UIThread.Post(() => {
             if (render == _rendered) Fire(render);   // a later render waits its own After
         }));
-    };
+    }
 
     static void Fire(int render) {
         _fired = render;

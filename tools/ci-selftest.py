@@ -36,10 +36,6 @@ SKIP = {
         "undo restores a value, and a drag's ticks were one step":
             "WARP renders each Set for longer than the 0.6 s that folds a drag's ticks into one step",
         "ReleaseRenderMemory gives back": "the footprint off macOS is the working set, and WARP's video memory is the process's own",
-        # Diagnosed: Settled.cs calls a render quiet when 160 ms passed since the last,
-        # and each of the burst's four Sets renders on WARP for longer, so each reads at once.
-        "the histogram and the flat-frame check never read mid-drag":
-            "WARP renders each Set for longer than the 160 ms that makes a burst's renders one read",
     },
     "linux": {},
 }
