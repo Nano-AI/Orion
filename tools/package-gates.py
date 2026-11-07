@@ -18,6 +18,8 @@ macOS, ported:
    dynamically or not; LGPL only in a shared library.
 4. No home directory of anyone but the CI build accounts, and, off CI, not the
    builder's home or git e-mail.
+5. ReadyToRun: Orion.dll and Avalonia's carry native code, so a launch does not
+   JIT the window. `package-gates.py ready-to-run DIR` checks only this (macOS).
 """
 import fnmatch
 import json
@@ -202,7 +204,44 @@ def check_people(app: Path, errors):
             fail(errors, f"{f.relative_to(app)} names a person: {', '.join(found)}")
 
 
+def ready_to_run(dll: Path) -> bool:
+    """A ReadyToRun assembly: its CLI header's ManagedNativeHeader points at a READYTORUN_HEADER
+    ('RTR'). IL alone, the runtime JITs every method the launch touches."""
+    pe = dll.read_bytes()
+    at = int.from_bytes(pe[0x3C:0x40], "little")
+    sections, optional = int.from_bytes(pe[at + 6:at + 8], "little"), int.from_bytes(pe[at + 20:at + 22], "little")
+    opt = at + 24
+    dirs = opt + (112 if pe[opt:opt + 2] == b"\x0b\x02" else 96)   # PE32+ or PE32
+
+    def offset(rva: int) -> int | None:
+        for i in range(sections):
+            sec = opt + optional + 40 * i
+            size, va, raw = (int.from_bytes(pe[sec + k:sec + k + 4], "little") for k in (8, 12, 20))
+            if va <= rva < va + size:
+                return rva - va + raw
+        return None
+
+    cli = offset(int.from_bytes(pe[dirs + 14 * 8:dirs + 14 * 8 + 4], "little"))   # directory 14: the CLI header
+    if cli is None:
+        return False
+    native = offset(int.from_bytes(pe[cli + 64:cli + 68], "little"))   # ManagedNativeHeader
+    return native is not None and pe[native:native + 4] == b"RTR\x00"
+
+
+def check_ready_to_run(app: Path, errors):
+    for name in ("Orion.dll", "Avalonia.Base.dll"):   # ours, and the UI's largest
+        found = sorted(app.rglob(name))
+        if not found or not ready_to_run(found[0]):
+            fail(errors, f"{name} is not ReadyToRun: publish with PublishReadyToRun (Orion.csproj), or every launch JITs it")
+
+
 def main() -> int:
+    if sys.argv[1:2] == ["ready-to-run"]:   # package-app.sh's, for the macOS bundle
+        errors = []
+        check_ready_to_run(Path(sys.argv[2]), errors)
+        if not errors:
+            print("package-gates: ReadyToRun")
+        return 1 if errors else 0
     system, app, licences, build, shell = sys.argv[1:6]
     app, licences, build, shell = Path(app), Path(licences), Path(build), Path(shell)
     errors = []
@@ -211,10 +250,11 @@ def main() -> int:
     needed_by = check_files(app, licences, notice, errors)
     check_gpl(licences, needed_by, errors)
     check_people(app, errors)
+    check_ready_to_run(app, errors)
     if errors:
         print(f"package-gates: {len(errors)} problem(s); the package is not made", file=sys.stderr)
         return 1
-    print(f"package-gates: every file licensed, no GPL, nobody named ({system})")
+    print(f"package-gates: every file licensed, no GPL, nobody named, ReadyToRun ({system})")
     return 0
 
 

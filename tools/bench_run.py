@@ -241,6 +241,7 @@ def pan_lines(stdout: str) -> dict[str, float]:
 # orion-bench's report, line by line: regex -> the metric names its groups fill.
 ENGINE_LINES = [
     (r"^\s+decode\s+([\d.]+) ms", ["engine_decode_ms"]),
+    (r"^\s+created\s+([\d.]+) ms", ["engine_device_ms"]),   # the GPU device: on the first open's decode, never the window's
     (r"^Pipeline\s+\d+ nodes, (\d+) MiB resident .*pool high-water (\d+) MiB", ["engine_resident_mib", "engine_pool_peak_mib"]),
     (r"^\s+full render\s+([\d.]+) ms", ["engine_full_render_ms"]),
     (r"^\s+best round:\s+min [\d.]+\s+median ([\d.]+)\s+p95 ([\d.]+)", ["engine_exposure_ms", "engine_exposure_p95_ms"]),

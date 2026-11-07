@@ -51,10 +51,12 @@ int main(int argc, char** argv) {
         std::printf("  decode         %.1f ms  (%.0f MP/s)\n\n",
                     decodeMs, mp / (decodeMs / 1000.0));
 
+        const auto t1 = Clock::now();
         auto device = orion::gpu::Device::create();
-        std::printf("Device\n  %s  (unified memory: %s)\n\n",
+        const double deviceMs = msSince(t1);
+        std::printf("Device\n  %s  (unified memory: %s)\n  created        %.1f ms\n\n",
                     device->info().name.c_str(),
-                    device->info().unifiedMemory ? "yes" : "no");
+                    device->info().unifiedMemory ? "yes" : "no", deviceMs);
 
         orion::pipe::DevelopPipeline develop(*device, ORION_SHADER_DIR, img);
         orion::pipe::Adjustments adj;

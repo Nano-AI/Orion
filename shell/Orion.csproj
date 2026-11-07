@@ -15,6 +15,9 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <!-- packages.lock.json pins every transitive package, the terminal's native pty above all (#366). -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- Every package's publish (tools/package-*.sh, each with a runtime) ships native code beside the IL,
+         so a launch does not JIT the window first; `dotnet build` ignores it. tools/package-gates.py refuses a package without it. -->
+    <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
   <ItemGroup>
     <!-- Built by native/build.sh from the engine's static library on macOS; on Windows and
