@@ -110,10 +110,15 @@ public:
     /// (denoise) when the zoom's own step is coarser is then refused too, so
     /// the drag takes the quarter-scale preview at its old cost and the step-1
     /// region follows when the hand stops.
-    double renderRegion(const Region& r, bool interacting = false);
+    ///
+    /// `wait` false submits and returns 0: the canvas copies the region in
+    /// queue order behind it, and `regionBusy` says when the GPU is done.
+    double renderRegion(const Region& r, bool interacting = false, bool wait = true);
 
     /// The region graph, once `renderRegion` has built one.
     [[nodiscard]] bool hasRegion() const noexcept { return region_ != nullptr; }
+    /// A `renderRegion` that did not wait is still on the GPU. Throws if it failed.
+    [[nodiscard]] bool regionBusy() { return region_ && region_->graph().busy(); }
     [[nodiscard]] const pipe::DevelopPipeline& regionDevelop() const;
     /// Frame pixels per region pixel, per axis, that the last region chose.
     [[nodiscard]] int regionStep() const noexcept { return regionStep_; }

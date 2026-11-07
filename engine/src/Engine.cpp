@@ -241,7 +241,7 @@ constexpr std::uint32_t kRegionAlign = 16;
 constexpr std::uint32_t kRegionBucket = 256;
 }  // namespace
 
-double Engine::renderRegion(const Region& v, bool interacting) {
+double Engine::renderRegion(const Region& v, bool interacting, bool wait) {
     if (!develop_ || !mosaic_ || headless_) return -1.0;
     if (!pipe::DevelopPipeline::regionSupports(adj_)) return -1.0;
     if (!(v.w > 0.0f && v.h > 0.0f) || v.outW == 0 || v.outH == 0) return -1.0;
@@ -300,13 +300,18 @@ double Engine::renderRegion(const Region& v, bool interacting) {
     // whole cells), the margin, the alignment, then a bucketed size that fits.
     const std::uint32_t fw = step == 1 ? img.width  : img.width  / (2 * step) * 2;
     const std::uint32_t fh = step == 1 ? img.height : img.height / (2 * step) * 2;
-    const auto span = [&](float lo, float hi, std::uint32_t whole,
+    // Never smaller than the graph already built at this step: a hand's pan
+    // asks a narrower margin than the rest render (ViewRegion.cs), and a
+    // rebuild costs the UI thread ~25 ms where a reload costs the GPU a wider window.
+    const bool same = region_ && regionStep_ == int(step);
+    const auto span = [&](float lo, float hi, std::uint32_t whole, std::uint32_t least,
                           std::uint32_t& origin, std::uint32_t& size) {
         const float a = std::floor(lo / float(step)) - float(kRegionHalo);
         const float b = std::ceil(hi / float(step)) + float(kRegionHalo);
         std::uint32_t o = a <= 0.0f ? 0u : std::uint32_t(a) / kRegionAlign * kRegionAlign;
         const std::uint32_t e = b <= 0.0f ? 0u : std::min(whole, std::uint32_t(b));
         size = (std::max(e, o + kRegionAlign) - o + kRegionBucket - 1) / kRegionBucket * kRegionBucket;
+        size = std::max(size, least);
         if (size >= whole) { origin = 0; size = whole; return; }
         // At the far edge: the aligned origin at or before `whole - size`, and
         // the window then runs to the edge itself. Stopping at `o + size`
@@ -331,8 +336,8 @@ double Engine::renderRegion(const Region& v, bool interacting) {
         fullCurrent_ = false;
     }
     std::uint32_t ox = 0, oy = 0, ww = 0, wh = 0;
-    span(x0, x1, fw, ox, ww);
-    span(y0, y1, fh, oy, wh);
+    span(x0, x1, fw, same ? region_->width() : 0, ox, ww);
+    span(y0, y1, fh, same ? region_->height() : 0, oy, wh);
 
     // Built when the step or the size changes, reloaded when the window moves.
     // A window is a crop of the mosaic on whole cells, then the preview's own
@@ -342,15 +347,20 @@ double Engine::renderRegion(const Region& v, bool interacting) {
                       region_->width() == ww && region_->height() == wh;
     if (!fits || !regionLoaded_ || ox != regionX_ || oy != regionY_) {
         regionLoaded_ = false;   // until the load below has finished
-        auto sub = raw::window(img, ox * step, oy * step, ww * step, wh * step);
-        if (step > 1) sub = raw::decimate(sub, int(step));
-        if (fits && region_->canReload(sub)) {
-            region_->reload(sub);
+        if (fits && step == 1) {
+            // The same photograph through the same graph: the window's samples, read in place.
+            region_->moveWindow(img.samples.data() + std::size_t(oy) * img.width + ox, std::size_t(img.width) * 2);
         } else {
-            region_ = std::make_unique<pipe::DevelopPipeline>(*device_, res::shaderDir(), sub);
-            region_->setGridStep(float(step));
-            if (lut_) region_->setCreativeLut(*lut_);
-            regionView_ = {};
+            auto sub = raw::window(img, ox * step, oy * step, ww * step, wh * step);
+            if (step > 1) sub = raw::decimate(sub, int(step));
+            if (fits && region_->canReload(sub)) {
+                region_->moveWindow(sub.samples.data(), std::size_t(sub.width) * 2);
+            } else {
+                region_ = std::make_unique<pipe::DevelopPipeline>(*device_, res::shaderDir(), sub);
+                region_->setGridStep(float(step));
+                if (lut_) region_->setCreativeLut(*lut_);
+                regionView_ = {};
+            }
         }
         region_->setFrameWindow({ox, oy, fw, fh});
         // The frame's noise, not the window's: denoise must not depend on
@@ -367,7 +377,7 @@ double Engine::renderRegion(const Region& v, bool interacting) {
     region_->apply(adj_);
     double ms = 0.0;
     try {
-        ms = region_->render();
+        ms = region_->render(wait);
     } catch (...) {
         // A window that failed (out of memory, a lost device) keeps nothing:
         // the next one starts from empty rather than beside this one's

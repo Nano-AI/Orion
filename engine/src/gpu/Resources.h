@@ -184,9 +184,16 @@ public:
     /// after it, a `Readback` included (#386). Metal waits anyway.
     void commit();
 
-    /// GPU-side duration of the committed work. Valid after commitAndWait().
-    /// On Dawn, the wall time from submit to completion, which includes the
-    /// wait's own latency (no timestamp queries yet).
+    /// `commit`, then `finished` says when the GPU is done with this work:
+    /// false while it runs, true once it has; `wait` blocks until then. Throws
+    /// if the work failed. Metal waits in `commitTracked`.
+    void commitTracked();
+    bool finished(bool wait);
+
+    /// GPU-side duration of the committed work. Valid after commitAndWait(),
+    /// or once `finished` is true. On Dawn, the wall time from submit to
+    /// completion, which includes the wait's own latency (no timestamp
+    /// queries yet). A buffer with no dispatch submits and waits for nothing.
     [[nodiscard]] double gpuMilliseconds() const noexcept;
 
     struct Impl;   // backend-private

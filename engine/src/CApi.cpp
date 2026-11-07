@@ -330,13 +330,23 @@ OrionStatus orion_engine_render_preview(OrionEngine* engine, double* out_ms) {
 
 OrionStatus orion_engine_render_region(OrionEngine* engine, float x, float y,
                                        float w, float h, unsigned out_w,
-                                       unsigned out_h, int interacting,
+                                       unsigned out_h, int flags,
                                        double* out_ms) {
     if (engine == nullptr || !engine->impl.hasImage()) return ORION_ERR_BAD_ARG;
     return guard(engine, [&]() -> OrionStatus {
-        const double ms = engine->impl.renderRegion({x, y, w, h, out_w, out_h}, interacting != 0);
+        const double ms = engine->impl.renderRegion({x, y, w, h, out_w, out_h}, (flags & ORION_REGION_INTERACTING) != 0,
+                                                    (flags & ORION_REGION_NO_WAIT) == 0);
         if (ms < 0.0) return ORION_ERR_BAD_ARG;   // not this edit: render the whole graph
         if (out_ms) *out_ms = ms;
+        return ORION_OK;
+    });
+}
+
+OrionStatus orion_engine_region_busy(OrionEngine* engine, int* out_busy) {
+    if (engine == nullptr || out_busy == nullptr) return ORION_ERR_BAD_ARG;
+    *out_busy = 0;
+    return guard(engine, [&]() -> OrionStatus {
+        *out_busy = engine->impl.regionBusy() ? 1 : 0;
         return ORION_OK;
     });
 }

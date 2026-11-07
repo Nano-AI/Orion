@@ -552,9 +552,9 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     primed_  = true;
 }
 
-double DevelopPipeline::renderOnce() {
+double DevelopPipeline::renderOnce(bool wait) {
     reconcileBrushAccum();
-    const double ms = pipeline_.render();
+    const double ms = pipeline_.render(wait);
     commitBrushAccum();
     return ms;
 }
@@ -596,7 +596,7 @@ std::string DevelopPipeline::failedEffect() const {
     return list;
 }
 
-double DevelopPipeline::render() {
+double DevelopPipeline::render(bool wait) {
     // A is a reduction over the whole frame, so it cannot be a node, and every
     // node downstream of it needs it before it runs. When it is stale the graph
     // is rendered once to produce the pooled candidates, A is read back, and
@@ -612,9 +612,9 @@ double DevelopPipeline::render() {
         const double first = renderOnce();
         if (needsAirlight) estimateAirlight();
         if (needsPlan)     estimateFusionPlan();
-        return first + renderOnce();
+        return first + renderOnce(wait);
     }
-    return renderOnce();
+    return renderOnce(wait);
 }
 
 }  // namespace orion::pipe

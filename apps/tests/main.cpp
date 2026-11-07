@@ -109,6 +109,7 @@ int main(int argc, char** argv) {
     gpu(testLensSourceOnRealSony);
     gpu(testRegionMatchesCropGpu);
     gpu(testRegionAtFrameEdgesGpu);
+    gpu(testRegionWithoutWaitGpu);
     gpu(testRegionDngLensGpu);
     testLensAutoScale();
     gpu(testToneBandsWithoutGuide);

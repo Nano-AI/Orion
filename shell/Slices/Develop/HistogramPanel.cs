@@ -27,6 +27,7 @@ static class Levels {
 
     static Levels() {
         EngineModel.Shared.Rendered += Refresh;
+        EngineModel.Shared.Landed += Refresh;
         // The last photo's curve is not this one's: say nothing until it is measured.
         EngineModel.Shared.PropertyChanged += (_, e) => {
             if (e.PropertyName == nameof(EngineModel.Current) && Bins.Length > 0) { Bins = []; Updated?.Invoke(); }
@@ -37,7 +38,8 @@ static class Levels {
     // ponytail: synchronous on every settled render; Swift waits 160 ms. Debounce if typed values or resets feel slow
     // (a timer would also need flushing before a headless --screenshot).
     static void Refresh() {
-        if (EngineModel.Shared.Interacting) return;
+        // A region still on the GPU: the read would wait for it, so it reads once that lands.
+        if (EngineModel.Shared.Interacting || EngineModel.Shared.Busy) return;
         var bins = new uint[BinCount * 3];
         nint engine = EngineModel.Shared.Handle;
         Bins = engine != 0 && DevelopFacade.orion_engine_histogram(engine, bins, BinCount) == 0 ? bins : [];

@@ -29,6 +29,7 @@ static partial class SelfTest {
             WelcomeChecks();
             ZoomChecks(window, canvas);
             PanChecks(window, canvas);
+            ZoomHoldChecks(window, canvas);
             CompareUxChecks(window, canvas, overlay);
         } finally {
             CompareState.Clear();
@@ -139,7 +140,7 @@ static partial class SelfTest {
         engine.Set("exposure_ev", ev + 0.1f);
         var part = engine.Shown.Uv;
         Check(engine.Shown.Graph == Graph.Region && part.Width < 1 && part.Height <= 1 && engine.View is { } seen
-              && part == ViewRegion.Around(seen).Uv && part.Contains(seen.Uv) && seen.Pixels.Width > 0,
+              && part == ViewRegion.Around(seen, ViewRegion.RestMargin).Uv && part.Contains(seen.Uv) && seen.Pixels.Width > 0,
               $"past fit with a plain edit, the engine renders only the part in view and its margin, at the screen's pixels (#22, #401): {engine.Shown.Graph} {part}");
         engine.Set("exposure_ev", ev);
 
@@ -234,9 +235,9 @@ static partial class SelfTest {
     }
 
     /// A pan moves the pixels already rendered (#401): nothing renders while the
-    /// hand is down, held still past the rest delay too, nor once it lets go
-    /// inside the margin the last region was rendered with; past it, the view
-    /// renders once it rests, and the region then covers it.
+    /// hand is down, held still too, nor once it lets go inside the margin the
+    /// last region was rendered with; past it, the view renders under the
+    /// moving hand, again once the hand holds still, and the region then covers it.
     static void RestingPanChecks(Window window, CanvasPanel canvas) {
         var engine = EngineModel.Shared;
         var size = canvas.Bounds.Size;
@@ -251,13 +252,13 @@ static partial class SelfTest {
         void Drag(Vector d, bool hold) {
             window.MouseDown(mid, MouseButton.Left);
             for (int i = 1; i <= 20; i++) window.MouseMove(mid + d * i / 20);
-            if (hold) Frames(() => false, 0.4);   // held still, the button down, past the 150 ms rest
+            if (hold) Frames(() => false, 0.4);   // held still, the button down, past StillFor
             Thread.Sleep(60);   // placed, not thrown: no flick carries it on
             window.MouseUp(mid + d, MouseButton.Left);
             Frames();   // until it rests: a pan past the picture's edge springs back first
-            Frames(() => false, 0.5);   // then the 150 ms rest and its render
+            Frames(() => false, 0.5);   // then the rest render and its copy
         }
-        var margin = new Vector(size.Width, size.Height) * ViewRegion.Margin;
+        var margin = new Vector(size.Width, size.Height) * ViewRegion.HandMargin;
         int before = Session.Renders;
         Drag(-margin / 2, hold: true);
         int inside = Session.Renders - before;
@@ -269,17 +270,66 @@ static partial class SelfTest {
         Check(region ? past > 0 && engine.View is { } seen && engine.Shown.Uv.Contains(seen.Uv) : past == 0,
               region ? $"a pan past the margin renders once it rests, and the region covers the view ({past} renders)"
                      : $"the whole picture at full size covers any view: a pan renders nothing ({past} renders)");
-        // The margin itself: ViewRegion.Margin of the view each side, cut at the picture's edge, never past Dawn's 8192.
-        double m = ViewRegion.Margin * 0.2;
+        if (region) HandPanChecks(window, mid, -margin * 3);
+        // The margin itself: ViewRegion.RestMargin of the view each side, cut at the picture's edge, never past Dawn's 8192.
+        double m = ViewRegion.RestMargin * 0.2;
         var view = (new Rect(m / 2, 0.4, 0.2, 0.2), new PixelSize(2000, 2000));   // nearer the left edge than a margin
-        var near = ViewRegion.Around(view);
+        var near = ViewRegion.Around(view, ViewRegion.RestMargin);
         var big = (new Rect(0.4, 0.4, 0.2, 0.2), new PixelSize(7000, 7000));
-        var huge = ViewRegion.Around(big);
+        var huge = ViewRegion.Around(big, ViewRegion.RestMargin);
         Check(near.Uv.X == 0 && Math.Abs(near.Uv.Right - (m / 2 + 0.2 + m)) < 1e-9 && Math.Abs(near.Uv.Height - (0.2 + 2 * m)) < 1e-9
               && near.Pixels == new PixelSize((int)Math.Round(near.Uv.Width * 10000), (int)Math.Round(near.Uv.Height * 10000))
               && huge.Pixels.Width <= 8192 && huge.Pixels.Height <= 8192 && ViewRegion.Covers(huge, big) && ViewRegion.Covers(near, view)
               && !ViewRegion.Covers(near, (view.Item1, new PixelSize(4000, 4000))),
               $"the region's margin is cut at the picture's edge and at 8192 pixels, and a zoom is never covered ({near.Uv}, {near.Pixels}; {huge.Pixels})");
+    }
+
+    /// Past the margin, with the button still down: a region renders while the
+    /// hand moves, one in flight at a time, and the rest render once it holds still.
+    static void HandPanChecks(Window window, Point mid, Vector d) {
+        var vp = CanvasState.Viewport;
+        int before = EngineModel.Shared.HandRenders;
+        window.MouseDown(mid, MouseButton.Left);
+        for (int i = 1; i <= 20; i++) {
+            window.MouseMove(mid + d * i / 20);
+            Dispatcher.UIThread.RunJobs();   // the render it asked for, once the last has landed
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();   // one frame between moves: never StillFor
+            Thread.Sleep(10);
+        }
+        int moving = EngineModel.Shared.HandRenders - before;
+        Check(vp.Held && moving > 0 && EngineModel.Shared.Shown.Graph == Graph.Region,
+              $"a pan past the margin renders under the moving hand, before the release ({moving} renders)");
+        // Held still, the rest render: a region round the view held wider than a hand's. Where a
+        // headless frame outlasts StillFor it may come between two moves already; either way before the release.
+        Frames(() => false, 0.3);
+        var engine = EngineModel.Shared;
+        static double Area(Rect r) => r.Width * r.Height;
+        Check(vp.Held && engine.View is { } held && engine.Shown.Uv.Contains(held.Uv)
+              && Area(engine.Shown.Uv) > Area(ViewRegion.Around(held, ViewRegion.HandMargin).Uv) * 1.05,
+              $"held still past {CanvasPanel.StillFor * 1000:0} ms of frames, the rest render's region, the button still down ({engine.Shown.Uv})");
+        window.MouseUp(mid + d, MouseButton.Left);
+        Frames();
+    }
+
+    /// A pinch past fit keeps the copy it holds, scaled, until it rests: no
+    /// full-size copy mid-gesture when the zoom crosses a halving.
+    static void ZoomHoldChecks(Window window, CanvasPanel canvas) {
+        var vp = CanvasState.Viewport;
+        vp.ZoomBy(3, new Point(0.5, 0.5));
+        Frames();
+        EngineModel.Shared.Render(preview: false);   // this view at its detail, wider than the screen, whatever rendered before
+        Frames(() => false, 0.5);   // and its copy
+        string setup = $"{EngineModel.Shared.Shown.Graph} {EngineModel.Shared.Shown.Uv}, copy {CopiedPicture.Size}";
+        int begun = CopiedPicture.Begun;
+        double drawn = CanvasPanel.DrawMilliseconds;
+        Pinch(window, At(window, canvas, new Point(canvas.Bounds.Width / 2, canvas.Bounds.Height / 2)), -0.6);
+        using (var frame = new RenderTargetBitmap(new PixelSize((int)canvas.Bounds.Width, (int)canvas.Bounds.Height)))
+            frame.Render(canvas);   // drawn mid-gesture, well inside the pinch's 80 ms rest
+        Check(vp.Live && CanvasPanel.DrawMilliseconds > drawn && CopiedPicture.Begun == begun,
+              $"a pinch across a halving copies nothing until it rests ({CopiedPicture.Begun - begun} copies, live {vp.Live}, from {setup})");
+        Frames();
+        vp.Reset();
+        Frames();
     }
 
     static void CompareUxChecks(Window window, CanvasPanel canvas, CompareOverlay overlay) {

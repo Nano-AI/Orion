@@ -54,6 +54,7 @@ public sealed class CanvasPanel : Panel {
         Children.AddRange([_shared, _picture, _garden, _welcome, _state]);
         _shared.Arrived += _picture.InvalidateVisual;
         _copied.Arrived += () => { _version++; _picture.InvalidateVisual(); };
+        _copied.Showing = Showing;
         // Before the first draw says how wide the picture is: the first copy is not the whole render.
         SizeChanged += (_, e) => {
             _copied.Seed(e.NewSize.Width * (TopLevel.GetTopLevel(this)?.RenderScaling ?? 1));
@@ -120,22 +121,51 @@ public sealed class CanvasPanel : Panel {
     }
 
     /// Past fit the engine renders only what is on screen (#22): tells it what
-    /// that is, the part of the picture in view and the device pixels it covers.
-    /// Only at rest: while a hand or a spring moves the view the canvas moves the
-    /// pixels already rendered and the engine does nothing (#401).
+    /// that is, the part of the picture in view and the device pixels it covers,
+    /// and what moves it: a hand (a pan renders under it, #401) or a spring,
+    /// whose landing renders while it glides.
     void Tell() {
         var size = Bounds.Size;
         double a = CanvasState.ImageAspect;
         var vp = CanvasState.Viewport;
-        if (vp.Live || CropEdit.Previewing || a <= 0 || size.Width <= 0 || size.Height <= 0) return;
+        // A canvas no window shows still hears CanvasState: its view is nobody's, and two
+        // canvases telling theirs in turn would each render the other's away.
+        if (!Showing() || CropEdit.Previewing || a <= 0 || size.Width <= 0 || size.Height <= 0) return;
         vp.Measure(a, size.Width / size.Height);
-        var whole = CanvasState.Whole(size);
-        var seen = CanvasState.DrawnFrame(size);
-        if (seen.Width <= 0 || seen.Height <= 0) return;
+        if (ViewAt(null) is not { } seen) return;
+        var engine = EngineModel.Shared;
+        engine.View = seen;
+        if (vp.Held) engine.Pan();
+        else if (vp.Live && vp.Landing is { } landing && ViewAt(landing) is { } there) engine.Land(there);
+    }
+
+    bool Showing() => TopLevel.GetTopLevel(this) is { IsVisible: true } && IsEffectivelyVisible;
+
+    /// The part of the picture in view at `at` (the zoom and centre on screen
+    /// when null), and the device pixels it covers.
+    (Rect Uv, PixelSize Pixels)? ViewAt((double Zoom, Point Center)? at) {
+        var size = Bounds.Size;
+        var whole = CanvasState.Whole(size, at);
+        var seen = whole.Intersect(new Rect(size));
+        if (seen.Width <= 0 || seen.Height <= 0) return null;
         double scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
-        EngineModel.Shared.View = (new Rect((seen.X - whole.X) / whole.Width, (seen.Y - whole.Y) / whole.Height,
-                                            seen.Width / whole.Width, seen.Height / whole.Height),
-                                   new PixelSize((int)Math.Round(seen.Width * scaling), (int)Math.Round(seen.Height * scaling)));
+        return (new Rect((seen.X - whole.X) / whole.Width, (seen.Y - whole.Y) / whole.Height, seen.Width / whole.Width, seen.Height / whole.Height),
+                new PixelSize((int)Math.Round(seen.Width * scaling), (int)Math.Round(seen.Height * scaling)));
+    }
+
+    /// Seconds of frames a hand holds the view still before that counts as
+    /// rest for rendering (not for the spring, which waits for the release):
+    /// three frames at 60 Hz, past the gap between a moving hand's events.
+    internal const double StillFor = 0.05;
+    readonly object _still = new();
+
+    void Still() {
+        double waited = 0;
+        Motion.Run(_still, dt => {
+            if ((waited += dt) < StillFor) return true;
+            if (_anchor != null) EngineModel.Shared.Rested();
+            return false;
+        });
     }
 
     /// What failed, as far as the shell can tell without the engine's word for it.
@@ -196,13 +226,19 @@ public sealed class CanvasPanel : Panel {
         // Past 4× a pixel is a square, not a blur; below it, filtered.
         var mode = vp.FitScale * vp.Zoom > 4 ? BitmapInterpolationMode.None : BitmapInterpolationMode.HighQuality;
         // A region sits where its part of the picture is, and moves with it until the next.
-        var uv = engine.Shown.Graph == Graph.Region ? engine.Shown.Uv : new Rect(0, 0, 1, 1);
-        var dest = new Rect(whole.X + uv.X * whole.Width, whole.Y + uv.Y * whole.Height,
-                            uv.Width * whole.Width, uv.Height * whole.Height);
+        Rect At(Rect uv) => new(whole.X + uv.X * whole.Width, whole.Y + uv.Y * whole.Height, uv.Width * whole.Width, uv.Height * whole.Height);
+        var dest = At(engine.Shown.Graph == Graph.Region ? engine.Shown.Uv : new Rect(0, 0, 1, 1));
         double pixels = dest.Width * scaling;   // the shown picture's width on screen, in device pixels
-        // The render straight from the GPU when the shared surface holds it (#317), else its screen-sized copy (#386).
+        // The render straight from the GPU when the shared surface holds it (#317), else its screen-sized copy (#386),
+        // which may be of the render before, where its own pixels belong.
         // ponytail: the crop tool's turned clip takes the CPU copy (CompositionVisual.Clip is internal); a mask over the visual lifts that.
         bool shared = _shared.Place(CropEdit.Previewing ? null : engine.Shown, dest, mode, pixels);
+        Bitmap? picture = null;
+        if (!shared) {
+            picture = _copied.For(engine.Shown, whole.Size, pixels, engine.Interacting || vp.Live);
+            if (picture != null) dest = At(_copied.Uv);
+            else picture = engine.Shown.Bitmap;
+        }
 
         // The whole picture into its place, clipped to the view (a rubber band shows
         // the surround past its edge), or to the turned frame while the crop tool previews.
@@ -213,9 +249,9 @@ public sealed class CanvasPanel : Panel {
                 var outside = new CombinedGeometry(GeometryCombineMode.Exclude, new RectangleGeometry(whole), new RectangleGeometry(dest));
                 using (c.PushGeometryClip(outside)) c.DrawImage(under, new Rect(under.Size), whole);
             }
-            if (!shared && (_copied.For(engine.Shown, pixels, engine.Interacting) ?? engine.Shown.Bitmap) is { } picture) {
+            if (picture != null) {
                 // A copy taken in this very draw is new pixels in the same bitmap: its version too.
-                var shown = _shown.For(picture, HashCode.Combine(_version, _copied.Version), pixels);
+                var shown = _shown.For(picture, HashCode.Combine(_version, _copied.Version), dest.Width * scaling);
                 c.DrawImage(shown, new Rect(shown.Size), dest);
             }
             if (CompareState.Showing && CompareState.Original is { } original) {
@@ -377,6 +413,7 @@ public sealed class CanvasPanel : Panel {
         vp.Pan(new Vector(dx, dy));
         _x.Add((e.Timestamp, vp.Raw.X));
         _y.Add((e.Timestamp, vp.Raw.Y));
+        Still();
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e) => Let(e.Timestamp, e.Pointer);
@@ -388,6 +425,7 @@ public sealed class CanvasPanel : Panel {
     void Let(ulong now, IPointer? pointer) {
         if (_anchor == null) return;
         _anchor = null;
+        Motion.Stop(_still);
         pointer?.Capture(null);
         if (_band != null) {
             _band = null;

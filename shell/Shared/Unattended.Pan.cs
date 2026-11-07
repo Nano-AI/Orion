@@ -24,14 +24,16 @@ namespace OrionShell;
 /// phase: drag (the hand moving), hold (button down, still, 300 ms), rest (a
 /// second after the release). A stall is a frame whose UI work passed 16.7 ms.
 /// interval_median_ms is the real time between frames, the headless raster
-/// included: past 150 ms the view's rest timer can fire between two moves.
+/// included: past CanvasPanel.StillFor of frames a hand counts as held still.
+/// sharp is the share of frames whose view the shown region covers, its copy
+/// landed; to_sharp_ms (rest only) is the time from the release to the first.
 /// ORION_PAN_WINDOW=<w>x<h> sizes the window (3440x1440 by default);
 /// ORION_PAN_CSV=<path> appends every frame; ORION_PAN_SHOTS=<dir> saves what
 /// each pan left on screen and the same view rendered afresh, to compare.
 sealed partial class App {
     static bool PanOnly => Environment.GetCommandLineArgs().Contains("--pan");
 
-    sealed record Frame(int I, string Phase, double Start, double Move, double Draw, int Renders, double EngineMs, int Copies, double CopyMs) {
+    sealed record Frame(int I, string Phase, double Start, double Move, double Draw, int Renders, double EngineMs, int Copies, double CopyMs, bool Sharp) {
         // A copy's start is inside the render's time and its take inside the draw's: counted once.
         public double Ui => Move + Draw + EngineMs;
     }
@@ -119,8 +121,10 @@ sealed partial class App {
             using (var slice = new CancellationTokenSource(TimeSpan.FromMilliseconds(Math.Max(left, 1))))
                 Dispatcher.UIThread.MainLoop(slice.Token);
             if (i == 59 && shot != null) PanShot(window, shot);   // mid-drag: what the hand uncovered
+            bool sharp = engine.View is { } seen && engine.Shown.Graph is Graph.Region or Graph.Full && engine.Shown.Uv.Contains(seen.Uv)
+                         && CopiedPicture.Behind == 0 && !engine.Busy;
             frames.Add(new Frame(i, phase, start, CanvasPanel.MoveMilliseconds - m0, CanvasPanel.DrawMilliseconds - d0, Session.Renders - r0,
-                                 engineMs - e0, CopiedPicture.Begun - c0, CopiedPicture.Milliseconds - k0));
+                                 engineMs - e0, CopiedPicture.Begun - c0, CopiedPicture.Milliseconds - k0, sharp));
         }
         engine.Rendered -= Rendered;
         return frames;
@@ -135,10 +139,11 @@ sealed partial class App {
             double Q(double q) => ui[(int)Math.Min(ui.Count - 1, ui.Count * q)];
             var gaps = f.Zip(f.Skip(1), (a, b) => b.Start - a.Start).Order().ToList();
             double gap = gaps.Count == 0 ? 0 : gaps[gaps.Count / 2];
+            string toSharp = phase == "rest" && f.FirstOrDefault(x => x.Sharp) is { } s ? $" to_sharp_ms={s.Start - f[0].Start:0.0}" : "";
             Console.WriteLine($"bench pan {label} {phase} frames={f.Count} ui_median_ms={Q(0.5):0.00} ui_p95_ms={Q(0.95):0.00} ui_max_ms={ui[^1]:0.0} " +
                               $"move_ms={f.Sum(x => x.Move):0.0} draw_ms={f.Sum(x => x.Draw):0.0} renders={f.Sum(x => x.Renders)} " +
                               $"engine_ms={f.Sum(x => x.EngineMs):0.0} copies={f.Sum(x => x.Copies)} copy_ms={f.Sum(x => x.CopyMs):0.0} " +
-                              $"stalls={f.Count(x => x.Ui > 1000 / 60.0)} interval_median_ms={gap:0.0}");
+                              $"stalls={f.Count(x => x.Ui > 1000 / 60.0)} interval_median_ms={gap:0.0} sharp={f.Count(x => x.Sharp) / (double)f.Count:0.00}{toSharp}");
         }
     }
 }

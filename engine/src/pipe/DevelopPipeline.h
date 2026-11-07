@@ -91,6 +91,10 @@ public:
     /// Swaps in a new image without touching the compiled graph.
     void reload(const raw::BayerImage& image);
     void reload(const raw::LinearImage& image);
+    /// Another window of the photograph this graph was built from, of the
+    /// same size and CFA phase (the region graph, #22): only the source
+    /// changes, so its metadata and every parameter block stay pushed.
+    void moveWindow(const std::uint16_t* samples, std::size_t bytesPerRow) { pipeline_.setSource(samples, bytesPerRow); }
 
     /// Pushes the current adjustments into the graph, dirtying only what they
     /// affect. Cheap — call it freely on every slider tick.
@@ -194,8 +198,9 @@ public:
     /// 24 Mpx and most photographs are never painted on.
     [[nodiscard]] std::size_t brushAccumBytes() const;
 
-    /// Renders every dirty node. Returns GPU-side milliseconds.
-    double render();
+    /// Renders every dirty node. Returns GPU-side milliseconds. `wait`:
+    /// Pipeline::render's, for the last pass.
+    double render(bool wait = true);
 
     /// What the out-of-memory message names (#406): the effect whose texture
     /// the device refused on the last render ("clarity", "texture", ...), else
@@ -863,7 +868,7 @@ private:
     /// pipeline says actually ran.
     void commitBrushAccum();
     /// One render, with the two above wrapped around it.
-    double renderOnce();
+    double renderOnce(bool wait = true);
     bool         primed_ = false;
     WhiteBalance         asShot_{};
     std::array<float, 3> asShotMul_{1.0f, 1.0f, 1.0f};

@@ -212,8 +212,18 @@ public:
     void releaseOutputs() noexcept;
 
     /// Executes every dirty node in one command buffer.
-    /// Returns the GPU-side duration in milliseconds.
-    double render();
+    /// Returns the GPU-side duration in milliseconds, 0 when nothing was dirty.
+    ///
+    /// `wait` false submits and returns (0 ms): the canvas's region past fit,
+    /// whose copy is queued behind it (#22). Until the GPU is done, `busy` is
+    /// true, and every call here that writes what the GPU may still read (a
+    /// render, the source, an aux plate, a release) waits for it first
+    /// (`finishPending`): Metal writes a texture from the CPU at once
+    /// (replaceRegion), Dawn in queue order. Dawn's Readback, a CPU read, is
+    /// queue-ordered too. One render in flight at most.
+    double render(bool wait = true);
+    [[nodiscard]] bool busy();
+    void finishPending();
 
     /// Which nodes actually ran on the last render.
     [[nodiscard]] const std::vector<NodeTiming>& lastRun() const noexcept { return lastRun_; }
@@ -467,6 +477,8 @@ private:
     /// The render's open command buffer (null when profiling), and the GPU
     /// milliseconds of the batches `giveBack` already submitted.
     std::unique_ptr<gpu::CommandBuffer> batch_;
+    /// A `render(false)` the GPU may still be running.
+    std::unique_ptr<gpu::CommandBuffer> pending_;
     double submittedMs_ = 0.0;
     int failedNode_ = -1;
 

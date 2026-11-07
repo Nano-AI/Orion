@@ -65,9 +65,12 @@ public sealed partial class Session : IDisposable {
 
     /// Renders the quarter-resolution preview graph or the full one. The shim
     /// falls back to the full graph when there is no preview graph.
-    public Graph Render(bool preview) {
+    public Graph Render(bool preview) => Render(preview, out _);
+
+    /// `ms`: the GPU's milliseconds, 0 when nothing was dirty.
+    public Graph Render(bool preview, out double ms) {
         Interlocked.Increment(ref _renders);
-        var graph = (Graph)Native.shim_render(Shim, preview ? 1 : 0, out _);
+        var graph = (Graph)Native.shim_render(Shim, preview ? 1 : 0, out ms);
         if (graph == Graph.Full) RenderedFull = true;
         return graph;
     }
@@ -75,12 +78,18 @@ public sealed partial class Session : IDisposable {
     /// Only `uv` of the displayed picture, at `pixels` (the screen's): the
     /// canvas past fit (#22). Region, or None when the engine needs the whole
     /// graph for this edit, and the caller renders that instead; Failed when
-    /// the render failed, and LastError says why.
-    public Graph RenderRegion(Avalonia.Rect uv, PixelSize pixels, bool interacting = false) {
+    /// the render failed, and LastError says why. `wait` false returns once the
+    /// render is submitted: reads and copies of it queue behind it, and Busy
+    /// says when the GPU is done.
+    public Graph RenderRegion(Avalonia.Rect uv, PixelSize pixels, bool interacting = false, bool wait = true) {
         Interlocked.Increment(ref _renders);
         return (Graph)Native.shim_render_region(Shim, (float)uv.X, (float)uv.Y, (float)uv.Width, (float)uv.Height,
-                                                pixels.Width, pixels.Height, interacting ? 1 : 0, out _);
+                                                pixels.Width, pixels.Height, (interacting ? 1 : 0) | (wait ? 0 : 2), out _);
     }
+
+    /// A region rendered without waiting is still on the GPU. False once it is
+    /// done, and when it failed there (LastError): nothing is in flight then.
+    public bool Busy => Native.orion_engine_region_busy(Handle, out int busy) == 0 && busy != 0;
 
     /// Every engine render in the process, on any session: what a gesture that
     /// must cost none (the compare divider's drag) is measured by.

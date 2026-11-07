@@ -40,10 +40,10 @@ public static unsafe partial class Native {
     public static partial int shim_render(nint shim, int preview, out double gpuMs);
 
     /// 3 = only part of the picture rendered, at screen size (#22); 0 = this
-    /// edit needs the whole graph, or failed: render that instead.
+    /// edit needs the whole graph, or failed: render that instead. `flags`: orion.h's ORION_REGION_*.
     [LibraryImport(Lib)]
     public static partial int shim_render_region(nint shim, float x, float y, float w, float h,
-                                                 int outW, int outH, int interacting, out double gpuMs);
+                                                 int outW, int outH, int flags, out double gpuMs);
 
     [LibraryImport(Lib)]
     public static partial int shim_read(nint shim, int which, byte* dst, int capacity, out int w, out int h);
@@ -93,6 +93,9 @@ public static unsafe partial class Native {
 
     [LibraryImport(Lib)]
     public static partial int orion_engine_image_size(nint engine, out uint width, out uint height);
+
+    [LibraryImport(Lib)]
+    public static partial int orion_engine_region_busy(nint engine, out int busy);
 
     /// The preview graph's picture region; nonzero status when there is no preview graph.
     [LibraryImport(Lib)]

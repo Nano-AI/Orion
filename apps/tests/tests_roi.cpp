@@ -3,7 +3,9 @@
 #include "harness.h"
 #include "Engine.h"
 
+#include <chrono>
 #include <filesystem>
+#include <thread>
 
 namespace {
 // A noisy mosaic with edges in it, so demosaic, denoise, sharpening, the lens
@@ -340,5 +342,58 @@ void testRegionAtFrameEdgesGpu() {
                "step " + std::to_string(engine.regionStep()) + ", max " + std::to_string(worst));
     } catch (const std::exception& e) {
         report(false, "region at the frame's edges", e.what());
+    }
+}
+
+void testRegionWithoutWaitGpu() {
+    section("A region that does not wait is the same pixels as one that does (#22)");
+
+    // Two views of one size 64 px apart: the second moves the window while the
+    // first may still be on the GPU, which `finishPending` orders. Against a
+    // second engine that only ever waited, built fresh for the view.
+    constexpr std::uint32_t kW = 1536, kH = 1024;
+    try {
+        orion::pipe::Adjustments a;
+        a.exposureEv = 0.4f;
+        a.contrast = 1.3f;
+        a.sharpenAmount = 0.8f;
+        const orion::Engine::Region one{0.25f, 0.25f, 0.25f, 0.25f, 384, 256};
+        const orion::Engine::Region two{0.25f + 64.0f / kW, 0.25f, 0.25f, 0.25f, 384, 256};
+        const orion::Engine::Region wide{0.2f, 0.2f, 0.4f, 0.25f, 614, 256};
+
+        orion::Engine engine;
+        engine.openDecoded(structured(kW, kH));
+        a.wb = engine.develop().asShotWhiteBalance();
+        engine.setAdjustments(a);
+        const double ms = engine.renderRegion(one, false, false);
+        report(ms == 0.0, "a region that does not wait returns before the GPU says how long it took",
+               std::to_string(ms) + " ms");
+        engine.renderRegion(two, false, false);
+        const auto moved = pixels(engine.regionDevelop());
+        a.exposureEv = 0.9f;   // an edit with that one still in flight
+        engine.setAdjustments(a);
+        engine.renderRegion(two, false, false);
+        const auto edited = pixels(engine.regionDevelop());
+        for (int i = 0; i < 2000 && engine.regionBusy(); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        report(!engine.regionBusy(), "and the GPU finishes it");
+        // A narrower view after a wider one at the same step keeps the wider graph: no rebuild.
+        engine.renderRegion(wide);
+        const auto* built = &engine.regionDevelop();
+        engine.renderRegion(two);
+        report(&engine.regionDevelop() == built && pixels(engine.regionDevelop()) == edited,
+               "a narrower view moves the wider window rather than rebuilding, the same pixels");
+
+        orion::Engine waited;
+        waited.openDecoded(structured(kW, kH));
+        a.exposureEv = 0.4f;
+        waited.setAdjustments(a);
+        waited.renderRegion(two);
+        report(pixels(waited.regionDevelop()) == moved, "a moved window behind an unwaited render: bit-identical to waiting");
+        a.exposureEv = 0.9f;
+        waited.setAdjustments(a);
+        waited.renderRegion(two);
+        report(pixels(waited.regionDevelop()) == edited, "and so is the edit after it");
+    } catch (const std::exception& e) {
+        report(false, "region without waiting", e.what());
     }
 }
