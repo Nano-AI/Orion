@@ -21,6 +21,7 @@ struct MetalDevice final : Device::Impl {
             .maxBufferLength       = device.maxBufferLength,
             .unifiedMemory         = static_cast<bool>(device.hasUnifiedMemory),
             .supportsApple7        = static_cast<bool>([device supportsFamily:MTLGPUFamilyApple7]),
+            .gpuTimestamps         = true,
         };
     }
 

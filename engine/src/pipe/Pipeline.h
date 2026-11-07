@@ -58,9 +58,12 @@ struct Node {
 struct NodeTiming {
     std::string name;
     bool        executed = false;   // false when the cache served it
-    /// GPU milliseconds for this node alone. Zero unless profiling is on —
-    /// see `setProfiling`.
+    /// Milliseconds for this node alone, zero unless profiling is on (see
+    /// `setProfiling`): the GPU's clock where `gpuClock`, else `wallMs`.
     double      ms = 0.0;
+    /// Its submit to completion as the CPU saw it.
+    double      wallMs = 0.0;
+    bool        gpuClock = false;
 };
 
 class Pipeline {

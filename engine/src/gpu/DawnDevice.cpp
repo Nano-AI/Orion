@@ -247,6 +247,12 @@ std::shared_ptr<Context> open() {
         }
     }
 
+    // Profiling's clock (CommandBuffer::timeOnGpu), where the adapter has one;
+    // without it a node's time is wall time. Unquantized: Dawn's default masks
+    // a timestamp to 65.5 us (kTimestampQuantizationMask), coarser than a small node.
+    c.timestamps = c.adapter.HasFeature(wgpu::FeatureName::TimestampQuery);
+    if (c.timestamps) features.push_back(wgpu::FeatureName::TimestampQuery);
+
     // Everything the adapter offers: the defaults cap a texture at 8192 and a
     // buffer at 256 MiB, and a 24 MP RGBA32F readback is 386 MB.
     wgpu::Limits limits{};
@@ -268,9 +274,12 @@ std::shared_ptr<Context> open() {
     const bool checked = robust != nullptr && *robust != '\0' ? std::strcmp(robust, "1") == 0
                                                               : native.robust;
     const char* toggleNames[] = {"disable_robustness"};
+    const char* offNames[] = {"timestamp_quantization"};
     wgpu::DawnTogglesDescriptor toggles{};
     toggles.enabledToggleCount = checked ? 0 : 1;
     toggles.enabledToggles = toggleNames;
+    toggles.disabledToggleCount = c.timestamps ? 1 : 0;
+    toggles.disabledToggles = offNames;
 
     wgpu::DeviceDescriptor dd{};
     dd.nextInChain = &toggles;
@@ -302,6 +311,7 @@ std::shared_ptr<Context> open() {
     c.queue = c.device.GetQueue();
 
     describe(c, limits);
+    c.info.gpuTimestamps = c.timestamps;
     return ctx;
 }
 

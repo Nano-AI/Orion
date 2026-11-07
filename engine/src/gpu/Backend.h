@@ -58,7 +58,11 @@ struct CommandBuffer::Impl {
     /// `commit`, and `finished` then answers for this work; Metal waits here.
     virtual void commitTracked() { commitAndWait(); }
     virtual bool finished(bool /*wait*/) { return true; }
-    double gpuMs = 0.0;
+    /// CommandBuffer::timeOnGpu's; nothing to do where every buffer is timed (Metal).
+    virtual void timeOnGpu() {}
+    double gpuMs  = 0.0;
+    double wallMs = 0.0;
+    bool   gpuClock = false;   // gpuMs is the GPU's own clock, not wall time
 };
 
 struct Device::Impl {

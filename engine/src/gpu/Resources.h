@@ -190,11 +190,20 @@ public:
     void commitTracked();
     bool finished(bool wait);
 
+    /// Asks for the GPU's own clock around this buffer's work, before it is
+    /// committed. On Dawn that is a timestamp written at the start and end of
+    /// its pass, where the device has `timestamp-query`; it costs a resolve and
+    /// a readback, so only profiling asks. Metal times every buffer anyway.
+    void timeOnGpu();
+
     /// GPU-side duration of the committed work. Valid after commitAndWait(),
-    /// or once `finished` is true. On Dawn, the wall time from submit to
-    /// completion, which includes the wait's own latency (no timestamp
-    /// queries yet). A buffer with no dispatch submits and waits for nothing.
+    /// or once `finished` is true. The GPU's clock where `gpuClocked()`, else
+    /// (Dawn without timestamps) `wallMilliseconds()`. A buffer with no
+    /// dispatch submits and waits for nothing.
     [[nodiscard]] double gpuMilliseconds() const noexcept;
+    [[nodiscard]] bool gpuClocked() const noexcept;
+    /// Submit to completion as the CPU saw it, the wait's own latency included.
+    [[nodiscard]] double wallMilliseconds() const noexcept;
 
     struct Impl;   // backend-private
 

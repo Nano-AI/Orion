@@ -51,11 +51,13 @@ SCENARIOS = {
     "open-warm": ("open", "folder", False, "the same folder again, its files cached"),
     "swap": ("swap", "photos", False, "an arrow to the neighbour (cached) and a jump past the cache"),
     "drag": ("drag", "first", False, "60 ticks of the exposure slider: the preview drag and the full one"),
+    "drag-heavy": ("drag-heavy", "first", False, "the drag with clarity 1, denoise luminance 2 and texture 1 on, Luminance moved"),
     "pan": ("pan", "first", False, "a hand dragging the photo at 100%, region and whole-graph edits (`--bench --pan`, Unattended.Pan.cs)"),
     "render": ("render", "first", False, "the first full-resolution render, and the card's memory peak"),
     "export": ("export", "first", False, "the photo exported as the export sheet does, at its defaults"),
     "side-by-side": ("side-by-side", "photos", False, "the first two photos side by side, linked, at fit then 100%: both engines' memory at once"),
     "engine": ("engine", "first", False, "orion-bench: the engine alone on the shipping graph"),
+    "engine-heavy": ("engine-heavy", "first", False, "orion-bench --heavy: the drag-heavy tick on both graphs, node by node"),
 }
 
 
@@ -67,8 +69,10 @@ def main() -> int:
         cp.add_argument("--confidence", type=float, default=0.95)
         cp.add_argument("--min-effect", type=float, default=0.05)
         c = cp.parse_args(sys.argv[2:])
-        rows = compare(json.loads(c.old.read_text()), json.loads(c.new.read_text()), "this", "this", c.confidence, c.min_effect)
+        old, new = json.loads(c.old.read_text()), json.loads(c.new.read_text())
+        rows = compare(old, new, "this", "this", c.confidence, c.min_effect)
         print(table(rows))
+        print(node_table(old, new, "this", "this", c.confidence, c.min_effect))
         return 1 if any(r["verdict"] == "SLOWER" for r in rows) else 0
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -90,7 +94,7 @@ def main() -> int:
 
     if args.list:
         for name, (_, _, _, what) in SCENARIOS.items():
-            print(f"{name:10} {what}")
+            print(f"{name:12} {what}")
         return 0
     chosen = [s.strip() for s in args.scenarios.split(",") if s.strip()]
     if unknown := [s for s in chosen if s not in SCENARIOS]:
@@ -132,15 +136,18 @@ def main() -> int:
 
     out = args.json or args.scratch / f"bench-{time.strftime('%Y%m%d-%H%M%S')}.json"
     rows = compare(results, results, "base", "this", args.confidence, args.min_effect) if args.ab else []
+    against, against_build = (results, "base") if args.ab else (results, None)
     baseline_file = args.baseline_dir / f"{m['key']}.json"
     if not args.ab and baseline_file.exists() and not args.save_baseline:
-        rows = compare(json.loads(baseline_file.read_text()), results, "this", "this", args.confidence, args.min_effect)
+        against, against_build = json.loads(baseline_file.read_text()), "this"
+        rows = compare(against, results, "this", "this", args.confidence, args.min_effect)
         results["compared_with"] = str(baseline_file)
     elif not args.ab and not rows:
         rows = compare(results, results, None, "this")   # no baseline: the readings alone
     results["comparison"] = rows
     out.write_text(json.dumps(results, indent=1))
     print(table(rows))
+    print(node_table(against, results, against_build, "this", args.confidence, args.min_effect))
     print(f"\nresults: {out}")
     never = [s for s in chosen for b in builds if not any(r.get("metrics") for r in results["scenarios"][s]["runs"][b])]
     if never:
@@ -220,7 +227,7 @@ def measure(chosen, builds, lists, args, results, contexts) -> None:
                 got = sample(name, builds[b], lists, args)
                 results["scenarios"][name]["runs"][b].append(got)
                 bad = f"  ({got['error']})" if got.get("error") else ""
-                print(f"  {r + 1}/{args.repeats} {name:9} {b:4} {brief(got['metrics'])}{bad}", flush=True)
+                print(f"  {r + 1}/{args.repeats} {name:12} {b:4} {brief(got['metrics'])}{bad}", flush=True)
 
 
 def sample(name: str, b: dict, lists: dict, args) -> dict:
@@ -230,8 +237,8 @@ def sample(name: str, b: dict, lists: dict, args) -> dict:
     with run.gpu_lock(os.environ.get("ORION_GPU_LOCK")):
         card = run.vram()
         residual = run.evict(photos) if cold else None
-        if what == "engine":
-            got = run.run_engine(b["engine"], photos[0], args.scratch / "engine")
+        if what in ("engine", "engine-heavy"):
+            got = run.run_engine(b["engine"], photos[0], args.scratch / "engine", heavy=what == "engine-heavy")
         else:
             got = run.run_app(b["app"], what, photos, args.scratch / "export")
     got["machine"] = machine | {"vram_free_mib": card.get("free_mib")}
@@ -286,17 +293,60 @@ def compare(old: dict, new: dict, old_build: str | None, new_build: str,
     return rows
 
 
+def node_values(results: dict, scenario: str, build: str | None) -> dict[tuple[str, str], dict[str, list[float]]]:
+    """(graph, node) -> its gpu_ms, wall_ms and bytes over the runs that finished."""
+    out: dict[tuple[str, str], dict[str, list[float]]] = {}
+    for r in results["scenarios"].get(scenario, {}).get("runs", {}).get(build, []):
+        if r.get("ok") is False:
+            continue
+        for n in r.get("nodeProfiles", []):
+            got = out.setdefault((n["graph"], n["name"]), {"gpu_ms": [], "wall_ms": [], "bytes": []})
+            for k in got:
+                got[k].append(float(n[k]))
+    return out
+
+
+def node_table(old: dict, new: dict, old_build: str | None, new_build: str,
+               confidence: float = 0.95, min_effect: float = 0.05, top: int = 10) -> str:
+    """Each profiled graph's `top` slowest nodes by GPU time, against `old_build` where it ran on the
+    same photos. Profiled one command buffer a node, so they rank; they do not sum to a tick.
+    A reading beside the main table: its verdicts never set the exit code."""
+    lines = []
+    for name, scenario in new["scenarios"].items():
+        mine = node_values(new, name, new_build)
+        same = old_build and name in old["scenarios"] and (old is new or old["scenarios"][name]["context"] == scenario["context"])
+        theirs = node_values(old, name, old_build) if same else {}
+        for graph in sorted({g for g, _ in mine}):
+            nodes = {k[1]: v for k, v in mine.items() if k[0] == graph}
+            ranked = sorted(nodes, key=lambda n: -stats.median(nodes[n]["gpu_ms"]))[:top]
+            total = sum(stats.median(v["gpu_ms"]) for v in nodes.values())
+            lines += [f"\n{name}: the {graph} graph's slowest {len(ranked)} of {len(nodes)} nodes, GPU ms ({total:.4g} in all)",
+                      f"  {'node':26} {'gpu':>8} {'wall':>8} {'MiB':>6} | {'baseline':>9} {'shift [CI]':>24}  verdict"]
+            for n in ranked:
+                v = nodes[n]
+                base, ci, said = "-", "", "no baseline" if old_build else ""
+                if (graph, n) in theirs:
+                    r = stats.verdict("node_ms", theirs[(graph, n)]["gpu_ms"], v["gpu_ms"], confidence, min_effect)
+                    base, said = f"{r['baseline']:.4g}", r["verdict"]
+                    if "shift" in r:
+                        lo, hi = r["lo"], r["hi"]
+                        ci = f"{r['shift']:+.3g} [{'-inf' if math.isinf(lo) else f'{lo:+.3g}'}, {'inf' if math.isinf(hi) else f'{hi:+.3g}'}]"
+                lines.append(f"  {n[:26]:26} {stats.median(v['gpu_ms']):>8.3f} {stats.median(v['wall_ms']):>8.3f} "
+                             f"{stats.median(v['bytes']) / 1048576:>6.0f} | {base:>9} {ci:>24}  {said}")
+    return "\n".join(lines)
+
+
 def table(rows: list[dict]) -> str:
     def f(x: float) -> str:
         return "-" if x is None or (isinstance(x, float) and math.isnan(x)) else f"{x:.4g}"
 
-    lines = [f"{'scenario':10} {'metric':28} {'median':>9} {'+-MAD':>7} {'n':>2} | {'baseline':>9} {'shift [CI]':>26}  verdict"]
+    lines = [f"{'scenario':12} {'metric':28} {'median':>9} {'+-MAD':>7} {'n':>2} | {'baseline':>9} {'shift [CI]':>26}  verdict"]
     for r in rows:
         ci = ""
         if "shift" in r:
             lo, hi = r["lo"], r["hi"]
             ci = f"{r['shift']:+.4g} [{'-inf' if math.isinf(lo) else f'{lo:+.4g}'}, {'inf' if math.isinf(hi) else f'{hi:+.4g}'}]"
-        lines.append(f"{r['scenario']:10} {r['metric']:28} {f(r['median']):>9} {f(r['mad']):>7} {r['n']:>2} | "
+        lines.append(f"{r['scenario']:12} {r['metric']:28} {f(r['median']):>9} {f(r['mad']):>7} {r['n']:>2} | "
                      f"{f(r.get('baseline')):>9} {ci:>26}  {r['verdict']}")
     return "\n".join(lines)
 

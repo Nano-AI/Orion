@@ -122,6 +122,7 @@ void testDisabledCacheReleaseGpu();
 void testDawnParityGpu();
 void testEveryKernelCompilesOnDawnGpu();
 void testReleaseEveryRenderGpu();
+void testProfileGpuClockGpu();
 void testGpuBudget42MpGpu();
 void testWarmGraphMatchesFreshGpu();
 void testMemoryRuleGpu();

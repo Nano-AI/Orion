@@ -248,11 +248,34 @@ ENGINE_LINES = [
     (r"^\s+-(full|web|print)\.(jpg|tif)\s+([\d.]+) ms", None),   # the export block: one metric per format
 ]
 
+# The heavy tick (apps/bench/bench_heavy.cpp), per graph: the tick, and the apply and batch inside it.
+HEAVY_TICK = re.compile(r"^heavy (\S+) tick\s+median ([\d.]+) ms\s+p95 ([\d.]+) ms\s+apply ([\d.]+) ms\s+batch ([\d.]+) ms")
+# One profiled node of it; the name goes last, spaces and all.
+PROFILE_LINE = re.compile(r"^profile (\S+) gpu_ms=([\d.]+) wall_ms=([\d.]+) bytes=(\d+) clock=(gpu|wall) node=(.+)$")
 
-def run_engine(bench: Path, photo: Path, out: Path, timeout: float = 900) -> dict:
-    """One orion-bench run (apps/bench): the engine alone, the shipping graph on a real photo."""
+
+def heavy_lines(stdout: str) -> tuple[dict[str, float], list[dict]]:
+    """The heavy tick's metrics, and its `nodeProfiles`: one entry a node a graph, slowest first."""
+    m: dict[str, float] = {}
+    nodes: list[dict] = []
+    for line in stdout.splitlines():
+        if hit := HEAVY_TICK.match(line):
+            g = f"engine_heavy_{hit[1]}"
+            m |= {f"{g}_tick_ms": float(hit[2]), f"{g}_tick_p95_ms": float(hit[3]),
+                  f"{g}_apply_ms": float(hit[4]), f"{g}_batch_ms": float(hit[5])}
+        elif hit := PROFILE_LINE.match(line):
+            nodes.append({"graph": hit[1], "name": hit[6], "gpu_ms": float(hit[2]), "wall_ms": float(hit[3]),
+                          "bytes": int(hit[4]), "clock": hit[5]})
+    for graph in {n["graph"] for n in nodes}:
+        m[f"engine_heavy_{graph}_nodes_gpu_ms"] = round(sum(n["gpu_ms"] for n in nodes if n["graph"] == graph), 3)
+    return m, nodes
+
+
+def run_engine(bench: Path, photo: Path, out: Path, timeout: float = 900, heavy: bool = False) -> dict:
+    """One orion-bench run (apps/bench): the engine alone, the shipping graph on a real photo;
+    with `heavy`, only its heavy tick (`--heavy`)."""
     out.mkdir(parents=True, exist_ok=True)
-    proc = subprocess.Popen([str(bench), str(photo), str(out / "orion")], stdout=subprocess.PIPE,
+    proc = subprocess.Popen([str(bench), str(photo), "--heavy" if heavy else str(out / "orion")], stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, text=True)
     peak = GpuPeak(proc.pid)
     try:
@@ -271,7 +294,10 @@ def run_engine(bench: Path, photo: Path, out: Path, timeout: float = 900) -> dic
                 m[f"engine_export_{hit[1]}_{hit[2]}_ms"] = float(hit[3])
             else:
                 m.update(zip(names, map(float, hit.groups())))
-    m["engine_gate_fail_count"] = 0.0 if re.search(r"M0 gate .*: PASS", stdout) else 1.0
+    if not heavy:
+        m["engine_gate_fail_count"] = 0.0 if re.search(r"M0 gate .*: PASS", stdout) else 1.0
+    tick, nodes = heavy_lines(stdout)
+    m |= tick
     errors = [l for l in stderr.splitlines() if l.startswith("error:")]
     m["engine_error_count"] = float(len(errors))
     if (gpu := peak.stop()) is not None:
@@ -281,9 +307,40 @@ def run_engine(bench: Path, photo: Path, out: Path, timeout: float = 900) -> dic
     # it stand and the error is counted. A process killed by a signal stands for nothing.
     if proc.returncode < 0:
         return {"ok": False, "metrics": {}, "error": f"killed by signal {-proc.returncode}: {_tail(stderr)}"}
-    return {"ok": True, "metrics": m, **({"error": errors[0][:600]} if errors else {})}
+    return {"ok": True, "metrics": m, "nodeProfiles": nodes, **({"error": errors[0][:600]} if errors else {})}
 
 
 def _tail(text: str, lines: int = 3) -> str:
     keep = [l for l in text.splitlines() if l.strip() and not l.startswith("Warning:")]
     return " | ".join(keep[-lines:])[:600]
+
+
+def _checks() -> int:
+    """`python3 tools/bench_run.py`: the parsers against lines as orion-bench prints them."""
+    bad = 0
+
+    def check(ok: bool, what: str) -> None:
+        nonlocal bad
+        print(("ok    " if ok else "FAIL  ") + what)
+        bad += not ok
+
+    out = "\n".join([
+        "heavy full tick  median 291.62 ms  p95 313.00 ms  apply 0.41 ms  batch 280.10 ms  (7968x5320)",
+        "profile full gpu_ms=5.238 wall_ms=6.302 bytes=84779520 clock=gpu node=clarity:collapse 0",
+        "profile full gpu_ms=1.974 wall_ms=6.404 bytes=169559040 clock=gpu node=clarity:remap 1.0 h",
+        "profile preview gpu_ms=0.300 wall_ms=1.279 bytes=5298720 clock=wall node=profile:hue/sat",
+        "heavy full nodes 2  sum gpu 7.21 ms  sum wall 12.71 ms",
+    ])
+    m, nodes = heavy_lines(out)
+    check(m.get("engine_heavy_full_tick_ms") == 291.62 and m.get("engine_heavy_full_batch_ms") == 280.10,
+          f"the tick line gives the tick and its batch: {m}")
+    check(len(nodes) == 3, f"every profile line is a node: {len(nodes)}")
+    check(nodes[1] == {"graph": "full", "name": "clarity:remap 1.0 h", "gpu_ms": 1.974, "wall_ms": 6.404,
+                       "bytes": 169559040, "clock": "gpu"}, f"a name with spaces survives whole: {nodes[1]}")
+    check(nodes[2]["clock"] == "wall" and nodes[2]["name"] == "profile:hue/sat", "a wall-clock node says so")
+    check(m.get("engine_heavy_full_nodes_gpu_ms") == 7.212, f"the graph's node sum: {m.get('engine_heavy_full_nodes_gpu_ms')}")
+    return 1 if bad else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_checks())

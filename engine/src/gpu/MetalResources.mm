@@ -3,6 +3,7 @@
 #include "gpu/Backend.h"
 
 #include <algorithm>
+#include <chrono>
 #include <stdexcept>
 
 namespace orion::gpu {
@@ -211,9 +212,11 @@ struct MetalCommandBuffer final : CommandBuffer::Impl {
     }
 
     void commitAndWait() override {
+        const auto start = std::chrono::steady_clock::now();
         [enc endEncoding];
         [cb commit];
         [cb waitUntilCompleted];
+        wallMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 
         @autoreleasepool {
             if (cb.status == MTLCommandBufferStatusError) {
@@ -222,6 +225,7 @@ struct MetalCommandBuffer final : CommandBuffer::Impl {
             }
         }
         gpuMs = (cb.GPUEndTime - cb.GPUStartTime) * 1000.0;
+        gpuClock = true;
     }
 };
 

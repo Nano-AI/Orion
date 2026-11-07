@@ -62,6 +62,7 @@ int main(int argc, char** argv) {
     gpu(testBindingCount);
     gpu(testDisabledCacheReleaseGpu);
     gpu(testReleaseEveryRenderGpu);
+    gpu(testProfileGpuClockGpu);
     gpu(testGpuBudget42MpGpu);
     gpu(testWarmGraphMatchesFreshGpu);
     gpu(testMemoryRuleGpu);

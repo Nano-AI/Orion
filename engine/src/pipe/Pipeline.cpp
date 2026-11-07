@@ -451,11 +451,14 @@ void Pipeline::computeOne(int id) {
         // Profiling, or a recovery dispatch outside a batched render: its own
         // command buffer, so its GPU time is attributable to this node alone.
         gpu::CommandBuffer one(device_);
+        if (profiling_) one.timeOnGpu();
         one.dispatch(*kernels_[idx], textures,
                      node.params.empty() ? nullptr : node.params.data(),
                      node.params.size(), w, h);
         one.commitAndWait();
         lastRun_[idx].ms = one.gpuMilliseconds();
+        lastRun_[idx].wallMs = one.wallMilliseconds();
+        lastRun_[idx].gpuClock = one.gpuClocked();
     }
 
     releaseIfDone(id);

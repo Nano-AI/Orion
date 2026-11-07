@@ -226,6 +226,10 @@ void CommandBuffer::commit() { impl_->commit(); }
 void CommandBuffer::commitTracked() { impl_->commitTracked(); }
 bool CommandBuffer::finished(bool wait) { return impl_->finished(wait); }
 
+void CommandBuffer::timeOnGpu() { impl_->timeOnGpu(); }
+
 double CommandBuffer::gpuMilliseconds() const noexcept { return impl_->gpuMs; }
+bool CommandBuffer::gpuClocked() const noexcept { return impl_->gpuClock; }
+double CommandBuffer::wallMilliseconds() const noexcept { return impl_->wallMs; }
 
 }  // namespace orion::gpu
