@@ -226,9 +226,12 @@ sealed partial class App {
 
     /// 60 ticks of an exposure drag, each the frame a hand would see: the
     /// write and its render, the queue, then the canvas's frame. The first five
-    /// warm up. `ui` is the product's own work on the UI thread; `frame` adds
-    /// the headless frame, which raster-draws the window on this thread (see
-    /// the note at the top), so it is the larger and the less portable number.
+    /// warm up. `ui` is the product's own work on the UI thread, as the pan
+    /// counts it: the write with its render and every Rendered handler, and the
+    /// canvas's draw. `frame` is the whole tick, the headless raster included
+    /// (see the note at the top): that raster also runs inside RunJobs, from the
+    /// headless render timer's own DispatcherTimer, once a tick passes 16 ms.
+    /// `raster`, frame less ui, is a reading only: it is no window's cost.
     static void DragScenario(Dictionary<string, double> m, bool preview) {
         var engine = EngineModel.Shared;
         float start = engine.Get("exposure_ev");
@@ -237,13 +240,14 @@ sealed partial class App {
         var renders = new List<double>();
         if (preview) engine.BeginInteraction();
         for (int i = 0; i < 60; i++) {
+            double drawn = CanvasPanel.DrawMilliseconds;
             var sw = Stopwatch.StartNew();
             engine.Set("exposure_ev", -1 + 2 * i / 59f);
+            double set = sw.Elapsed.TotalMilliseconds;
             Dispatcher.UIThread.RunJobs();
-            double work = sw.Elapsed.TotalMilliseconds;
             Heartbeat.Frame();
             if (i < 5) continue;
-            ui.Add(work);
+            ui.Add(set + CanvasPanel.DrawMilliseconds - drawn);
             frames.Add(sw.Elapsed.TotalMilliseconds);
             renders.Add(engine.Last.Render);
         }
@@ -253,6 +257,7 @@ sealed partial class App {
         m[$"{k}_ui_ms"] = Median(ui);
         m[$"{k}_ui_p95_ms"] = Quantile(ui, 0.95);
         m[$"{k}_frame_ms"] = Median(frames);
+        m[$"{k}_raster"] = Median(frames.Zip(ui, (f, u) => f - u).ToList());   // no unit suffix: tools/bench_stats.py reads it, never judges it
         m[$"{k}_engine_ms"] = Median(renders);
     }
 

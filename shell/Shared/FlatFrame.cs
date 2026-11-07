@@ -16,8 +16,11 @@ static class FlatFrameCheck {
     /// Why the last full render looks flat, or null.
     public static string? Why { get; private set; }
 
+    /// Full renders judged: one per settle, however many renders led to it.
+    public static int Judged { get; private set; }
+
     /// Armed by the footer's first read of Why, which comes before any full render it could miss.
-    static FlatFrameCheck() => EngineModel.Shared.Rendered += Check;
+    static FlatFrameCheck() => Settled.Fired += Check;
 
     /// The samples read the full graph (orion_engine_sample), so only a full render is judged;
     /// a drag's preview renders leave the verdict of the last one standing.
@@ -25,6 +28,7 @@ static class FlatFrameCheck {
         var engine = EngineModel.Shared;
         if (engine.Handle == 0) { Why = null; return; }
         if (engine.Shown.Graph != Graph.Full) return;
+        Judged++;
         Why = Judge(Probe.Select(p => CanvasNative.Sample(p)?.Display).ToList());
     }
 

@@ -146,15 +146,24 @@ sealed class ComparePane : Grid {
         var whole = Whole(map);
         var vp = _side.View;
         var mode = vp.FitScale * vp.Zoom > 4 ? BitmapInterpolationMode.None : BitmapInterpolationMode.HighQuality;
-        using (c.PushGeometryClip(new RectangleGeometry(new Rect(Area))))
-        using (c.PushRenderOptions(new RenderOptions { BitmapInterpolationMode = mode })) {
-            c.DrawImage(preview, new Rect(preview.Size), whole);
+        using (c.PushGeometryClip(new RectangleGeometry(new Rect(Area)))) {
+            DrawImage(preview, whole);
             if (vp.PastFit && _side.Region is { } region)
-                c.DrawImage(region, new Rect(region.Size), CanvasLayout.InView(_side.RegionUv, whole));
+                DrawImage(region, CanvasLayout.InView(_side.RegionUv, whole));
         }
         // The active side, the one the rating keys mark: an accent ring just outside its picture, in the inset.
         if (SideBySide.Active == _side)
             c.DrawRectangle(null, ActiveRing, whole.Intersect(new Rect(Area)).Inflate(4), Radius.Md, Radius.Md);
+
+        // A reduction under 2x is bilinear: Skia's HighQuality downscale is mipmapped, and CPU Skia rebuilds the
+        // chain on every draw of a new picture (CanvasPanel.Draw). Further down, the mips earn their cost; up, Mitchell.
+        // Pushed per image and never around them: Avalonia keeps an outer push's mode over an inner one's.
+        void DrawImage(Bitmap b, Rect into) {
+            double wide = into.Width * Scaling;
+            var m = mode != BitmapInterpolationMode.None && b.PixelSize.Width >= wide && b.PixelSize.Width < 2 * wide
+                ? BitmapInterpolationMode.LowQuality : mode;
+            using (c.PushRenderOptions(new RenderOptions { BitmapInterpolationMode = m })) c.DrawImage(b, new Rect(b.Size), into);
+        }
     }
 
     Point Anchor(Point p) => new(p.X / Math.Max(Area.Width, 1), p.Y / Math.Max(Area.Height, 1));

@@ -23,6 +23,7 @@ static partial class SelfTest {
         Rest(engine);   // an earlier check may have left a decode in flight
         SegmentedChecks();
         CaptureChecks();
+        if (engine.Handle != 0) SettleChecks(engine);
         if (engine.Handle == 0 || engine.Photos.Count < 2) return;
         int start = engine.Current;
         var window = new MainWindow();
@@ -100,12 +101,46 @@ static partial class SelfTest {
         bool late = histogram.Pulsing;
         var pulsing = ToolColumn(window);
         engine.EndInteraction();
-        Pump(150);
+        Pump(150 + (int)Settled.After.TotalMilliseconds);
         Check(!early && late && !histogram.Pulsing && Levels.Bins.Length > 0 && before.SequenceEqual(pulsing),
               $"the histogram pulses only once it has waited 500 ms, in place, and stops when it fills (at 200 ms {early}, at 700 ms {late})");
         Check(histogram.GetVisualDescendants().OfType<Control>().Any(c => ToolTip.GetTip(c) is string t && t.StartsWith("Shadows clipped"))
               && histogram.GetVisualDescendants().OfType<Control>().Any(c => ToolTip.GetTip(c) is string t && t.StartsWith("Highlights clipped")),
               "each clipping flag says what it measures");
+    }
+
+    /// The histogram and the flat-frame samples read the render back once the edit settles: a lone
+    /// render outside a drag at once, a burst once at its end, a drag never.
+    static void SettleChecks(EngineModel engine) {
+        int rest = 150 + (int)Settled.After.TotalMilliseconds;
+        Rest(engine);
+        Pump(rest);
+        float start = engine.Get("exposure_ev");
+        var (bins, judged) = (Levels.Bins, FlatFrameCheck.Judged);
+        engine.BeginInteraction();
+        for (int i = 1; i <= 3; i++) engine.Set("exposure_ev", start + 0.1f * i);
+        Pump(rest);
+        bool drag = ReferenceEquals(Levels.Bins, bins) && FlatFrameCheck.Judged == judged;
+        engine.EndInteraction();
+        Pump(rest);
+
+        (bins, judged) = (Levels.Bins, FlatFrameCheck.Judged);
+        engine.Set("exposure_ev", start - 0.1f);
+        bool lone = !ReferenceEquals(Levels.Bins, bins) && Levels.Bins.Length > 0 && FlatFrameCheck.Judged == judged + 1;
+
+        (bins, judged) = (Levels.Bins, FlatFrameCheck.Judged);
+        for (int i = 2; i <= 5; i++) engine.Set("exposure_ev", start - 0.1f * i);
+        bool waits = ReferenceEquals(Levels.Bins, bins) && FlatFrameCheck.Judged == judged;
+        Pump(rest);
+        int burst = FlatFrameCheck.Judged - judged;
+        bool measured = !ReferenceEquals(Levels.Bins, bins) && Levels.Bins.Length > 0;
+
+        engine.Set("exposure_ev", start);
+        Pump(rest);
+        Check(drag && lone && waits && measured && burst == 1,
+              $"the histogram and the flat-frame check never read mid-drag, read a lone render at once, and read four quick " +
+              $"renders once, {Settled.After.TotalMilliseconds} ms after the last (drag untouched {drag}, lone read at once {lone}, " +
+              $"burst untouched at first {waits}, measured after {measured}, flat-frame reads for the burst {burst})");
     }
 
     static void SplitterChecks(MainWindow window) {
