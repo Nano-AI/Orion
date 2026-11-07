@@ -723,9 +723,12 @@ static_assert(sizeof(AtrousBlur) == 16);
 /// research/denoise-masked.md §0.1 (two strengths) and §1 (`detail`).
 struct AtrousShrink {
     std::uint32_t size[2];
+    /// This scale's luma variance, noiseA·Y + noiseB, and each chroma
+    /// channel's, chromaA·Y + chromaB (`StarletNoise.h`).
     float noiseA;
     float noiseB;
-    float scaleNorm;
+    float chromaA;
+    float chromaB;
     float strengthLuma;
     float strengthChroma;
     float detail;         // 0..1, the texture-adaptive factor's weight
@@ -742,11 +745,12 @@ struct AtrousShrink {
     /// adds the residual c_{j+1}. 0 is the coarse-to-fine chain, whose first
     /// `accum` is the residual itself.
     std::int32_t  ends;
+    std::int32_t  _pad[3];
 };
 inline constexpr std::int32_t kShrinkFirst = 1;
 inline constexpr std::int32_t kShrinkLast  = 2;
-static_assert(sizeof(AtrousShrink) == 48);
-static_assert(offsetof(AtrousShrink, texture) == 40);
+static_assert(sizeof(AtrousShrink) == 64);
+static_assert(offsetof(AtrousShrink, texture) == 44);
 
 /// Non-local means on luminance — research/high-iso.md §4, the Slang
 /// `NlmParams`. The two windows are runtime so the bench can measure both.

@@ -146,7 +146,6 @@ void testDenoiseGpu() {
     c0->upload(input.data(), std::size_t(kW) * 4 * sizeof(__fp16));
 
     constexpr int kScales = 4;
-    constexpr float kScaleNorm[kScales] = {0.8907f, 0.2007f, 0.0855f, 0.0412f};
 
     std::vector<std::unique_ptr<orion::gpu::Texture>> blurs;
     for (int j = 0; j < kScales; ++j) blurs.push_back(make());
@@ -178,9 +177,8 @@ void testDenoiseGpu() {
         orion::pipe::params::AtrousShrink sp{};
         sp.size[0] = kW; sp.size[1] = kH;
         // The synthetic noise is constant, so it is all in the b term.
-        sp.noiseA = 0.0f;
-        sp.noiseB = kSigma * kSigma;
-        sp.scaleNorm = kScaleNorm[j];
+        const float n = orion::pipe::starlet::kWhiteNorm[j];
+        sp.noiseB = sp.chromaB = kSigma * kSigma * n * n;
         sp.strengthLuma = 2.0f;
         sp.strengthChroma = 2.0f;
         sp.step = 1 << j;

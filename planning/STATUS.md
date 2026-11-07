@@ -25,6 +25,7 @@ This session (PRs 57 to 60), measured with `tools/bench.py --ab` on the RTX 3070
 | Lens profile, PR 57 | only the editor's session | every session, compare's candidate and batch export included |
 | CI, `ci: lean runs` | Windows vcpkg never cached (11 min a run); Linux rebuilt opencv every run (2.5 to 5.5 min); main runs cancelled each other (3 of the last 5); no Windows selftest on a PR; MCP tests and greps never ran | vcpkg caches save whenever a run builds a package; every main commit gets a run; the Windows selftest on every PR; a `gates` job; a timeout on every job |
 | Clipping and the histogram (Lightroom parity) | flags a reading only, histogram inert | J, the flags or Alt on a tone slider paint clipped pixels on the canvas; a drag across the histogram moves Blacks, Shadows, Exposure, Highlights or Whites, one undo step |
+| Denoise threshold per starlet scale, ISO 8000 frame, PR 66 (research/high-iso.md §7) | luma 0.82-1.63x off its noise, chroma at luma's deviation (0.61-3.8x under) | a measured per-scale, per-class table after RCD, luma and chroma apart, within 5% |
 
 ## Next, in order
 

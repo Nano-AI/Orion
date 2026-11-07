@@ -8,15 +8,14 @@ namespace {
 
 using Frame = std::vector<__fp16>;
 
-constexpr float kScaleNorm[4] = {0.8907f, 0.2007f, 0.0855f, 0.0412f};
-
 float luma2020(float r, float g, float b) {
     return 0.2627f * r + 0.6780f * g + 0.0593f * b;
 }
 
 /// The capture chain's four blurs and four shrinks, dispatched by hand like
-/// `testDenoiseGpu`. `shape` fills each scale's shrink block beyond size,
-/// scale norm and step.
+/// `testDenoiseGpu`. `shape` fills each scale's shrink block beyond size and
+/// step, with the luma model per pixel; the run scales it by white noise's
+/// ‖W_j‖₂ and gives chroma the same.
 struct Starlet {
     orion::gpu::Device& device;
     std::unique_ptr<orion::gpu::Library> blurLib, shrinkLib;
@@ -58,9 +57,11 @@ struct Starlet {
             const int j = coarseFirst ? 3 - k : k;
             orion::pipe::params::AtrousShrink sp{};
             sp.size[0] = w; sp.size[1] = h;
-            sp.scaleNorm = kScaleNorm[j];
             sp.step = 1 << j;
             shape(sp);
+            const float n2 = orion::pipe::starlet::kWhiteNorm[j] * orion::pipe::starlet::kWhiteNorm[j];
+            sp.noiseA *= n2; sp.noiseB *= n2;
+            sp.chromaA = sp.noiseA; sp.chromaB = sp.noiseB;
             const auto* fine = (j == 0) ? c0.get() : blurs[std::size_t(j - 1)].get();
             const auto* coarse = blurs[std::size_t(j)].get();
             const orion::gpu::Texture* accum = coarse;
@@ -582,8 +583,8 @@ void testTextureGpu() {
 /// 36% removed at 1e-2), which is the "small saturated objects" line in §1.
 ///
 /// ⚠ With the plan's luma model for σ, Smoothness 1 at Color 3 removed 37% of
-/// the coarse energy here against a 67% plateau; `coarseChromaNoise` is the
-/// deviation that fixed it (66%).
+/// the coarse energy here against a 67% plateau; the chroma model
+/// (`StarletNoise.h`'s j = 4, 5) is what fixed it.
 void testDenoiseSmoothnessGpu() {
     section("Denoise: Smoothness, coarse chroma at quarter resolution (GPU)");
 
@@ -593,7 +594,7 @@ void testDenoiseSmoothnessGpu() {
         std::vector<double> c(std::size_t(kG) * kG, 0.0), n(c.size()), t(c.size());
         c[std::size_t(kG / 2) * kG + kG / 2] = 1.0;
         const double h[5] = {1.0 / 16, 4.0 / 16, 6.0 / 16, 4.0 / 16, 1.0 / 16};
-        const auto norms = orion::pipe::DevelopPipeline::starletScaleNorms();
+        const auto& norms = orion::pipe::starlet::kWhiteNorm;
         for (int j = 0; j < 6; ++j) {
             const int s = 1 << j;
             for (int y = 0; y < kG; ++y)

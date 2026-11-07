@@ -113,9 +113,11 @@ void DevelopPipeline::applyLocalDenoise(const Adjustments& adj,
         params::AtrousShrink shrink{};
         shrink.size[0] = width_;
         shrink.size[1] = height_;
-        shrink.noiseA = noise[0];
-        shrink.noiseB = noise[1];
-        shrink.scaleNorm = kDenoiseScaleNorm[j];
+        // White-noise norms, and luma's deviation for chroma too: this chain
+        // runs after the matrix, where the per-class tables do not apply.
+        const float n2 = starlet::kWhiteNorm[j] * starlet::kWhiteNorm[j];
+        shrink.noiseA = shrink.chromaA = noise[0] * n2;
+        shrink.noiseB = shrink.chromaB = noise[1] * n2;
         shrink.detail = adj.denoiseDetail;
         shrink.step = 1 << j;
         // The strengths come from the field; the two scalars are unread.

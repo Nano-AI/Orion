@@ -745,11 +745,8 @@ void DevelopPipeline::applyDenoise(const Adjustments& adj,
         adj.denoiseNlm != lastAdj_.denoiseNlm || wbMoved;
     if (nlmMoved) pipeline_.setEnabled(nNlm_, nlm);
 
-    // The luma model after white balance; the chain, the non-local means and
-    // Smoothness all read these two numbers.
-    const auto [aLum, bLum] = captureLumaNoise(adj);
-
     if (nlm && nlmMoved) {
+        const auto [aLum, bLum] = captureLumaNoise(adj);
         params::Nlm np{};
         np.size[0] = width_;
         np.size[1] = height_;
@@ -793,9 +790,11 @@ void DevelopPipeline::applyDenoise(const Adjustments& adj,
             params::AtrousShrink shrink{};
             shrink.size[0] = width_;
             shrink.size[1] = height_;
-            shrink.noiseA = aLum;
-            shrink.noiseB = bLum;
-            shrink.scaleNorm = kDenoiseScaleNorm[j];
+            const auto n = captureScaleNoise(adj, j);
+            shrink.noiseA = n.lumaA;
+            shrink.noiseB = n.lumaB;
+            shrink.chromaA = n.chromaA;
+            shrink.chromaB = n.chromaB;
             // Two strengths, nothing derived: research/denoise-masked.md §0.1.
             shrink.strengthLuma = adj.denoiseLuma;
             shrink.strengthChroma = adj.denoiseColor;
@@ -810,18 +809,15 @@ void DevelopPipeline::applyDenoise(const Adjustments& adj,
     }
 
     if (smoothing && smoothMoved) {
-        // ⚠ The chroma model, not the luma one (a deviation from high-iso.md
-        // §1, which reused the luma model): see `coarseChromaNoise`. The block
-        // keeps its full colour, so the shrink reads its brightness from it
-        // exactly as the full-resolution one does.
-        const auto noise = coarseChromaNoise(adj);
+        // The block keeps its full colour, so the shrink reads its brightness
+        // from it exactly as the full-resolution one does.
         for (int j = 0; j < kChromaScales; ++j) {
+            const auto n = captureScaleNoise(adj, kDenoiseScales + j);
             params::AtrousShrink shrink{};
             shrink.size[0] = chromaW_;
             shrink.size[1] = chromaH_;
-            shrink.noiseA = noise[0];
-            shrink.noiseB = noise[1];
-            shrink.scaleNorm = kChromaScaleNorm[j];
+            shrink.chromaA = n.chromaA;
+            shrink.chromaB = n.chromaB;
             shrink.strengthLuma = 0.0f;
             shrink.strengthChroma = adj.denoiseColor * adj.denoiseSmoothness;
             shrink.step = 4 << j;
@@ -846,30 +842,8 @@ std::array<float, 2> DevelopPipeline::captureLumaNoise(const Adjustments& adj) c
     return {aLum, bLum};
 }
 
-std::array<float, 2> DevelopPipeline::coarseChromaNoise(const Adjustments& adj) const {
-    // The same fit, carried through the chroma split instead of the luma sum,
-    // and through the mosaic's sampling. Chroma channel ch is x_ch − wᵀx, so
-    // its variance is Σ_c (δ_ch,c − w_c)² var(x_c). At scales far coarser than
-    // the CFA period a demosaiced channel is an interpolation of samples at
-    // density ρ_c (a quarter for R and B, half for G; Alleysson et al. 2005),
-    // so its coarse coefficients carry var/ρ_c rather than var. The shrink
-    // takes one σ for all three chroma channels: their mean variance.
-    //
-    // Measured, not argued: on `testDenoiseSmoothnessGpu`'s card this is 3.0x
-    // the luma model's deviation, and the luma model at Color 3 removed 37%
-    // of the coarse chroma energy against a 67% plateau that 4x reaches.
-    const auto m = denoiseMultipliers(adj);
-    constexpr float w[3] = {0.2627f, 0.6780f, 0.0593f};
-    constexpr float rho[3] = {0.25f, 0.5f, 0.25f};
-    float sumA = 0.0f, sumB = 0.0f;
-    for (int ch = 0; ch < 3; ++ch) {
-        for (int c = 0; c < 3; ++c) {
-            const float d = (ch == c ? 1.0f : 0.0f) - w[c];
-            sumA += d * d * m[std::size_t(c)] / rho[c];
-            sumB += d * d * m[std::size_t(c)] * m[std::size_t(c)] / rho[c];
-        }
-    }
-    return {noise_.a * sumA / 3.0f, noise_.b * sumB / 3.0f};
+starlet::ScaleNoise DevelopPipeline::captureScaleNoise(const Adjustments& adj, int j) const {
+    return starlet::scaleNoise(noise_.a, noise_.b, denoiseMultipliers(adj), j);
 }
 
 std::array<float, 3> DevelopPipeline::denoiseMultipliers(const Adjustments& adj) const {

@@ -333,9 +333,88 @@ That is provenance, not clearance.
 
 ---
 
+## 7. The noise each starlet scale actually carries, measured 2026-11-07
+
+### Sources
+
+> D. L. Donoho and I. M. Johnstone, *Ideal spatial adaptation by wavelet shrinkage*, Biometrika 81(3), 425-455, 1994.
+> J.-L. Starck and F. Murtagh, *Astronomical Image and Data Analysis*, 2nd ed., Springer, 2006; and J.-L. Starck and F. Murtagh, *Automatic noise estimation from the multiresolution support*, PASP 110, 193-199, 1998.
+
+Donoho and Johnstone read a scale's noise deviation as its median absolute deviation over 0.6745.
+Starck and Murtagh give the deviation at scale j as `σ·σ_j^e`, where `σ_j^e` is measured by transforming simulated unit noise, because `‖W_j‖₂` is right only for white noise.
+The demosaic's output is not white, so the chain had been thresholding against the wrong `σ_j` at every scale.
+
+### Step 1, the measurement
+
+DSC00709 (ISO 16000) is not on this machine; the highest-ISO frame there is `a7backup/DSC09348.ARW`, ISO 8000, a night road with a large flat sky.
+Fit: `a = 1.181e-3`, `b = 2.934e-6`; white balance `m = (1.777, 1, 2.707)`.
+A 2048 x 1536 crop of sky at (5400, 1800), cut to the 3039 of 3072 32 px blocks whose `c_2` luma stays under twice the median (no stars, no lights), luminance 0.0033 after white balance.
+The demosaic's output (`rcd:red/blue`) was read back and a double-precision starlet run on it; each scale's deviation is the MAD over the blocks.
+"Model" is what the chain used: `‖W_j‖₂·sqrt(aLum·Y + bLum)` for luma and, before this change, the same luma deviation for chroma; "Smoothness model" is `coarseChromaNoise`, the density-scaled chroma model §1 used at j = 4, 5.
+
+| j | luma measured | luma model | ratio | chroma measured | chroma thresholded at (luma model) | ratio | Smoothness model | ratio |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 1.53e-3 | 1.86e-3 | **0.82** | 1.14e-3 | 1.86e-3 | **0.61** | 6.74e-3 | 0.17 |
+| 1 | 6.47e-4 | 4.18e-4 | **1.55** | 1.02e-3 | 4.18e-4 | **2.44** | 1.52e-3 | 0.67 |
+| 2 | 2.88e-4 | 1.78e-4 | **1.61** | 6.07e-4 | 1.78e-4 | **3.41** | 6.47e-4 | 0.94 |
+| 3 | 1.40e-4 | 8.59e-5 | **1.63** | 3.25e-4 | 8.59e-5 | **3.79** | 3.12e-4 | 1.04 |
+| 4 | 7.05e-5 | 4.25e-5 | 1.66 | 1.65e-4 | 4.25e-5 | 3.88 | 1.54e-4 | 1.07 |
+| 5 | 4.12e-5 | 2.13e-5 | 1.94 | 8.14e-5 | 2.13e-5 | 3.83 | 7.72e-5 | 1.05 |
+
+A synthetic grey mosaic with the same `a`, `b`, white balance and level, through the same graph, gives the same ratios within 5% at j = 0..4 (luma 0.83, 1.54, 1.60, 1.59, 1.60; chroma against luma 0.61, 2.44, 3.30, 3.55, 3.63).
+Only luma at j = 5, which no chain shrinks, reads higher on the real frame (1.94 against 1.60): low-frequency structure in the sky or read noise the fit does not see.
+
+What it says:
+- **The audit's two claims hold.** Luma's fine scale was over-thresholded by 1.2x and j = 1..3 under-thresholded by 1.55-1.63x; chroma at j = 1..3 was under-thresholded by 2.4-3.8x, so 4 to 16 px colour speckle stood above `τ` and survived.
+  Both exceed the 1.5x line, so the fix below is owed and the cause is not the demosaic order.
+- **The real frame is the synthetic card.** RCD on white per-sample noise reproduces the frame to 5%, so the per-scale deviation is a property of the demosaic and the transform, not of the photograph, and a table measured once on simulated noise (Starck and Murtagh's `σ_j^e`) serves every frame without a per-frame reduction pass, which would also have read texture as noise on a frame with no flat part.
+- **§1's chroma model was right where it was used**, at j = 4, 5 (0.94-1.07), and 6x too high at j = 0, where it was not.
+
+### Step 2, the fix
+
+`pipe/StarletNoise.h` holds, per scale and per CFA class (R, G, B), `λ = var(w_j) / var(sample)` after RCD, for luma and for one chroma channel.
+Under a white balance `m` and fit `a`, `b`, a class's sample variance at grey luminance `Y` is `m_c·a·Y + m_c²·b`, so each scale's variance is `A_j·Y + B_j` with `A_j = a·Σ λ_jc·m_c` and `B_j = b·Σ λ_jc·m_c²`.
+The shrink takes the two pairs (`noiseA/B` luma, `chromaA/B` chroma) per scale, replacing `scaleNorm`; Smoothness's two quarter-resolution shrinks read the chroma rows j = 4, 5 and `coarseChromaNoise` is gone.
+The preview and region graphs run the same RCD on point-sampled mosaics with the full frame's per-sample noise, so the same table serves them.
+
+**Fit.** Eleven mixes of per-class deviation (ratios 1 to 3, the range white balance spans) on a flat 0.1 mosaic with deviation 0.01, least squares per scale: every mix within 4% in deviation at the scales a chain shrinks, 6% at luma j = 5.
+λ does not move with level or amplitude: 0.02 and 0.25, 0.005 and 0.02 agree to 2%.
+⚠ Single-class injections are *not* additive at j = 0 (R + G + B alone gives 0.169 against 0.243 with all three): one noisy class makes the fine-scale distribution a mixture across CFA phases, which a MAD under-reads. The table is therefore fitted on mixes, never on one class at a time.
+
+**Unchanged.** The slider is still `β` in deviations of the measured noise; NLM's per-pixel `σ` (its own model, §4); the masked chain (#300), which runs after the matrix where a camera-class table does not apply and keeps white-noise norms with luma's deviation for chroma.
+
+**Measured (`testStarletNoiseGpu`, `testDenoiseResidualGpu`).**
+A held-out card (DSC09348's `a`, `b` and white balance, grey 0.02, black offset 512, Rec.2020 primaries so no matrix mixes luma into chroma):
+
+| j | luma, measured / table | luma, measured / white model | chroma, measured / table | chroma, measured / luma's white model |
+|---|---|---|---|---|
+| 0 | 1.04 | 0.81 | 0.99 | 0.54 |
+| 1 | 1.01 | 1.53 | 1.00 | 2.15 |
+| 2 | 1.01 | 1.59 | 1.00 | 2.93 |
+| 3 | 1.00 | 1.60 | 1.05 | 3.32 |
+| 4 | 0.89 (unused) | 1.43 | 1.00 | 3.25 |
+| 5 | 0.98 (unused) | 1.57 | 1.05 | 3.32 |
+
+What the chain leaves of the four scales' sum (the picture less the input's `c_4`, as an RMS, since the garrote's residual is sparse):
+
+| | White-noise norms | Measured tables |
+|---|---|---|
+| Colour speckle past a 1 px blur (2 to 16 px), Color 3 | 0.46 | **0.18** |
+| Luma past a 2 px blur (j = 2, 3), Luminance 2 | 0.50 | **0.43** |
+| Luma, all four scales, Luminance 2 | 0.34 | 0.37 |
+
+Chroma is the large change: 2.6x less speckle at the same Color.
+Luma moves less, both ways: coarse grain falls by 14% and the finest scale keeps a little more, because it had been thresholded 1.2x above its noise.
+`testDenoiseSmoothnessGpu`'s card goes from 66% to 80% of its coarse chroma energy removed at Color 3, Smoothness 1 (rows 4, 5 read slightly above the density model there).
+
+**Cost.** No node, no pass: two more floats in each shrink's block and one more square root per pixel and scale.
+
+---
+
 ## History
 
 | Date | What |
 |---|---|
 | 2026-10-18 | Written. §1 coarse chroma, §2 noise-aware texture gain, §3 Clarity's measured floor, §4 NL-means with its patent status and measurement protocol, §5 the recipe |
 | 2026-10-18 | Implemented, same day. §1 reads `c_4` with a chroma model; §2's `m` gained the brightness ceiling after the bench found 30σ alone reached nothing on a clean frame; §3's `kFloor` 0.5 from the sweep; §4 ships with the 11×11 window. Decisions #303-#308 |
+| 2026-11-07 | §7: each scale's noise measured on an ISO 8000 frame (luma 0.82-1.63x the white-noise model, chroma 0.61-3.8x the luma deviation it was thresholded at); the shrinks now read a per-scale, per-class table for luma and chroma |
