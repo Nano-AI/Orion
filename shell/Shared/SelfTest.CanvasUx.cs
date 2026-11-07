@@ -103,6 +103,17 @@ static partial class SelfTest {
         Dispatcher.UIThread.RunJobs();
     }
 
+    /// A trackpad scroll stamped with its own time, raised as Pinch raises the magnify. The
+    /// headless MouseWheel stamps each event after the last one's twenty render ticks, which on
+    /// Linux's CPU Skia (~70 ms a frame) spaces one swipe's events wider than a gesture's pause.
+    static void Scroll(Window window, Point at, Vector delta, ulong timestamp) {
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        var target = window.InputHitTest(at) as Avalonia.Interactivity.Interactive ?? window;
+        target.RaiseEvent(new PointerWheelEventArgs(target, new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true), window, at,
+            timestamp, PointerPointProperties.None, KeyModifiers.None, delta));
+        Dispatcher.UIThread.RunJobs();
+    }
+
     static void ZoomChecks(Window window, CanvasPanel canvas) {
         var vp = CanvasState.Viewport;
         var size = canvas.Bounds.Size;
@@ -156,12 +167,12 @@ static partial class SelfTest {
         int swiped = CanvasPanel.Swiped;
         double zoom0 = vp.Zoom;
         var center0 = vp.Center;
-        for (int i = 0; i < 6; i++) window.MouseWheel(At(window, canvas, p), new Vector(-0.6, 0.05), RawInputModifiers.None);   // 180 points, one gesture
+        for (int i = 0; i < 6; i++) Scroll(window, At(window, canvas, p), new Vector(-0.6, 0.05), (ulong)(1 + 16 * i));   // 180 points, one gesture
         // "Alone" is no zoom and no pan: the next photo may start its own fit motion (CI's photos differ in size), so Live is not the test.
         Check(CanvasPanel.Swiped == swiped + 1 && vp.IsFit && vp.Zoom == zoom0 && vp.Center == center0,
               $"at fit a sideways trackpad swipe steps one photo, once a gesture, and leaves the view alone ({CanvasPanel.Swiped - swiped} steps, fit {vp.IsFit}, zoom {zoom0:0.###} → {vp.Zoom:0.###}, centre {center0} → {vp.Center})");
-        Thread.Sleep(350);   // a pause is a new gesture where there is no AppKit phase: swipe back, to the photo the checks below expect
-        for (int i = 0; i < 6; i++) window.MouseWheel(At(window, canvas, p), new Vector(0.6, 0.05), RawInputModifiers.None);
+        // A pause is a new gesture where there is no AppKit phase: swipe back, to the photo the checks below expect.
+        for (int i = 0; i < 6; i++) Scroll(window, At(window, canvas, p), new Vector(0.6, 0.05), (ulong)(1 + 16 * 5 + 350 + 16 * i));
         Check(CanvasPanel.Swiped == swiped + 2, $"after a pause the next swipe is a new gesture and steps again ({CanvasPanel.Swiped - swiped} steps)");
         vp.Reset();
 

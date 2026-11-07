@@ -52,7 +52,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 ORION = ROOT / "shell" / "bin" / "Release" / "net10.0" / "Orion"
 SAMPLES = Path(os.environ.get("ORION_SAMPLES", ROOT / "samples"))
-os.environ.setdefault("DOTNET_ROOT", "/opt/homebrew/opt/dotnet/libexec")
+if sys.platform == "darwin":
+    os.environ.setdefault("DOTNET_ROOT", "/opt/homebrew/opt/dotnet/libexec")
 
 # ⚠ `_PIC8095.ARW` is deliberately not in this list. It has people in the plaza
 # at its base, and while an export into a temporary directory is not a
@@ -64,7 +65,12 @@ os.environ.setdefault("DOTNET_ROOT", "/opt/homebrew/opt/dotnet/libexec")
 # (2026-10-10), so the gate named files nobody had and exited 2 for everyone.
 EXPORT_CANDIDATES = ["_PIC8220.ARW", "_PIC8148.ARW",
                      "overexposed-background.ARW", "underexposedsubject.ARW"]
-EXPORTS = [c for c in EXPORT_CANDIDATES if (SAMPLES / c).is_file()][:2]
+RAW_SUFFIXES = {".arw", ".cr2", ".cr3", ".nef", ".raf", ".orf", ".rw2", ".dng"}
+EXPORTS = [c for c in EXPORT_CANDIDATES if (SAMPLES / c).is_file()]
+# Any other RAW fills in, never _PIC8095.ARW (people in the frame, above).
+EXPORTS += sorted(p.name for p in SAMPLES.glob("*") if p.suffix.lower() in RAW_SUFFIXES
+                  and p.is_file() and p.name not in EXPORTS and p.name != "_PIC8095.ARW")
+EXPORTS = EXPORTS[:2]
 if len(EXPORTS) < 2:
     EXPORTS = EXPORT_CANDIDATES[:2]
 

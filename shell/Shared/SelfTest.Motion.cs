@@ -232,23 +232,38 @@ static partial class SelfTest {
     }
 
     /// The arrow keys: a photo opening shows its values at once, and the section dot does not animate.
+    /// Two links to the selftest's one photo, as SideBySideChecks makes, so there is a next photo to step to.
     static void BrowseChecks(Window window, EngineModel engine, AnalogTrack track) {
-        engine.Apply(s => s.Set("exposure_ev", track.Base + 1.5f), reread: true);
-        var plate = track.FindAncestorOfType<SectionPlate>()!;
-        var dot = plate.GetVisualDescendants().OfType<Ellipse>().First();
-        double Lit() => dot.GetBaseValue(Visual.OpacityProperty).GetValueOrDefault();   // where it is going: Opacity reads the fade under way
-        double lit = Lit();
-        Check(lit == 1 && dot.Transitions?.Count == 2 && dot.Transitions.OfType<TransitionBase>().All(t => t.Duration == Motion.Enter),
-              "an edit brings the section's dot in on the Enter transition (fade and grow)");
-        bool moving = track.Moving;
-        engine.Next();
-        Settle(() => !engine.Opening);
-        var tracks = window.GetVisualDescendants().OfType<AnalogTrack>().ToList();
-        Check(moving && engine.Session != null && tracks.Count > 3 && tracks.All(t => !t.Moving && t.Shown == t.Value),
-              $"after an arrow key every one of {tracks.Count} tracks shows its photo's value at once, a glide in flight included");
-        Check(Lit() == lit || dot.Transitions == null, "a section dot a photo opening turns off or on does not animate");
-        engine.Previous();
-        Settle(() => !engine.Opening);
+        var list = engine.Photos.ToList();
+        int at = engine.Current;
+        string dir = Directory.CreateTempSubdirectory("orion-browse-").FullName;
+        try {
+            string ext = System.IO.Path.GetExtension(list[at]), a = System.IO.Path.Combine(dir, "a" + ext), b = System.IO.Path.Combine(dir, "b" + ext);
+            File.CreateSymbolicLink(a, list[at]);
+            File.CreateSymbolicLink(b, list[at]);
+            engine.Load([a, b]);
+            engine.Open(0);
+            Settle(() => !engine.Opening);
+            engine.Apply(s => s.Set("exposure_ev", track.Base + 1.5f), reread: true);
+            var plate = track.FindAncestorOfType<SectionPlate>()!;
+            var dot = plate.GetVisualDescendants().OfType<Ellipse>().First();
+            double Lit() => dot.GetBaseValue(Visual.OpacityProperty).GetValueOrDefault();   // where it is going: Opacity reads the fade under way
+            double lit = Lit();
+            Check(lit == 1 && dot.Transitions?.Count == 2 && dot.Transitions.OfType<TransitionBase>().All(t => t.Duration == Motion.Enter),
+                  "an edit brings the section's dot in on the Enter transition (fade and grow)");
+            bool moving = track.Moving;
+            bool stepped = engine.Next();
+            Settle(() => !engine.Opening);
+            var tracks = window.GetVisualDescendants().OfType<AnalogTrack>().ToList();
+            Check(moving && stepped && engine.Session != null && tracks.Count > 3 && tracks.All(t => !t.Moving && t.Shown == t.Value),
+                  $"after an arrow key every one of {tracks.Count} tracks shows its photo's value at once, a glide in flight included");
+            Check(Lit() == lit || dot.Transitions == null, "a section dot a photo opening turns off or on does not animate");
+        } finally {
+            engine.Load(list);
+            engine.Open(at);
+            Settle(() => !engine.Opening);
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     /// Reduce motion: no travel and no stretch; a short cross-fade instead.

@@ -275,7 +275,7 @@ public sealed class CanvasPanel : Panel {
         bool zoomKey = e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control);
         // At fit there is nothing to pan: a two-finger sideways swipe steps photos, as Photos does.
         if (precise && !zoomKey && CanvasState.Viewport.IsFit && Math.Abs(d.X) > Math.Abs(d.Y)) {
-            Swipe(d.X * points);
+            Swipe(d.X * points, e.Timestamp);
             e.Handled = true;
             return;
         }
@@ -289,21 +289,22 @@ public sealed class CanvasPanel : Panel {
     }
 
     /// Points of sideways travel that make a swipe, and the pause that starts a new one where
-    /// AppKit gives no gesture phase (Windows, Linux).
+    /// AppKit gives no gesture phase (Windows, Linux). The pause is read on the events' own
+    /// clock, not when the UI thread gets to them: a thread busy opening the photo the swipe
+    /// stepped to delivers the rest of the gesture late, all at once.
     const double SwipeStep = 80, SwipeGapMs = 300;
     double _swipe;
     bool _swiped;
-    long _swipeAt;
+    ulong _swipeAt;
     /// Photo steps a swipe has made: the selftest's count (one a gesture, however far it goes).
     internal static int Swiped;
 
     /// One step a gesture: fingers left (content moving left, natural scrolling) is the next photo.
     /// The momentum glide after the fingers lift is not a second swipe.
-    void Swipe(double dx) {
+    void Swipe(double dx, ulong at) {
         if (CanvasNative.Momentum()) return;
-        long now = Environment.TickCount64;
-        if (now - _swipeAt > SwipeGapMs) (_swipe, _swiped) = (0, false);
-        _swipeAt = now;
+        if (at < _swipeAt || at - _swipeAt > SwipeGapMs) (_swipe, _swiped) = (0, false);
+        _swipeAt = at;
         if (!_swiped && Math.Abs(_swipe += dx) >= SwipeStep) {
             _swiped = true;
             Swiped++;

@@ -26,8 +26,6 @@ SKIP = {
         "the selection reaches the picture": FIXTURE + ": the subject Vision finds barely moves it",
         "the sample's preview seeds a matte of at most":
             FIXTURE + ": it carries no embedded preview, so there is no sky to seed (the sheet says so)",
-        "after an arrow key every one of 9 tracks shows its photo's value at once":
-            "fails on main too (the glide, STATUS.md)",
     },
     "macos": {},
     "windows": {
