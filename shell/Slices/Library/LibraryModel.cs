@@ -10,17 +10,20 @@ namespace OrionShell.Library;
 /// The names and rules are Library.swift's, so the three views can never
 /// disagree about what a filter shows or what the count says.
 ///
-/// Ratings, rejections and the colour label live in each photo's XMP sidecar,
+/// Ratings, the pick and reject flags and the colour label live in each photo's XMP sidecar,
 /// merged as Library.persist merges them (Sidecar.Merge keeps the edit), and
 /// read back from it when the folder lists. A cull acts on the group
 /// (PhotoSelection) when the photo is part of a real one, else on that photo.
 public sealed class LibraryModel {
     public static LibraryModel Shared { get; } = new();
 
-    public enum Filter { All, Rated, Unrated, Rejected }
+    public enum Filter { All, Rated, Unrated, Rejected, Picked }
 
     /// Library.Filter.title, in allCases order.
-    public static readonly string[] FilterTitles = ["All", "Rated", "Unrated", "Rejected"];
+    public static readonly string[] FilterTitles = ["All", "Rated", "Unrated", "Rejected", "Picked"];
+
+    /// Lightroom's three flags: P, U and X.
+    public enum Flag { None, Picked, Rejected }
 
     public enum Order { Name, Rating }
     public static readonly string[] OrderTitles = ["File name", "Rating, best first"];
@@ -32,6 +35,7 @@ public sealed class LibraryModel {
         public string Name { get; } = System.IO.Path.GetFileName(path);
         public int Rating { get; internal set; }
         public bool Rejected { get; internal set; }
+        public bool Picked { get; internal set; }
         /// Free text, as XMP has it. Nothing here sets one; it is kept so a write never drops it.
         public string? Label { get; internal set; }
         /// Marked here since its sidecar was last asked for: a read still in flight must not undo it.
@@ -153,6 +157,7 @@ public sealed class LibraryModel {
         Filter.Rated => p.Rating >= 1 && !p.Rejected,
         Filter.Unrated => p.Rating == 0 && !p.Rejected,
         Filter.Rejected => p.Rejected,
+        Filter.Picked => p.Picked,
         _ => true,
     });
 
@@ -190,7 +195,7 @@ public sealed class LibraryModel {
 
     static bool Apply(Photo p, Sidecar? s) {
         if (s is not { Unreadable: null }) return false;
-        (p.Rating, p.Rejected, p.Label) = (s.Rating, s.Rejected, s.Label);
+        (p.Rating, p.Rejected, p.Picked, p.Label) = (s.Rating, s.Rejected, s.Picked, s.Label);
         return true;
     }
 
@@ -227,8 +232,14 @@ public sealed class LibraryModel {
 
     public void SetRejected(IEnumerable<Photo> photos, bool rejected) => Mark(photos, p => {
         p.Rejected = rejected;
-        if (rejected) p.Rating = 0;
+        if (rejected) (p.Rating, p.Picked) = (0, false);
     });
+
+    /// A pick un-rejects and keeps the rating; a reject is SetRejected's; none clears either flag.
+    public void SetFlag(IEnumerable<Photo> photos, Flag flag) {
+        if (flag == Flag.Rejected) { SetRejected(photos, true); return; }
+        Mark(photos, p => (p.Picked, p.Rejected) = (flag == Flag.Picked, false));
+    }
 
     public void ToggleRejected(Photo photo) => SetRejected(photo, !photo.Rejected);
 
@@ -243,7 +254,7 @@ public sealed class LibraryModel {
             p.Marked = true;
             // Only what a mark changes: the label comes from the file at write time,
             // never from a photo whose marks have not been read yet (decision #370).
-            if (Writes && !Sidecar.Merge(p.Path, s => (s.Rating, s.Rejected) = (p.Rating, p.Rejected))) failed.Add(p);
+            if (Writes && !Sidecar.Merge(p.Path, s => (s.Rating, s.Rejected, s.Picked) = (p.Rating, p.Rejected, p.Picked))) failed.Add(p);
         }
         if (failed.Count > 0)
             EngineModel.Shared.Say((failed.Count == 1 ? $"Ratings could not be saved for {failed[0].Name}."

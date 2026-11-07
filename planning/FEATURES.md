@@ -9,7 +9,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 |---|---|---|
 | Folder-based browse (no catalog) | M1 | Matches how you already work |
 | Grid + filmstrip, fast thumbnails | M1 | Async workers, LRU cache. The grid is the gallery view (#204): G toggles it, embedded-preview cells at 200-400 pt, rate/reject/trash without a decode |
-| Star ratings, reject flags, color labels | M1 | Written to XMP sidecar |
+| Star ratings, reject flags, color labels | M1 | Written to XMP sidecar. Pick flags too (P, X, U, the Picked filter): `orion:Pick`, since Lightroom keeps picks in its catalog, not in XMP |
 | Filter/sort by rating, flag, label, date | M1 | SQLite index makes this instant |
 | XMP sidecars as source of truth | M1 | Portable, no lock-in |
 | Live folder watch (FSEvents) | M6 | S6.9 — a rating written by another app appears without reopening. Costed under *Library index* in `ROADMAP.md` |
@@ -140,6 +140,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | Side-by-side compare | M6 | ✅ Two photos, select and candidate, zoom and pan linked, ratings on the active side: `compare-side-by-side` (C), branch `lh/compare` (#400). The before/after Y-split of S6.6 is still the divider (#212) |
 | Busy state on photo open | M6 | S6.3 (#212) — #151: the canvas holds the *previous* photograph for the 210.9 ms of a cold open, and nothing anywhere marks it stale |
 | Slider color scales | M6 | S6.4 (#212) — temp blue→yellow, tint green→magenta, mixer tracks tinted per band. `AnalogTrack` is flat + accent today |
+| Zoom presets | M6 | ✅ Lightroom's 1:4, 1:2, 1:1, 2:1, 4:1 (`zoom-1-4` to `zoom-4-1`); Ctrl+= and Ctrl+- step through them about the pointer, else the centre. Out of section 16: asked for with the first-hour Lightroom parity items |
 | Interactive histogram | M6 | ✅ S6.5 (#212): the clipping overlay on the canvas (`show-clipping`, J; the histogram's flags; Alt on a tone slider's drag), drawn over the picture, never rendered; a drag across one of the histogram's five regions moves its slider. The regions' widths are a choice: Lightroom documents none |
 | Soft proofing | M6 | S6.8 (#212) — lcms2 + OCIO already in the stack; UI plus a proof transform |
 | Keyboard-first workflow | M2 | Capture One's Speed Edit is the model |
@@ -168,7 +169,7 @@ None gets code before the developer settles it on an issue.
 | Super resolution / lens blur / reflection removal / adaptive presets | ML, v2 territory |
 | Depth range mask, people-parts masks | Depth data / segmentation models; niche next to the six shipped kinds |
 | **Auto-cull: rank, filter and rate a shoot** | Developer's, 2026-09-06 — *"rank and filter through photos and auto rate then and pick out the best ones"*. ⚠ **Three problems wearing one name, and they do not share a risk profile.** **(1) Defects** — focus (Laplacian variance, Pech-Pacheco et al. ICPR 2000), clipping (the histogram already computes it), blinks (`Vision` is linked (now `shell/native/matte.mm`) and already runs segmentation in `SubjectMatte.swift`). Measurement, not inference, right nearly every time, and most of the actual work: *"340 of these 500 are soft"* is the sentence that saves the afternoon. **(2) Burst grouping** — cluster near-duplicates, rank within each by (1). Where culling time really goes. Still no aesthetics model. **(3) Aesthetic scoring** — NIMA (Talebi & Milanfar, IEEE TIP 2018) is published so the sourcing rule is satisfiable; **provenance is not the problem, taste is.** It is trained on crowd consensus and will confidently rate the photographer's favourite a 4. ⚠ **Never auto-write `rating`.** `Library.swift:19` stores 0-5 in the XMP sidecar and `:101` filters on it, so a machine-written star silently changes what the photographer can see, on files that are irreplaceable — a new field plus a sort order and a confirmed action, never a silent write. ⚠ **A cached score is not reproducible**: `Engine+Document.swift` already warns that Vision's answer moves between OS releases, which is why a missing matte is *recorded* rather than guessed; store what produced a score or store none. ⚠ Run it on the embedded preview, not the raw — 42 MP x 500 frames through anything is not free, and focus and blinks do not need full resolution. **Build (1) alone first**; (3) probably never |
-| Navigator panel, zoom presets | |
+| Navigator panel | |
 | Reference view (pin a second image) | |
 | Second-monitor support | |
 | ISO-adaptive presets | Preset system is a patch model — adaptivity is a new axis |

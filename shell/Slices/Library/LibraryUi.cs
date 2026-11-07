@@ -11,16 +11,17 @@ static class LibraryUi {
     /// The library filter, one control wherever it appears (the strip and the
     /// gallery): a segmented choice, each cell counting what it would show, so
     /// every option is in view and none has to be remembered behind a menu.
-    /// Marks as icons (★ rated, ☆ unrated, ✕ rejected), each named in its tooltip:
+    /// Marks as icons (★ rated, ☆ unrated, ✕ rejected, ⚑ picked), each named in its tooltip:
     /// in words the four took 430 px of the strip.
     public static Segmented Filter() {
         var library = LibraryModel.Shared;
-        var filter = new Segmented(LibraryModel.FilterTitles, (int)library.Current, [null, "star.fill", "star", "xmark"]);
+        var filter = new Segmented(LibraryModel.FilterTitles, (int)library.Current, [null, "star.fill", "star", "xmark", "flag"]);
         void Count() {
             var photos = library.Photos;
             filter.Selected = (int)library.Current;
             filter.Figures($"{photos.Count}", $"{photos.Count(p => p.Rating >= 1 && !p.Rejected)}",
-                           $"{photos.Count(p => p.Rating == 0 && !p.Rejected)}", $"{library.RejectedCount}");
+                           $"{photos.Count(p => p.Rating == 0 && !p.Rejected)}", $"{library.RejectedCount}",
+                           $"{photos.Count(p => p.Picked)}");
         }
         filter.Changed += i => library.Current = (LibraryModel.Filter)i;
         library.Changed += Count;
@@ -65,7 +66,7 @@ static class LibraryUi {
 
     /// A photo's marks, at IconSize.Sm in the strip and the gallery alike: five stars, the rating's in the star
     /// colour and the rest faint, so "unrated" is shown rather than inferred;
-    /// a rejected photo shows the reject ✕ alone, in the reject colour.
+    /// a rejected photo shows the reject ✕ alone, in the reject colour; a picked one leads its stars with the flag.
     /// `unearned`: the stars above the rating too, faint; without them an unrated photo shows nothing.
     public static Control Marks(LibraryModel.Photo photo, bool unearned = true) {
         if (photo.Rejected) {
@@ -75,8 +76,13 @@ static class LibraryUi {
             return x;
         }
         var stars = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Xs, VerticalAlignment = VerticalAlignment.Center };
+        if (photo.Picked) {
+            var flag = Icons.Create("flag", IconSize.Sm, Palette.Text);
+            Avalonia.Automation.AutomationProperties.SetName(flag, "Picked");
+            stars.Children.Add(flag);
+        }
         for (int i = 1; i <= (unearned ? 5 : photo.Rating); i++) stars.Children.Add(Icons.Create("star.fill", IconSize.Sm, i <= photo.Rating ? Palette.Star : Palette.Faint));
-        Avalonia.Automation.AutomationProperties.SetName(stars, photo.Rating == 0 ? "Unrated" : $"{photo.Rating} stars");
+        Avalonia.Automation.AutomationProperties.SetName(stars, (photo.Picked ? "Picked, " : "") + (photo.Rating == 0 ? "Unrated" : $"{photo.Rating} stars"));
         return stars;
     }
 
@@ -89,6 +95,7 @@ static class LibraryUi {
         var scope = library.CullScope(photo);
         string suffix = Suffix(scope);
         var items = new List<Control> {
+            Item((photo.Picked ? "Unflag" : "Pick") + suffix, () => library.SetFlag(scope, photo.Picked ? LibraryModel.Flag.None : LibraryModel.Flag.Picked)),
             Item((photo.Rejected ? "Keep" : "Reject") + suffix, () => library.SetRejected(scope, !photo.Rejected)),
             new Separator(),
         };
@@ -139,6 +146,7 @@ static class LibraryUi {
         var parts = new List<string> { photo.Name };
         if (LibraryModel.Shared.HasExplicitSelection && LibraryModel.Shared.IsSelected(photo)) parts.Add("selected");
         if (photo.Rejected) parts.Add("rejected");
+        if (photo.Picked) parts.Add("picked");
         if (photo.Rating > 0) parts.Add($"{photo.Rating} star{(photo.Rating == 1 ? "" : "s")}");
         if (!string.IsNullOrEmpty(photo.Label)) parts.Add($"label {photo.Label}");
         return string.Join(", ", parts);

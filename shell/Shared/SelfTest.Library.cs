@@ -33,6 +33,7 @@ static partial class SelfTest {
             string photo = Path.Combine(dir, "photo" + Path.GetExtension(engine.Photos[engine.Current]));
             File.CreateSymbolicLink(photo, engine.Photos[engine.Current]);
             MarksInSidecar(photo);
+            PickInSidecar(photo);
             Versions(photo);
             VersionRestore(engine);
             GallerySizeRemembered(dir);
@@ -273,7 +274,7 @@ static partial class SelfTest {
         Check(library.HasExplicitSelection && library.Open == open && library.Targets.Count == 2,
               "a command-click on the strip selects without opening");
         var menu = LibraryUi.CullItems(other).OfType<MenuItem>().Select(m => (string)m.Header!).ToList();
-        Check(menu[0].EndsWith(" (2 photos)") && menu[1] == "1 star (2 photos)", "the strip's cull menu counts the group it acts on");
+        Check(menu[0] == "Pick (2 photos)" && menu[1].EndsWith(" (2 photos)") && menu[2] == "1 star (2 photos)", "the strip's cull menu counts the group it acts on");
         Commands.Run("rate-2");
         library.SetRejected([other], true);
         Check(open.Rating == 2 && ExportRun.Targets().Contains(other), "a rating key rates the group; a selected reject is exported, being asked for");

@@ -410,6 +410,7 @@ public sealed class CanvasPanel : Panel {
 
     void Move(PointerEventArgs e) {
         var p = e.GetPosition(this);
+        CanvasState.Pointer = Anchor(p);
         ColorLoupe.Track(p, Bounds.Size);
         if (_anchor is not { } anchor) return;
         double dx = (p.X - anchor.X) / Math.Max(Bounds.Width, 1), dy = (p.Y - anchor.Y) / Math.Max(Bounds.Height, 1);
@@ -451,7 +452,10 @@ public sealed class CanvasPanel : Panel {
         CanvasState.Viewport.Settle(now == 0 ? default : new Vector(Motion.Velocity(_x, now), Motion.Velocity(_y, now)));
     }
 
-    protected override void OnPointerExited(PointerEventArgs e) => CanvasState.ClearHover();
+    protected override void OnPointerExited(PointerEventArgs e) {
+        CanvasState.Pointer = null;
+        CanvasState.ClearHover();
+    }
 
     /// The welcome mark's size and glow, as the brand sets them (#407): 112 points,
     /// and a soft light of its own brightest star (Alnilam, read from the file) at 16%.
