@@ -49,7 +49,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SCENARIOS = {
     "open-cold": ("open", "folder", True, "a folder opened with its files out of the page cache: the window up, the first picture, the worst stall"),
     "open-warm": ("open", "folder", False, "the same folder again, its files cached"),
-    "swap": ("swap", "photos", False, "an arrow to the neighbour (cached) and a jump past the cache"),
+    "swap": ("swap", "photos", False, "an arrow to the neighbour (cached) and a jump past the cache, and a jump's open stage by stage"),
     "drag": ("drag", "first", False, "60 ticks of the exposure slider: the preview drag and the full one"),
     "drag-heavy": ("drag-heavy", "first", False, "the drag with clarity 1, denoise luminance 2 and texture 1 on, Luminance moved"),
     "pan": ("pan", "first", False, "a hand dragging the photo at 100%, region and whole-graph edits (`--bench --pan`, Unattended.Pan.cs)"),

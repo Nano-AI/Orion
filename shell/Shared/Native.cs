@@ -104,6 +104,10 @@ public static unsafe partial class Native {
     [LibraryImport(Lib)]
     public static partial int orion_engine_release_render_memory(nint engine);
 
+    /// OrionRawInfo, 288 bytes: uint32 width and height as displayed (upright) first.
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int orion_read_info(string path, [Out] byte[] info);
+
     /// OrionLensProfile, 204 bytes: int32 found, int32 approximate, char lens[128], char maker[64], int32 source.
     [LibraryImport(Lib)]
     public static partial int orion_engine_lens_profile(nint engine, [Out] byte[] profile);

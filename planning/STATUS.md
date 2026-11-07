@@ -31,6 +31,7 @@ This session (PRs 57 to 60), measured with `tools/bench.py --ab` on the RTX 3070
 | Denoise threshold per starlet scale, ISO 8000 frame, PR 66 (research/high-iso.md §7) | luma 0.82-1.63x off its noise, chroma at luma's deviation (0.61-3.8x under) | a measured per-scale, per-class table after RCD, luma and chroma apart, within 5% |
 | Zoom presets and pick flags (Lightroom parity) | fit and 1:1 only; rating and reject only | 1:4 to 4:1 by command and Ctrl+= / Ctrl+-; P, X, U flags in `orion:Pick`, a Picked filter |
 | Launch to first picture, a published build (ReadyToRun) | 1348 ms, the window 1039 (built 519, laid out 510) | 870 ms, the window 452 (299, 153); one more pass over 50 ms after it (frozen 102 to 156 ms) |
+| A jump past the cache (`swap_jump_ms` 271 to 277 ms, within the noise) | a blank canvas and the loader for the whole decode | the camera's embedded JPEG at once, centred on the frame; the loader over it only past 500 ms |
 
 On a GPU slower than 160 ms a render, a burst of typed values or held keys read the histogram and flat frame once per render; `Settled` now times the gap between renders, so it reads once, after the last.
 The clipping overlay's pixel checks wait for the canvas to hold the newest render's copy: on WARP that settle read had been landing it for them, and a copy stand-in that lands 200 ms late now shows it on any GPU; the histogram drag check also waits for the photo it reopens.
@@ -39,12 +40,13 @@ The clipping overlay's pixel checks wait for the canvas to hold the newest rende
 
 1. Zero-copy present off macOS: Windows (D3D11 keyed mutex into ANGLE, opt-in) and Linux (the one Vulkan allocator, not yet built). Issue 24.
 2. A Linux CI runner with a GPU; AMD, Intel, native Wayland and a non-NixOS desktop are untested. Issue 24.
-3. A hand render still costs the UI thread 15 to 25 ms (window upload and encode) plus ~12 ms for the copy's take: a worker-thread engine, or a GPU-side window crop from the full graph's source, and the copy off the UI thread.
-4. Adobe `.lcp` lens profiles wait on the developer: the reader is on branch `lcp-adobe-profiles`, and its only source for four field meanings is a patent. Issue 5.
-5. Owed checks: one real DJI `FC8482` DNG through the opcode path; stacking thresholds tuned on real star, flat and dark frames; band streaming for stacks over the memory available.
-6. Camera profiles. Issue 4.
-7. Smaller follow-ups: the lens switch reaches sessions already open; the selftest closes the canvases it leaves subscribed; an exact-size copy for the fit picture; highlight pins are unmeasured; a kept session's 5 MB decimated preview copy; frugal renders still wait inside `giveBack`.
-8. CI flake: macOS packaging failed once with `hdiutil: create failed - Resource busy` on a green selftest (PR 57); `tools/package-app.sh` should retry the image.
+3. A jump's 277 ms, split by `bench.py swap` (`open_*_ms`): LibRaw unpack 68, mosaic copy 36, decimation 29, graph build 25, upload 21, first render 15, read back 7; the UI thread's 76 is `swap_jump_ms` less `open_total_ms`.
+4. A hand render still costs the UI thread 15 to 25 ms (window upload and encode) plus ~12 ms for the copy's take: a worker-thread engine, or a GPU-side window crop from the full graph's source, and the copy off the UI thread.
+5. Adobe `.lcp` lens profiles wait on the developer: the reader is on branch `lcp-adobe-profiles`, and its only source for four field meanings is a patent. Issue 5.
+6. Owed checks: one real DJI `FC8482` DNG through the opcode path; stacking thresholds tuned on real star, flat and dark frames; band streaming for stacks over the memory available.
+7. Camera profiles. Issue 4.
+8. Smaller follow-ups: the lens switch reaches sessions already open; the selftest closes the canvases it leaves subscribed; an exact-size copy for the fit picture; highlight pins are unmeasured; a kept session's 5 MB decimated preview copy; frugal renders still wait inside `giveBack`.
+9. CI flake: macOS packaging failed once with `hdiutil: create failed - Resource busy` on a green selftest (PR 57); `tools/package-app.sh` should retry the image.
 
 ## Hazards worth knowing
 

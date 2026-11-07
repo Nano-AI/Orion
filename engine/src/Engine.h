@@ -63,6 +63,15 @@ public:
     [[nodiscard]] bool headless() const noexcept { return headless_; }
 
     void openRaw(const std::string& path);
+    /// Where the last open's milliseconds went, for the bench: the engine's
+    /// own construction (`orion_engine_create` sets it), the decode's three
+    /// stages (raw::DecodeTimes), the metadata and lens lookup, the graphs'
+    /// build (shaders and textures), their source uploads, the preview's decimation.
+    struct OpenTimings {
+        double createMs = 0, readMs = 0, unpackMs = 0, copyMs = 0, infoMs = 0, buildMs = 0, uploadMs = 0, decimateMs = 0;
+    };
+    [[nodiscard]] const OpenTimings& openTimings() const noexcept { return openTimings_; }
+    void setCreateMs(double ms) noexcept { openTimings_.createMs = ms; }
     /// The graphs half of `openRaw`, for an image already in memory: the tests'
     /// synthetic mosaics. No file, so no metadata and no lens profile.
     void openDecoded(raw::DecodedImage image);
@@ -349,6 +358,7 @@ private:
     /// then lensfun.
     [[nodiscard]] pipe::LensProfile automaticLensProfile() const;
     pipe::LensProfile                      lensProfile_;
+    OpenTimings                            openTimings_;
 };
 
 }  // namespace orion

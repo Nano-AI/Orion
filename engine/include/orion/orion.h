@@ -372,6 +372,17 @@ typedef struct OrionAdjustments {
 /* Opens a raw file and builds the develop pipeline for it. */
 OrionStatus orion_engine_open_raw(OrionEngine* engine, const char* path);
 
+/* Where the engine's creation and its last open spent their milliseconds,
+ * for the bench: LibRaw's open (the file read and parse), its unpack, the
+ * copy into the engine's mosaic, the metadata and lens lookup, the graphs'
+ * build (shaders, textures), their source uploads, and the preview's
+ * decimation. Zero for a stage that did not run. */
+typedef struct OrionOpenTimings {
+    double create_ms, read_ms, unpack_ms, copy_ms, info_ms, build_ms, upload_ms, decimate_ms;
+} OrionOpenTimings;
+
+OrionStatus orion_engine_open_timings(const OrionEngine* engine, OrionOpenTimings* out);
+
 #include "orion_mask.h"
 
 /* The camera's own white balance, so the UI can open on "as shot". Only the

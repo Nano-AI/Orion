@@ -10,11 +10,10 @@ namespace OrionShell.Library;
 /// every photo and a larger one only for what is in view.
 public enum ThumbnailSize { Strip, Large }
 
-/// Embedded previews through the facade (orion_read_thumbnail via the shim),
-/// read on one background thread and shown as each lands: a folder appears at
-/// once and its pictures fill in, as its marks do (ReadMarks). Read on the UI
-/// thread, 336 raws on a spinning disk held the window blank for half a minute
-/// before the first photo (#399).
+/// Embedded previews (EmbeddedPreview), read on one background thread and
+/// shown as each lands: a folder appears at once and its pictures fill in, as
+/// its marks do (ReadMarks). Read on the UI thread, 336 raws on a spinning
+/// disk held the window blank for half a minute before the first photo (#399).
 ///
 /// Every photo gets the strip's size (256 px, ~0.2 MB); the gallery's cells
 /// and its aside ask for the large one (800 px, its largest cell at 2x, ~1.7 MB)
@@ -108,7 +107,7 @@ static class Thumbnails {
             while (Next() is (var photo, var size)) {
                 Bitmap? picture = null;
                 try {
-                    picture = Load(photo.Path, Widths[(int)size], ref _buffer);
+                    picture = EmbeddedPreview.Read(photo.Path, Widths[(int)size], ref _buffer);
                 } catch (Exception e) {
                     // One unreadable file is a raw with no preview, not the end of the strip.
                     Console.Error.WriteLine($"thumbnail {photo.Name}: {e.Message}");
@@ -146,56 +145,11 @@ static class Thumbnails {
     /// sheet's split painter, #391): with its own buffer, so it never races the reader.
     public static Bitmap? Preview(string path) {
         var buffer = new byte[8 << 20];
-        return Load(path, Widths[(int)ThumbnailSize.Large], ref buffer);
+        return EmbeddedPreview.Read(path, Widths[(int)ThumbnailSize.Large], ref buffer);
     }
 
     /// Preview on the thread pool: the Stack sheet's frame strip, so nineteen reads never hold up the UI thread.
     public static Task<Bitmap?> LoadAsync(string path) => Task.Run(() => Preview(path));
-
-    /// The preview, decoded `width` wide and turned upright, through `buffer`,
-    /// which grows for a larger one.
-    static unsafe Bitmap? Load(string path, int width, ref byte[] buffer) {
-        int size, turns;
-        fixed (byte* p = buffer) size = Native.shim_thumbnail(path, p, buffer.Length, out turns);
-        if (size < 0) {
-            buffer = new byte[-size];
-            fixed (byte* p = buffer) size = Native.shim_thumbnail(path, p, buffer.Length, out turns);
-        }
-        if (size <= 0) return null;
-        using var stream = new MemoryStream(buffer, 0, size);
-        return Upright(Bitmap.DecodeToWidth(stream, width), turns);
-    }
-
-    /// The JPEG carries no orientation; `turns` clockwise quarter turns stand
-    /// it up (orion.h). Done once on the pixels, so every view sees the true
-    /// aspect instead of a landscape box with a rotated picture in it. Moved
-    /// pixel by pixel straight into the new bitmap rather than drawn, so it
-    /// needs no renderer and runs here.
-    static Bitmap Upright(Bitmap bitmap, int turns) {
-        turns = ((turns % 4) + 4) % 4;
-        if (turns == 0) return bitmap;
-        using var src = bitmap;
-        int w = src.PixelSize.Width, h = src.PixelSize.Height;
-        bool swap = turns % 2 == 1;
-        var upright = new WriteableBitmap(swap ? new PixelSize(h, w) : src.PixelSize, src.Dpi,
-                                          src.Format ?? Avalonia.Platform.PixelFormat.Bgra8888, src.AlphaFormat);
-        var pixels = System.Buffers.ArrayPool<uint>.Shared.Rent(w * h);
-        try {
-            unsafe {
-                fixed (uint* p = pixels) src.CopyPixels(new PixelRect(0, 0, w, h), (nint)p, w * h * 4, w * 4);
-                using var fb = upright.Lock();
-                byte* dst = (byte*)fb.Address;
-                for (int y = 0; y < h; y++)
-                    for (int x = 0; x < w; x++) {
-                        var (tx, ty) = turns switch { 1 => (h - 1 - y, x), 2 => (w - 1 - x, h - 1 - y), _ => (y, w - 1 - x) };
-                        *(uint*)(dst + ty * fb.RowBytes + tx * 4) = pixels[y * w + x];
-                    }
-            }
-        } finally {
-            System.Buffers.ArrayPool<uint>.Shared.Return(pixels);
-        }
-        return upright;
-    }
 }
 
 /// A photo's thumbnail wherever a view shows one: the picture once it is read,

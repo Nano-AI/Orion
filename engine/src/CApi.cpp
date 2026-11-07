@@ -12,6 +12,7 @@
 
 #include "pipe/CubeLut.h"
 #include "util/Memory.h"
+#include "util/Stopwatch.h"
 #include "util/Utf8Path.h"
 
 #include <fstream>
@@ -82,7 +83,9 @@ OrionStatus orion_engine_create(OrionEngine** out) {
     // No engine exists yet, so the reason is kept here, for orion_last_error(NULL):
     // "no GPU the engine can use" and "out of memory" need different answers (#376).
     try {
+        orion::util::Stopwatch clock;
         *out = new OrionEngine{};
+        (*out)->impl.setCreateMs(clock.ms());
         createError().clear();
         return ORION_OK;
     } catch (const std::exception& e) {
@@ -119,6 +122,13 @@ OrionStatus orion_engine_open_raw(OrionEngine* engine, const char* path) {
         engine->impl.openRaw(path);
         return ORION_OK;
     });
+}
+
+OrionStatus orion_engine_open_timings(const OrionEngine* engine, OrionOpenTimings* out) {
+    if (engine == nullptr || out == nullptr) return ORION_ERR_BAD_ARG;
+    const auto& t = engine->impl.openTimings();
+    *out = OrionOpenTimings{t.createMs, t.readMs, t.unpackMs, t.copyMs, t.infoMs, t.buildMs, t.uploadMs, t.decimateMs};
+    return ORION_OK;
 }
 
 namespace {

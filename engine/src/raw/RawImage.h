@@ -175,12 +175,18 @@ Thumbnail extractThumbnail(const std::string& path);
 /// that can take either goes through decode() instead.
 BayerImage decodeBayer(const std::string& path);
 
+/// Where a decode's milliseconds went: LibRaw's open (the file read and its
+/// parse), its unpack, and the copy into the engine's own image.
+struct DecodeTimes {
+    double readMs = 0, unpackMs = 0, copyMs = 0;
+};
+
 /// Either kind of raw, decided by what the file actually holds: a mosaic
 /// becomes a BayerImage exactly as decodeBayer would make it, a demosaiced
 /// linear DNG (floating-point or integer samples) becomes a LinearImage.
 /// One open and one unpack either way.
 using DecodedImage = std::variant<BayerImage, LinearImage>;
-[[nodiscard]] DecodedImage decode(const std::string& path);
+[[nodiscard]] DecodedImage decode(const std::string& path, DecodeTimes* times = nullptr);
 
 /// A smaller mosaic, for a preview that has to be rendered while a slider moves.
 ///

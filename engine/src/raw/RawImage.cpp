@@ -1,6 +1,7 @@
 #include "raw/RawImage.h"
 
 #include "util/Half.h"
+#include "util/Stopwatch.h"
 #include "util/Utf8Path.h"
 
 #include <libraw/libraw.h>
@@ -199,15 +200,18 @@ namespace {
 /// precision a merged HDR DNG exists to carry. Measured in tests_dng.cpp —
 /// with the default options float3_image stays null and color3_image gets the
 /// quantized copy. Harmless for integer sources, so it is cleared always.
-void openUnpacked(LibRaw& proc, const std::string& path) {
+void openUnpacked(LibRaw& proc, const std::string& path, DecodeTimes* times = nullptr) {
+    util::Stopwatch clock;
     if (int rc = openFile(proc, path); rc != LIBRAW_SUCCESS) {
         fail("could not open raw file", rc);
     }
+    if (times) times->readMs = clock.lap();
     proc.imgdata.rawparams.options &=
         ~static_cast<unsigned>(LIBRAW_RAWOPTIONS_CONVERTFLOAT_TO_INT);
     if (int rc = proc.unpack(); rc != LIBRAW_SUCCESS) {
         fail("could not unpack raw data", rc);
     }
+    if (times) times->unpackMs = clock.lap();
 }
 
 /// The mosaic path: everything decodeBayer always did, from the format checks
@@ -370,15 +374,20 @@ BayerImage decodeBayer(const std::string& path) {
     return buildBayer(proc);
 }
 
-DecodedImage decode(const std::string& path) {
+DecodedImage decode(const std::string& path, DecodeTimes* times) {
     auto owned = std::make_unique<LibRaw>();
     LibRaw& proc = *owned;
-    openUnpacked(proc, path);
+    openUnpacked(proc, path, times);
 
+    util::Stopwatch clock;
+    const auto timed = [&](DecodedImage image) {
+        if (times) times->copyMs = clock.ms();
+        return image;
+    };
     const auto& rd = proc.imgdata.rawdata;
-    if (rd.raw_image != nullptr) return buildBayer(proc);
+    if (rd.raw_image != nullptr) return timed(buildBayer(proc));
     if (rd.float3_image != nullptr || rd.color3_image != nullptr) {
-        return buildLinear(proc);
+        return timed(buildLinear(proc));
     }
     proc.recycle();
     throw std::runtime_error("no mosaic data in this file");

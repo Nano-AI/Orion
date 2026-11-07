@@ -729,6 +729,12 @@ void testFacadeSessionSeams() {
         std::remove(path.c_str());
         return;
     }
+    OrionOpenTimings t{};
+    report(orion_engine_open_timings(e, &t) == ORION_OK && t.create_ms > 0 && t.read_ms > 0 && t.unpack_ms > 0 &&
+               t.copy_ms > 0 && t.info_ms > 0 && t.build_ms > 0 && t.upload_ms > 0,
+           "the facade's open says where its time went, every stage it ran",
+           "create " + std::to_string(t.create_ms) + ", read " + std::to_string(t.read_ms) + ", unpack " +
+               std::to_string(t.unpack_ms) + ", build " + std::to_string(t.build_ms) + ", upload " + std::to_string(t.upload_ms));
     OrionAdjustments adj{};
     orion_engine_as_shot(e, &adj);
     adj.contrast = 1.45f; adj.process = 2; adj.crop_w = adj.crop_h = 1;

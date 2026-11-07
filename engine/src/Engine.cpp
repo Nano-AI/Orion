@@ -4,6 +4,7 @@
 #include "pipe/LensGeometry.h"
 #include "pipe/LensOpcodes.h"
 #include "ResourcePaths.h"
+#include "util/Stopwatch.h"
 
 #include <cmath>
 #include <cstdio>
@@ -100,19 +101,34 @@ void Engine::openRaw(const std::string& path) {
     device_->forgetOutOfMemory();
     // Either a mosaic or a demosaiced linear DNG — a merged HDR frame comes
     // back through this same door, which is the point of writing one.
-    auto decoded = raw::decode(path);
+    raw::DecodeTimes decodeTimes;
+    auto decoded = raw::decode(path, &decodeTimes);
     sourcePath_ = path;
 
     // The lens name lives in the metadata rather than the mosaic, so it takes a
     // second read of the file — cheap next to the decode that just happened.
+    util::Stopwatch clock;
     info_ = raw::readInfo(path);
     // A choice belongs to the photograph that was open, not to the next one.
     lensChoice_.clear();
     lensProfile_ = automaticLensProfile();
+    const double infoMs = clock.ms();
     openDecoded(std::move(decoded));
+    openTimings_.readMs = decodeTimes.readMs;
+    openTimings_.unpackMs = decodeTimes.unpackMs;
+    openTimings_.copyMs = decodeTimes.copyMs;
+    openTimings_.infoMs = infoMs;
 }
 
 void Engine::openDecoded(raw::DecodedImage decoded) {
+    util::Stopwatch clock;
+    double decimateMs = 0;
+    const auto decimated = [&](const auto& image) {
+        util::Stopwatch d;
+        auto small = kept(raw::decimate(image, kPreviewScale));
+        decimateMs += d.ms();
+        return small;
+    };
     // One body for both kinds of source: every operation below — decimate,
     // canReload, reload, the pipeline constructor — is overloaded for the
     // mosaic and the linear image, and a mosaic graph never reloads a linear
@@ -128,7 +144,7 @@ void Engine::openDecoded(raw::DecodedImage decoded) {
             // the decimation is a second, smaller copy of the mosaic nobody
             // would render (#312).
             if (preview_ && !headless_) {
-                const auto small = kept(raw::decimate(image, kPreviewScale));
+                const auto small = decimated(image);
                 previewSource_ = preview_->canReload(*small) ? sourceOf(small) : nullptr;
                 if (previewSource_) preview_->reload(*small);
             }
@@ -150,7 +166,7 @@ void Engine::openDecoded(raw::DecodedImage decoded) {
 
         // The preview image. Decimated once here rather than per render: it is
         // the same pixels every time, and at 24 MP the decimation is not free.
-        const auto small = kept(raw::decimate(image, kPreviewScale));
+        const auto small = decimated(image);
 
         // ⚠ Built after the full graph and allowed to fail. A machine that cannot
         // find room for the preview's intermediates should still be able to edit
@@ -189,6 +205,13 @@ void Engine::openDecoded(raw::DecodedImage decoded) {
     regionStep_ = 0;
     fullReleased_ = false;
     fullCurrent_ = previewCurrent_ = regionCurrent_ = false;
+    const double uploadMs = develop_->graph().sourceUploadMs() + (preview_ ? preview_->graph().sourceUploadMs() : 0);
+    const double createMs = openTimings_.createMs;
+    openTimings_ = {};
+    openTimings_.createMs = createMs;
+    openTimings_.uploadMs = uploadMs;
+    openTimings_.decimateMs = decimateMs;
+    openTimings_.buildMs = clock.ms() - uploadMs - decimateMs;
 }
 
 float Engine::hdrMerge(const std::vector<std::string>& paths, int referenceIndex,

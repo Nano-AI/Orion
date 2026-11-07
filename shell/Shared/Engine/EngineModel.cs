@@ -290,8 +290,10 @@ public sealed class EngineModel : INotifyPropertyChanged {
     public bool Previous() { int from = Current; return CanLeave() && _list.Previous() && Show(from); }
 
     /// Preview-first: the kept picture now, the session when it is ready,
-    /// which for a kept session is before this returns. False when the photo
-    /// will not open, as far as is known by then.
+    /// which for a kept session is before this returns. A photo with neither
+    /// shows the camera's embedded preview while it decodes, read once the
+    /// decode has started beside it. False when the photo will not open, as
+    /// far as is known by then.
     bool Show(int from) {
         Close();
         int index = Current, step = index - from;
@@ -303,8 +305,38 @@ public sealed class EngineModel : INotifyPropertyChanged {
         Opening = true;
         bool opened = true;
         _source.Request(index, s => opened = Arrive(index, s));
-        if (Opening) SetTiming("decoding…");
+        if (Opening) {
+            if (!Shown.Any) Embed(index);
+            SetTiming("decoding…");
+        }
         return opened;
+    }
+
+    /// The embedded preview on screen while its photo decodes, until a render replaces it.
+    Bitmap? _embedded;
+
+    /// About a fit canvas's width on a 2x display.
+    internal const int EmbeddedWidth = 2560;
+
+    /// Read on a worker beside the decode, and shown ahead of anything else
+    /// queued, so before the canvas's next frame: a jump waits there for what
+    /// is left of the read, and a launch, whose window is built meanwhile, does not.
+    void Embed(int index) {
+        string path = Photos[index];
+        var read = Task.Run(() => Embedded(path));
+        Dispatcher.UIThread.Post(() => {
+            if (Current == index && Opening && !Shown.Any && read.Result is { } embedded) Shown.Show(_embedded = embedded, Graph.Preview);
+        }, DispatcherPriority.Send);
+    }
+
+    static Bitmap? Embedded(string path) {
+        try {
+            var buffer = new byte[2 << 20];   // grows for a larger one
+            return EmbeddedPreview.ReadFramed(path, EmbeddedWidth, ref buffer);
+        } catch (Exception e) {
+            Console.Error.WriteLine($"embedded preview {Path.GetFileName(path)}: {e.Message}");   // the blank it was, not a failed open
+            return null;
+        }
     }
 
     /// Photo `index`'s session is ready, or will not open.
@@ -314,7 +346,13 @@ public sealed class EngineModel : INotifyPropertyChanged {
             if (s != null) _source.Release(s);
             return false;
         }
-        if ((_session = s) == null) { SetTiming("could not open"); return false; }
+        if ((_session = s) == null) {
+            if (_embedded != null && ReferenceEquals(Shown.Bitmap, _embedded)) Shown.Clear();   // the failure says why, not the camera's JPEG
+            _embedded = null;
+            SetTiming("could not open");
+            return false;
+        }
+        _embedded = null;
         Opened?.Invoke();
         Render(preview: !ZoomedPastFit);
         // The histogram and eyedropper read the full graph (orion.h), which a swap
