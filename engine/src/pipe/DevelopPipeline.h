@@ -17,6 +17,7 @@
 #include "pipe/LocalLaplacian.h"
 #include "pipe/MaskGeometry.h"
 #include "pipe/ShaderParams.h"
+#include "pipe/StarletNoise.h"
 #include "pipe/Pipeline.h"
 #include "pipe/ToneCurve.h"
 #include "pipe/WhiteBalance.h"
@@ -368,12 +369,9 @@ public:
     };
     [[nodiscard]] HighlightStages highlightStages() const;
 
-    /// ‖W_j‖₂ for j = 0..5: the four the chains shrink at full resolution
-    /// and Smoothness's two. For the test that recomputes them from the taps.
-    [[nodiscard]] static constexpr std::array<float, 6> starletScaleNorms() noexcept {
-        return {kDenoiseScaleNorm[0], kDenoiseScaleNorm[1], kDenoiseScaleNorm[2],
-                kDenoiseScaleNorm[3], kChromaScaleNorm[0], kChromaScaleNorm[1]};
-    }
+    /// The capture chain's noise at starlet scale j (0..5) under this white
+    /// balance: what its shrinks and Smoothness's threshold against.
+    [[nodiscard]] starlet::ScaleNoise captureScaleNoise(const Adjustments&, int j) const;
 
     [[nodiscard]] std::uint32_t width()  const noexcept { return width_; }
     [[nodiscard]] std::uint32_t height() const noexcept { return height_; }
@@ -566,11 +564,6 @@ private:
     float whiteLevel_ = 0.0f;
     float blackLevel_[3]{};
     static constexpr int kDenoiseScales = 4;
-    /// ‖W_j‖₂ for the 5x5 starlet. Noise falls away fast at coarse scales,
-    /// which is why one threshold across all of them over-smooths the fine
-    /// scales and under-smooths the coarse. Both chains read it.
-    static constexpr float kDenoiseScaleNorm[kDenoiseScales] = {0.8907f, 0.2007f,
-                                                                0.0855f, 0.0412f};
     /// Scale j's place in a chain run fine to coarse (#406), for its block.
     static constexpr std::int32_t shrinkEnds(int j) noexcept {
         return (j == 0 ? params::kShrinkFirst : 0) |
@@ -592,22 +585,14 @@ private:
     /// The masked chain and Clarity's guard (research/high-iso.md §3) read it.
     [[nodiscard]] std::array<float, 2> workingLumaNoise(const Adjustments&) const;
     /// The same model in the capture chain's own luminance, camera RGB after
-    /// white balance: `{a, b}` for both of its shrink chains.
+    /// white balance, per pixel: `{a, b}` for non-local means.
     [[nodiscard]] std::array<float, 2> captureLumaNoise(const Adjustments&) const;
-    /// The same model for *chroma* at scales far coarser than the mosaic:
-    /// through the chroma split and the CFA's sampling density. Smoothness's
-    /// two shrinks read it. research/high-iso.md §1, and its deviation.
-    [[nodiscard]] std::array<float, 2> coarseChromaNoise(const Adjustments&) const;
     int nAtrousBlur_[kDenoiseScales]{-1, -1, -1, -1};
     int nAtrousShrink_[kDenoiseScales]{-1, -1, -1, -1};
 
     // ── Smoothness: chroma at j = 4, 5, quarter resolution (high-iso.md §1) ─
     static constexpr int kChromaScales = 2;
     static constexpr std::uint32_t kChromaScale = 4;
-    /// ‖W_4‖₂, ‖W_5‖₂ of the same starlet, continuing kDenoiseScaleNorm.
-    /// ⚠ 0.0204, not detail.md's 0.0202: `testDenoiseSmoothnessGpu` computes
-    /// all six from the B3 taps and asserts them to three figures.
-    static constexpr float kChromaScaleNorm[kChromaScales] = {0.0204f, 0.0102f};
     int nChromaDown_ = -1;
     int nChromaBlur_[kChromaScales]{-1, -1};
     int nChromaShrink_[kChromaScales]{-1, -1};

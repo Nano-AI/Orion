@@ -9,12 +9,11 @@
 // in the highlights.
 //
 //     σ²(x) = a·x + b        Poisson shot noise + Gaussian read noise
-//     σ_j   = ‖W_j‖₂ · sqrt(a·x + b)
+//     σ_j²  = A_j·x + B_j    that model carried to scale j, luma and chroma apart
 //     τ_j   = β · σ_j
 //
-// ‖W_j‖₂ for the 5x5 starlet is [0.8907, 0.2007, 0.0855, 0.0412, 0.0204] —
-// noise falls away fast at coarse scales, which is why a single threshold
-// across scales over-smooths the fine ones and under-smooths the coarse.
+// A_j, B_j come from the CPU (pipe/StarletNoise.h): the demosaic correlates
+// the noise, so a scale's share of it is measured, not ‖W_j‖₂ of white noise.
 //
 // Shrinkage is the non-negative garrote. Soft thresholding biases every
 // surviving coefficient down by τ and visibly dulls edges; hard thresholding
@@ -39,9 +38,10 @@
 struct ShrinkParams
 {
     uint2 size;
-    float noiseA;          // Poisson term
-    float noiseB;          // Gaussian term
-    float scaleNorm;       // ‖W_j‖₂ for this scale
+    float noiseA;          // luma variance at this scale: noiseA·Y + noiseB
+    float noiseB;
+    float chromaA;         // each chroma channel's: chromaA·Y + chromaB
+    float chromaB;
     float strengthLuma;    // β for luma, in units of σ_j
     float strengthChroma;  // β for chroma
     float detail;          // 0..1, how much of the BayesShrink factor applies
@@ -49,6 +49,7 @@ struct ShrinkParams
     int   useField;        // 1: β per pixel from `field`, strengths ignored
     float texture;         // -1..1, Starck et al. 2003's gain on j = 0, 1
     int   ends;            // kFirstScale | kLastScale, fine to coarse (#406)
+    int   _pad0, _pad1, _pad2;
 };
 
 // Run fine to coarse, a scale needs only its two levels and the sum so far
@@ -100,7 +101,8 @@ void atrousShrink(uint3 tid : SV_DispatchThreadID,
 
     // Noise level at this pixel's own brightness, at this scale.
     const float y = max(luminance2020(cj1), 0.0f);
-    const float sigma = p.scaleNorm * sqrt(max(p.noiseA * y + p.noiseB, 0.0f));
+    const float sigma = sqrt(max(p.noiseA * y + p.noiseB, 0.0f));
+    const float sigmaChroma = sqrt(max(p.chromaA * y + p.chromaB, 0.0f));
 
     // Split into luma and chroma. Chroma noise is the ugly kind — colored
     // blotches — and chroma detail is scarce, so it tolerates a much harder
@@ -109,7 +111,7 @@ void atrousShrink(uint3 tid : SV_DispatchThreadID,
     const float3 dChroma = detail - dLuma;
 
     float tauLuma = betaLuma * sigma;
-    const float tauChroma = betaChroma * sigma;
+    const float tauChroma = betaChroma * sigmaChroma;
 
     // Chroma keeps the fixed threshold: the control that protects texture
     // should not also protect blotches. research/denoise-masked.md §1.

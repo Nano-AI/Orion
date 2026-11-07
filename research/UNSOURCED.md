@@ -1503,14 +1503,12 @@ The shapes are sourced; the numbers that set how hard each one bites are chosen.
   Measured in `testTextureGpu`: a clean card's eighth-deep ripple lifts x2.49 at +1 and x0.30 at −1 with the flat mean held, and the noisy card's numbers do not move (30σ is the larger there).
 - **What would settle it:** a side by side with Lightroom's Texture on high-ISO portraits and foliage at matched strengths, a sweep of `c` in 2.5-4 on real frames for grain regrowth at 100%, and a decision on `m` (fixed multiple against a per-frame quantile) from low-ISO frames.
 
-**Smoothness's strength product `denoiseColor × denoiseSmoothness`, and its chroma noise model** (`DevelopCapture.cpp` `coarseChromaNoise`, §1).
+**Smoothness's strength product `denoiseColor × denoiseSmoothness`, and its chroma noise model** (`DevelopCapture.cpp`, §1).
 - **Sourced:** the transform (the same starlet, Starck, Fadili & Murtagh 2007, two more scales at quarter resolution), the garrote, the reason chroma noise is coarse (Alleysson et al. 2005, Dubois 2005), and `‖W_4‖₂ = 0.0204`, `‖W_5‖₂ = 0.0102`, recomputed from the B3 taps in `testDenoiseSmoothnessGpu` (detail.md's `0.0202` is off in the third figure).
 - **Chosen:** the product, so Color 0 runs nothing and the two never disagree about whether chroma is being denoised; Smoothness 1 means the coarse scales get Color's own `β`.
-- **Derived, then measured, not sourced as a formula:** the coarse shrinks' `σ` is the fit carried through the chroma split (`Σ_c (δ − w_c)² var_c`) and divided by each channel's Bayer sampling density (R, B a quarter, G a half), averaged over the three chroma channels.
-  The plan reused the luma model; on the test's card that removed 37% of the coarse chroma energy at Color 3 against a 67% plateau, and the derived model, 3.0x the luma deviation there, removes 66%.
-  The density argument assumes a demosaic that interpolates each channel from its own samples at coarse scales, which RCD approximately does.
-- **What would settle it:** the quarter chain's own coefficients on a real 12800 frame (a MAD of `w_4` chroma over flat regions) against this model.
-  Real sensors add low-frequency read noise the Poisson-Gaussian fit does not see, so the truth is at or above this, and a per-frame MAD would replace the formula outright.
+- **Superseded 2026-11-07:** the coarse shrinks' `σ` was the fit carried through the chroma split and divided by each channel's Bayer sampling density.
+  It is now the chroma table in `pipe/StarletNoise.h`, measured by transforming simulated noise (high-iso.md §7), which is sourced.
+  The density model had matched a real ISO 8000 frame's chroma MAD within 7% at j = 4, 5, which settles this entry's open question.
 
 **Non-local means' slider mapping and window** (`pipe/NonLocalMeans.h`, `shaders/denoise_nlm.slang`, [high-iso.md](high-iso.md) §4).
 - **Sourced:** the filter, its weight `exp(−max(d² − 2σ², 0)/h²)`, the reference pixel's weight as the neighbourhood maximum, and the parameter table (Buades, Coll & Morel, IPOL 2011); the per-pixel `σ` from the capture model (Foi et al. 2008).

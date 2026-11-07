@@ -214,6 +214,8 @@ void testNlmGpu();
 void testDenoiseOrderGpu();
 void testTextureGpu();
 void testDenoiseSmoothnessGpu();
+void testStarletNoiseGpu();
+void testDenoiseResidualGpu();
 void testHighlightRecoveryGpu();
 void testLinearizeClipsToWhite();
 void testGradeOffsets();

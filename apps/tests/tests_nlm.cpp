@@ -17,7 +17,6 @@ namespace {
 
 using Frame = std::vector<__fp16>;
 
-constexpr float kScaleNorm[4] = {0.8907f, 0.2007f, 0.0855f, 0.0412f};
 
 float luma2020(float r, float g, float b) {
     return 0.2627f * r + 0.6780f * g + 0.0593f * b;
@@ -155,8 +154,9 @@ struct Gpu {
         for (int j = 3; j >= 0; --j) {
             orion::pipe::params::AtrousShrink sp{};
             sp.size[0] = c.w; sp.size[1] = c.h;
-            sp.noiseA = 0.0f; sp.noiseB = c.sigma * c.sigma;
-            sp.scaleNorm = kScaleNorm[j]; sp.step = 1 << j;
+            const float n = orion::pipe::starlet::kWhiteNorm[j];
+            sp.noiseB = sp.chromaB = c.sigma * c.sigma * n * n;
+            sp.step = 1 << j;
             sp.strengthLuma = beta; sp.strengthChroma = 0.0f;
             const auto* fine = (j == 0) ? c0.get() : blurs[std::size_t(j - 1)].get();
             const auto* coarse = blurs[std::size_t(j)].get();

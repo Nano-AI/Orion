@@ -104,6 +104,8 @@ int main(int argc, char** argv) {
     gpu(testNlmGpu);
     gpu(testTextureGpu);
     gpu(testDenoiseSmoothnessGpu);
+    gpu(testStarletNoiseGpu);
+    gpu(testDenoiseResidualGpu);
     gpu(testHighlightRecoveryGpu);
     testGradeOffsets();
     gpu(testLensGpu);

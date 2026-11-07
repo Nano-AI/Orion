@@ -110,7 +110,8 @@ the strength adapt correctly across the tonal range.
 |---|---|---|
 | Starlet / à-trous transform, `h = [1/16, 1/4, 3/8, 1/4, 1/16]`, taps spaced 2^j | Starck, Fadili & Murtagh (2007), *The Undecimated Wavelet Decomposition and its Reconstruction*, IEEE TIP 16(2). Restated in `deep-research-2026-07-27.md` §2 | `shaders/denoise_blur.slang` |
 | Non-negative garrote shrinkage, `w − τ²/w` | Gao (1998), *Wavelet Shrinkage Denoising Using the Non-Negative Garrote*, J. Comput. Graph. Stat. 7(4) | `shaders/denoise_accum.slang` |
-| Per-scale norms ‖W_j‖₂ = 0.8907, 0.2007, 0.0855, 0.0412 | `deep-research-2026-07-27.md` §2 | `DevelopPipeline.cpp` |
+| Per-scale norms ‖W_j‖₂ = 0.8907, 0.2007, 0.0855, 0.0412 (white noise; the masked chain) | `deep-research-2026-07-27.md` §2 | `pipe/StarletNoise.h` |
+| Per-scale noise after RCD, luma and chroma apart, measured by transforming simulated noise (2026-11-07) | Starck & Murtagh (2006), *Astronomical Image and Data Analysis*, 2nd ed., Springer; Donoho & Johnstone (1994) for each scale's MAD. `high-iso.md` §7 | `pipe/StarletNoise.h` |
 | MAD → σ, constant 1.4826 | Donoho & Johnstone (1994), *Ideal Spatial Adaptation by Wavelet Shrinkage*, Biometrika 81(3) | `raw/NoiseProfile.cpp` |
 | Poisson–Gaussian model `var = a·x + b`, fitted per frame | Foi, Trimeche, Katkovnik & Egiazarian (2008), *Practical Poissonian-Gaussian Noise Modeling and Fitting for Single-Image Raw-Data*, IEEE TIP 17(10), 1737–1754 | `raw/NoiseProfile.cpp` |
 | Quantile binning and each bin's median by counting, on integer keys (#319) | Counting sort: Cormen, Leiserson, Rivest & Stein (2009), *Introduction to Algorithms*, 3rd ed., MIT Press, §8.2. A median is an order statistic (§9), read off the same cumulative counts | `raw/NoiseProfile.cpp` |
