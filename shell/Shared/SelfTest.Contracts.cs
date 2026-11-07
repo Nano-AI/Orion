@@ -26,6 +26,8 @@ static partial class SelfTest {
     static partial void AgentChecks();
     // Decision #400: the side-by-side compare.
     static partial void SideBySideChecks();
+    // Lightroom parity: the clipping overlay and the interactive histogram.
+    static partial void ClippingChecks();
 
     static void CommandChecks() {
         // Every name a control binds to (Commands.Run/CanRun("…") in this tree) is registered.
@@ -51,7 +53,8 @@ static partial class SelfTest {
         // here even when only a key reaches it. A new one is added to the list.
         string[] registered = ["tab-light", "tab-color", "tab-detail", "tab-optics", "tab-mask", "tab-crop", "tab-presets", "gallery",
             "compare", "compare-side-by-side", "compare-link", "compare-swap", "compare-make-select",
-            "swap-split", "fit", "actual-size", "open-photo", "open-folder", "export", "export-all", "hdr-merge", "stack", "stop-batch",
+            "swap-split", "fit", "actual-size", "show-clipping", "show-shadow-clipping", "show-highlight-clipping",
+            "open-photo", "open-folder", "export", "export-all", "hdr-merge", "stack", "stop-batch",
             "reveal-session-log", "undo", "redo", "reset-adjustments", "rotate-left", "rotate-right", "reject", "rate-0", "rate-1", "rate-2",
             "rate-3", "rate-4", "rate-5", "next-photo", "previous-photo", "select-all", "deselect", "trash", "delete-rejected", "apply-crop",
             "cancel-crop", "mask-overlay", "mask-feather-less", "mask-feather-more", "delete-mask-shape", "toggle-assistant",

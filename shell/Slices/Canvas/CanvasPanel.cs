@@ -28,6 +28,7 @@ public sealed class CanvasPanel : Panel {
     readonly SharedPicture _shared = new();   // under _picture: the canvas draws over it
     readonly CopiedPicture _copied = new();   // where _shared does not hold the picture (#386)
     readonly Halvings _shown = new(), _original = new();
+    readonly ClippingMask _clipped = new(), _clippedUnder = new();
     (CanvasState.Scene, int, string) _noted;   // what _note says, for which scene, photo and message
     int _version;   // the shown bitmap is reused render after render: same object, new pixels
     Point? _anchor;
@@ -62,6 +63,7 @@ public sealed class CanvasPanel : Panel {
         };
         CanvasState.Changed += Refresh;
         CompareState.Moved += _picture.InvalidateVisual;   // a divider drag repaints the picture and nothing else
+        Clipping.Changed += _picture.InvalidateVisual;
         EngineModel.Shared.Shown.Changed += () => { _version++; Refresh(); };   // the picture: only through this seam
         EngineModel.Shared.PropertyChanged += (_, e) => {
             if (e.PropertyName is nameof(EngineModel.Current) or nameof(EngineModel.Timing)) Refresh();
@@ -232,7 +234,8 @@ public sealed class CanvasPanel : Panel {
         // The render straight from the GPU when the shared surface holds it (#317), else its screen-sized copy (#386),
         // which may be of the render before, where its own pixels belong.
         // ponytail: the crop tool's turned clip takes the CPU copy (CompositionVisual.Clip is internal); a mask over the visual lifts that.
-        bool shared = _shared.Place(CropEdit.Previewing ? null : engine.Shown, dest, mode, pixels);
+        // The clipping overlay reads the copy's pixels, so it takes the copy too.
+        bool shared = _shared.Place(CropEdit.Previewing || Clipping.Any ? null : engine.Shown, dest, mode, pixels);
         Bitmap? picture = null;
         if (!shared) {
             picture = _copied.For(engine.Shown, whole.Size, pixels, engine.Interacting || vp.Live);
@@ -246,12 +249,16 @@ public sealed class CanvasPanel : Panel {
         // Around a region, the preview: what a pan uncovers until the next region lands.
         if (dest != whole && engine.Session?.Picture is { } under) {
             var outside = new CombinedGeometry(GeometryCombineMode.Exclude, new RectangleGeometry(whole), new RectangleGeometry(dest));
-            using (c.PushGeometryClip(outside)) DrawImage(under, whole);
+            using (c.PushGeometryClip(outside)) {
+                DrawImage(under, whole);
+                if (Clipping.Any && _clippedUnder.For(under, _version) is { } mask) DrawImage(mask, whole);
+            }
         }
         if (picture != null) {
             // A copy taken in this very draw is new pixels in the same bitmap: its version too.
             var shown = _shown.For(picture, HashCode.Combine(_version, _copied.Version), dest.Width * scaling);
             DrawImage(shown, dest);
+            if (Clipping.Any && _clipped.For(shown, HashCode.Combine(_version, _copied.Version)) is { } mask) DrawImage(mask, dest);
         }
         if (CompareState.Showing && CompareState.Original is { } original) {
             // The split lives in view space: it holds still while the picture pans under it.

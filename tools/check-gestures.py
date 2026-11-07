@@ -58,6 +58,9 @@ EXPECTED = {
         "placing and dragging a spot re-renders the heal pass per tick",
     "Slices/Canvas/MaskOverlay.cs":
         "painting and placing a mask re-renders the mask chain per tick",
+    "Slices/Develop/HistogramDrag.cs":
+        "a drag across the histogram moves a tone slider: a full-resolution "
+        "render per tick otherwise",
 }
 
 BEGIN = "BeginInteraction"
