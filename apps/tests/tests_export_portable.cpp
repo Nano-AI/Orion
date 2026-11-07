@@ -1,10 +1,7 @@
-// Export on Windows and Linux (ImageWriterPortable.cpp, decision #376).
-//
-// macOS reads its exports back through ImageIO, a second reader on purpose
-// (tests_io.cpp, tests_watermark.cpp, tests_jxl.cpp). Here the only reader at
-// hand is OpenCV, which also wrote the file, so these hold what a shared
-// reader can still catch: the size, the depth, the channel order, the resize,
-// the watermark landing, and the refusals the writer promises.
+// Export on Windows and Linux (ImageWriterPortable.cpp, decision #376): the
+// pixels, read back by OpenCV. The size, the depth, the channel order, the
+// resize and the watermark landing; the profile and metadata are
+// tests_export_tags.cpp's.
 
 #include "harness.h"
 
@@ -89,16 +86,6 @@ void testExportFormats() {
         const auto jpeg = encodeJpeg(px.data(), kW, kH, stride, 0.8f);
         report(jpeg.size() > 2 && jpeg[0] == 0xFF && jpeg[1] == 0xD8, "encodeJpeg makes a JPEG");
         report(encodedSize(px.data(), kW, kH, stride, o) > 0, "the size readout encodes");
-    }
-
-    {
-        ExportOptions o;
-        o.format = ImageFormat::Png;
-        o.space = ColorSpace::DisplayP3;
-        bool threw = false;
-        try { writeImage(scratch("orion-export-p3.png"), px.data(), kW, kH, stride, o); }
-        catch (const std::exception&) { threw = true; }
-        report(threw, "Display P3 is refused, not written as relabelled sRGB");
     }
 }
 

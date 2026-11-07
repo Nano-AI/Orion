@@ -201,8 +201,9 @@ static partial class SelfTest {
 
     static void ExportChecks(EngineModel engine) {
         var settings = ExportSettings.Shared;
-        int size = settings.Size, format = settings.Format;
+        int size = settings.Size, format = settings.Format, space = settings.Space;
         settings.Size = Array.FindIndex(ExportSettings.Sizes, s => s.Code == 1024);
+        settings.Space = Array.FindIndex(ExportSettings.Spaces, s => s.Code == 1);
         string folder = Directory.CreateTempSubdirectory("orion-selftest-").FullName;
         try {
             var run = ExportRun.Run(ExportRun.Plan([engine.Photos[engine.Current]], folder, "jpg"));
@@ -210,6 +211,16 @@ static partial class SelfTest {
             var written = Directory.GetFiles(folder);
             Check(run.Result == "Exported 1 photo." && written.Length == 1 && new FileInfo(written[0]).Length > 10_000 && ExportRun.Progress == null,
                   $"a batch writes through the engine and says so ('{run.Result}')");
+            // Off macOS the writer is ImageWriterPortable.cpp: the camera's EXIF and a
+            // Display P3 profile, as ImageIO writes them on macOS.
+            if (!OperatingSystem.IsMacOS() && written.Length == 1) {
+                var segments = JpegSegments(File.ReadAllBytes(written[0]));
+                string model = CaptureInfo.ReadFile(engine.Photos[engine.Current])?.Camera.Split(' ', 2).Last() ?? "?";
+                Check(segments.Any(s => s.Marker == 0xE1 && Ascii(s.Body).StartsWith("Exif\0\0", StringComparison.Ordinal) && Ascii(s.Body).Contains(model)),
+                      $"an export carries the camera's EXIF ('{model}')");
+                Check(segments.Any(s => s.Marker == 0xE2 && Ascii(s.Body).StartsWith("ICC_PROFILE", StringComparison.Ordinal) && Ascii(s.Body).Contains("Display P3")),
+                      "choosing Display P3 embeds a Display P3 profile");
+            }
 
             // JPEG XL (issue 6): the format choice reaches the engine. With metadata the
             // file is the ISO BMFF container, which opens with a 12-byte "JXL " box.
@@ -218,18 +229,30 @@ static partial class SelfTest {
             while (!jxl.IsCompleted) Dispatcher.UIThread.RunJobs();
             var file = Directory.GetFiles(folder, "*.jxl");
             byte[] head = file.Length == 1 ? File.ReadAllBytes(file[0])[..12] : [];
-            // Off macOS no metadata is written (#376), so the file is the bare codestream, FF 0A.
-            bool signed = OperatingSystem.IsMacOS()
-                ? head.AsSpan().SequenceEqual((byte[])[0, 0, 0, 12, (byte)'J', (byte)'X', (byte)'L', (byte)' ', 13, 10, 0x87, 10])
-                : head.Length == 12 && head[0] == 0xFF && head[1] == 0x0A;
+            bool signed = head.AsSpan().SequenceEqual((byte[])[0, 0, 0, 12, (byte)'J', (byte)'X', (byte)'L', (byte)' ', 13, 10, 0x87, 10]);
             Check(jxl.Result == "Exported 1 photo." && signed,
                   $"choosing JPEG XL writes a .jxl through the engine ('{jxl.Result}')");
         } finally {
             settings.Size = size;
             settings.Format = format;
+            settings.Space = space;
             Directory.Delete(folder, true);
         }
     }
+
+    /// A JPEG's marker segments before the scan (ITU-T T.81 B.1.1).
+    static List<(byte Marker, byte[] Body)> JpegSegments(byte[] b) {
+        var segments = new List<(byte, byte[])>();
+        for (int i = 2; i + 4 <= b.Length && b[i] == 0xFF && b[i + 1] != 0xDA;) {
+            int length = b[i + 2] << 8 | b[i + 3];
+            if (length < 2 || i + 2 + length > b.Length) break;
+            segments.Add((b[i + 1], b[(i + 4)..(i + 2 + length)]));
+            i += 2 + length;
+        }
+        return segments;
+    }
+
+    static string Ascii(byte[] b) => System.Text.Encoding.Latin1.GetString(b);
 
     /// Every built command runs headless without throwing. The ones that need a
     /// window or a person (a file dialog, a confirmation) do nothing here.

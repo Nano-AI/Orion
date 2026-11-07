@@ -83,15 +83,22 @@ if(APPLE)
     set_source_files_properties(tests_jxl.cpp PROPERTIES INCLUDE_DIRECTORIES ${JXL_INCLUDE_DIR})
     target_link_libraries(orion-tests PRIVATE ${JXL_LIBRARIES} ${JXL_CMS_LIBRARY})
 else()
-    # Windows and Linux have no ImageIO: their writer is read back by OpenCV,
-    # which wrote it, so these check shape and size, not colour (#376).
-    target_sources(orion-tests PRIVATE tests_export_portable.cpp)
-    target_link_libraries(orion-tests PRIVATE ${OPENCV_LIBRARIES})
+    # Windows and Linux have no ImageIO. OpenCV reads the pixels back; the
+    # profile and metadata are parsed by hand, by libtiff, libjxl and Little
+    # CMS (tests_export_tags.cpp).
+    target_sources(orion-tests PRIVATE tests_export_portable.cpp tests_export_tags.cpp)
+    find_package(lcms2 CONFIG REQUIRED)
+    find_package(TIFF REQUIRED)
+    find_package(ZLIB REQUIRED)
+    set_source_files_properties(tests_export_tags.cpp PROPERTIES INCLUDE_DIRECTORIES ${JXL_INCLUDE_DIR})
+    target_link_libraries(orion-tests PRIVATE ${OPENCV_LIBRARIES} ${JXL_LIBRARIES}
+        lcms2::lcms2 TIFF::TIFF ZLIB::ZLIB)
 endif()
 
 # The photograph CI hands the shell's --selftest, generated so it carries no
 # one's pictures (tools/fixtures/selftest-photo.cpp, decision #376).
 add_executable(orion-selftest-photo
     ${CMAKE_SOURCE_DIR}/tools/fixtures/selftest-photo.cpp
-    ${CMAKE_SOURCE_DIR}/engine/src/util/DngWriter.cpp)
+    ${CMAKE_SOURCE_DIR}/engine/src/util/DngWriter.cpp
+    ${CMAKE_SOURCE_DIR}/engine/src/util/TiffIfd.cpp)
 target_include_directories(orion-selftest-photo PRIVATE ${CMAKE_SOURCE_DIR}/engine/src)

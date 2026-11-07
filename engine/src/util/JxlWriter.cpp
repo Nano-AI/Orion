@@ -71,7 +71,7 @@ std::vector<std::uint8_t> encodeJxl(const JxlInput& in) {
     info.uses_original_profile = lossless ? JXL_TRUE : JXL_FALSE;
     check(JxlEncoderSetBasicInfo(enc.get(), &info), "basic info");
 
-    if (in.icc.empty()) {   // sRGB, said as an enum: the Windows/Linux writer has no ICC (#376)
+    if (in.icc.empty()) {   // sRGB, said as an enum
         JxlColorEncoding srgb;
         JxlColorEncodingSetToSRGB(&srgb, JXL_FALSE);
         check(JxlEncoderSetColorEncoding(enc.get(), &srgb), "color encoding");

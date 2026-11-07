@@ -283,6 +283,14 @@ from the installed packages into `Contents/Resources/licenses/` of the
 packaged app (`tools/package-app.sh`). See
 `planning/DECISIONS.md` #363.
 
+## Little CMS
+
+Off macOS, export builds its ICC profiles and converts into them with Little
+CMS 2 (https://www.littlecms.com), licensed under the **MIT License**,
+Copyright (c) 2023 Marti Maria Saguer. Orion links it dynamically
+(`engine/src/util/ExportColour.cpp`); on macOS it arrives with OpenCV and
+libjxl. Its licence text travels in `licenses/` beside the binaries.
+
 ## Libraries OpenCV and libjxl bring with them
 
 The packaged app carries every Homebrew library the engine reaches, found by

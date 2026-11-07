@@ -1,6 +1,6 @@
 // Regenerate from the repository root (no GPU or external libraries needed):
 // c++ -std=c++20 -Iengine/src tools/fixtures/mask-invert.cpp \
-//   engine/src/util/DngWriter.cpp -o /tmp/orion-mask-fixture
+//   engine/src/util/DngWriter.cpp engine/src/util/TiffIfd.cpp -o /tmp/orion-mask-fixture
 // /tmp/orion-mask-fixture
 // A uniform, non-dark 64x64 frame makes both mask regions measurable even
 // when the local sample RAW is a night photograph. Reuse Orion's DNG writer.

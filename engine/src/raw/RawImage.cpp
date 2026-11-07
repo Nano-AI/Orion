@@ -78,6 +78,15 @@ RawInfo readInfo(const std::string& path) {
     info.aperture    = other.aperture;
     info.focalLength = other.focal_len;
     info.timestamp   = static_cast<std::int64_t>(other.timestamp);
+    if (const auto& g = other.parsed_gps; g.gpsparsed) {
+        info.gps.parsed = true;
+        std::copy(g.latitude, g.latitude + 3, info.gps.latitude);
+        std::copy(g.longitude, g.longitude + 3, info.gps.longitude);
+        info.gps.altitude = g.altitude;
+        info.gps.latRef = g.latref;
+        info.gps.lonRef = g.longref;
+        info.gps.altRef = g.altref;
+    }
     if (idata.xmpdata != nullptr && idata.xmplen > 0) {
         // xmplen counts the NUL LibRaw appends; the packet ends at the first one.
         const char* end = std::find(idata.xmpdata, idata.xmpdata + idata.xmplen, '\0');

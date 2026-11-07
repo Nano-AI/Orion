@@ -21,6 +21,7 @@
 #include "util/DngWriter.h"
 
 #include "util/Half.h"
+#include "util/TiffIfd.h"
 #include "util/Utf8Path.h"
 
 #include <algorithm>
@@ -32,88 +33,8 @@
 #include <vector>
 
 namespace orion::util {
-namespace {
 
-// TIFF 6.0 field types, §2.
-constexpr std::uint16_t kByte      = 1;
-constexpr std::uint16_t kAscii     = 2;
-constexpr std::uint16_t kShort     = 3;
-constexpr std::uint16_t kLong      = 4;
-constexpr std::uint16_t kRational  = 5;
-constexpr std::uint16_t kUndefined = 7;
-constexpr std::uint16_t kSRational = 10;
-
-void put16(std::vector<std::uint8_t>& out, std::uint16_t v) {
-    out.push_back(static_cast<std::uint8_t>(v & 0xff));
-    out.push_back(static_cast<std::uint8_t>(v >> 8));
-}
-
-void put32(std::vector<std::uint8_t>& out, std::uint32_t v) {
-    put16(out, static_cast<std::uint16_t>(v & 0xffff));
-    put16(out, static_cast<std::uint16_t>(v >> 16));
-}
-
-/// One IFD entry, payload held as its final little-endian bytes. Whether the
-/// payload rides inline or in the external data area is decided at layout
-/// time from its size alone.
-struct Entry {
-    std::uint16_t tag  = 0;
-    std::uint16_t type = 0;
-    std::uint32_t count = 0;
-    std::vector<std::uint8_t> data;
-};
-
-Entry shortEntry(std::uint16_t tag, std::initializer_list<std::uint16_t> vs) {
-    Entry e{tag, kShort, static_cast<std::uint32_t>(vs.size()), {}};
-    for (auto v : vs) put16(e.data, v);
-    return e;
-}
-
-Entry longEntry(std::uint16_t tag, std::uint32_t v) {
-    Entry e{tag, kLong, 1, {}};
-    put32(e.data, v);
-    return e;
-}
-
-Entry byteEntry(std::uint16_t tag, std::initializer_list<std::uint8_t> vs) {
-    Entry e{tag, kByte, static_cast<std::uint32_t>(vs.size()), {}};
-    e.data.assign(vs);
-    return e;
-}
-
-Entry asciiEntry(std::uint16_t tag, const std::string& s) {
-    Entry e{tag, kAscii, static_cast<std::uint32_t>(s.size() + 1), {}};
-    e.data.assign(s.begin(), s.end());
-    e.data.push_back(0);
-    return e;
-}
-
-/// den = 10000 matches the precision Adobe's own converter writes color
-/// matrices at; the values arrive from LibRaw at four decimal places anyway.
-Entry srationalEntry(std::uint16_t tag, const float* vs, std::size_t n,
-                     std::int32_t den = 10000) {
-    Entry e{tag, kSRational, static_cast<std::uint32_t>(n), {}};
-    for (std::size_t i = 0; i < n; ++i) {
-        const auto num =
-            static_cast<std::int32_t>(std::lround(static_cast<double>(vs[i]) * den));
-        put32(e.data, static_cast<std::uint32_t>(num));
-        put32(e.data, static_cast<std::uint32_t>(den));
-    }
-    return e;
-}
-
-Entry rationalEntry(std::uint16_t tag, const float* vs, std::size_t n,
-                    std::uint32_t den = 1000000) {
-    Entry e{tag, kRational, static_cast<std::uint32_t>(n), {}};
-    for (std::size_t i = 0; i < n; ++i) {
-        const double v = std::max(0.0, static_cast<double>(vs[i]));
-        put32(e.data, static_cast<std::uint32_t>(std::lround(v * den)));
-        put32(e.data, den);
-    }
-    return e;
-}
-
-}  // namespace
+using namespace tiff;
 
 void writeDngLinear(const std::string& path, const DngLinearImage& image) {
     if (image.rgb == nullptr || image.width == 0 || image.height == 0) {
@@ -209,23 +130,10 @@ void writeDngLinear(const std::string& path, const DngLinearImage& image) {
         ifd0 = std::move(raw);
         for (auto& e : meta) ifd0.push_back(std::move(e));
     }
-    std::sort(ifd0.begin(), ifd0.end(),
-              [](const Entry& a, const Entry& b) { return a.tag < b.tag; });
-    std::sort(sub.begin(), sub.end(),
-              [](const Entry& a, const Entry& b) { return a.tag < b.tag; });
+    sortByTag(ifd0);
+    sortByTag(sub);
 
     // ── Layout: header | IFD0 | values | subIFD | values | jpeg | strip ───
-    const auto ifdBytes = [](const std::vector<Entry>& ifd) {
-        return std::uint32_t(2 + ifd.size() * 12 + 4);
-    };
-    const auto externalBytes = [](const std::vector<Entry>& ifd) {
-        std::uint32_t total = 0;
-        for (const auto& e : ifd) {
-            if (e.data.size() > 4) total += std::uint32_t(e.data.size() + 1) & ~1u;
-        }
-        return total;
-    };
-
     const std::uint32_t ifd0Offset = 8;
     const std::uint32_t subOffset =
         sub.empty() ? 0
@@ -255,43 +163,8 @@ void writeDngLinear(const std::string& path, const DngLinearImage& image) {
     put16(head, 42);
     put32(head, ifd0Offset);
 
-    const auto serializeIfd = [&](const std::vector<Entry>& ifd,
-                                  std::uint32_t ifdOffset) {
-        // Values wider than four bytes live after the IFD at even offsets.
-        std::uint32_t valueCursor = ifdOffset + ifdBytes(ifd);
-        std::vector<std::uint32_t> valueOffsets(ifd.size(), 0);
-        for (std::size_t i = 0; i < ifd.size(); ++i) {
-            if (ifd[i].data.size() > 4) {
-                valueCursor += valueCursor & 1;
-                valueOffsets[i] = valueCursor;
-                valueCursor += std::uint32_t(ifd[i].data.size());
-            }
-        }
-        head.resize(ifdOffset, 0);
-        put16(head, std::uint16_t(ifd.size()));
-        for (std::size_t i = 0; i < ifd.size(); ++i) {
-            const Entry& e = ifd[i];
-            put16(head, e.tag);
-            put16(head, e.type);
-            put32(head, e.count);
-            if (e.data.size() <= 4) {
-                head.insert(head.end(), e.data.begin(), e.data.end());
-                head.resize(head.size() + (4 - e.data.size()), 0);
-            } else {
-                put32(head, valueOffsets[i]);
-            }
-        }
-        put32(head, 0);  // no next IFD
-        for (std::size_t i = 0; i < ifd.size(); ++i) {
-            if (ifd[i].data.size() > 4) {
-                head.resize(valueOffsets[i], 0);
-                head.insert(head.end(), ifd[i].data.begin(), ifd[i].data.end());
-            }
-        }
-    };
-
-    serializeIfd(ifd0, ifd0Offset);
-    if (!sub.empty()) serializeIfd(sub, subOffset);
+    writeIfd(head, ifd0, ifd0Offset);
+    if (!sub.empty()) writeIfd(head, sub, subOffset);
 
     if (withPreview) {
         head.resize(jpegOffset, 0);

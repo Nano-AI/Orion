@@ -166,6 +166,11 @@ int main(int argc, char** argv) {
     testExportWatermark();
     testExportJxl();
     testExportSharpening();
+#ifndef __APPLE__
+    testExportColourTags();
+    testExportMetadataTags();
+    testExportTiffDeflate();
+#endif
     testFloatToHalf();
     testDngRoundTrip();
     gpu(testLinearDngOpens);

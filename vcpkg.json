@@ -6,11 +6,14 @@
   "dependencies": [
     "libraw",
     "libjxl",
+    "lcms",
     {
       "name": "opencv4",
       "default-features": false,
       "features": ["calib3d", "fs", "jpeg", "png", "tiff"]
     },
+    "tiff",
+    "zlib",
     {
       "name": "icu",
       "platform": "linux"
