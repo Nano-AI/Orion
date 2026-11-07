@@ -14,7 +14,7 @@ Shipped on `main`: export off macOS in sRGB, Display P3 and Adobe RGB with the c
 
 `main` passes every gate on a real Mac, on a Linux machine with an RTX 3070 (`tools/open-pr.sh` runs there too) and in CI on all three systems (issues 37 and 41 closed, #47, #48).
 
-This session (PRs 57 to 60), measured with `tools/bench.py --ab` on the RTX 3070 at 24 MP:
+This session (PRs 57 to 60), measured with `tools/bench.py --ab` on the RTX 3070 at 42 MP:
 
 | Change | Before | After |
 |---|---|---|
@@ -25,6 +25,8 @@ This session (PRs 57 to 60), measured with `tools/bench.py --ab` on the RTX 3070
 | Lens profile, PR 57 | only the editor's session | every session, compare's candidate and batch export included |
 | CI, `ci: lean runs` | Windows vcpkg never cached (11 min a run); Linux rebuilt opencv every run (2.5 to 5.5 min); main runs cancelled each other (3 of the last 5); no Windows selftest on a PR; MCP tests and greps never ran | vcpkg caches save whenever a run builds a package; every main commit gets a run; the Windows selftest on every PR; a `gates` job; a timeout on every job |
 | Clipping and the histogram (Lightroom parity) | flags a reading only, histogram inert | J, the flags or Alt on a tone slider paint clipped pixels on the canvas; a drag across the histogram moves Blacks, Shadows, Exposure, Highlights or Whites, one undo step |
+
+On a GPU slower than 160 ms a render, a burst of typed values or held keys read the histogram and flat frame once per render; `Settled` now times the gap between renders, so it reads once, after the last.
 
 ## Next, in order
 

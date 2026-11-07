@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
@@ -135,8 +136,26 @@ static partial class SelfTest {
         int burst = FlatFrameCheck.Judged - judged;
         bool measured = !ReferenceEquals(Levels.Bins, bins) && Levels.Bins.Length > 0;
 
+        // A slow GPU (WARP) spends longer than After inside each render and in each read back;
+        // subscribers that sleep there stand in for it.
+        int slowMs = (int)Settled.After.TotalMilliseconds + 40;
+        void Slow(object? _, PropertyChangedEventArgs e) { if (e.PropertyName == nameof(EngineModel.Picture)) Thread.Sleep(slowMs); }
+        void SlowRead() => Thread.Sleep(slowMs);
+        judged = FlatFrameCheck.Judged;
+        engine.PropertyChanged += Slow;
+        Settled.Fired += SlowRead;
+        for (int i = 1; i <= 4; i++) engine.Set("exposure_ev", start + 0.1f * i);
+        engine.PropertyChanged -= Slow;
+        Settled.Fired -= SlowRead;
+        int during = FlatFrameCheck.Judged - judged;
+        Pump(rest);
+        int slow = FlatFrameCheck.Judged - judged;
+
         engine.Set("exposure_ev", start);
         Pump(rest);
+        Check(during == 1 && slow == 2,
+              $"four renders each {slowMs} ms long, back to back, read at the first and once after the last, never between " +
+              $"(reads during {during}, after {slow})");
         Check(drag && lone && waits && measured && burst == 1,
               $"the histogram and the flat-frame check never read mid-drag, read a lone render at once, and read four quick " +
               $"renders once, {Settled.After.TotalMilliseconds} ms after the last (drag untouched {drag}, lone read at once {lone}, " +
