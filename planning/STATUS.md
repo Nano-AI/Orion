@@ -23,6 +23,7 @@ This session (PRs 57 to 60), measured with `tools/bench.py --ab` on the RTX 3070
 | GPU held by the engine after a render / a swap, PR 60 | 1934 / 2040 MiB | 1094 / 1094 MiB (kept photos keep nothing on the card, one grain plate, lazy mattes, idle trim) |
 | Swap peak | 2584 MiB | 2220 MiB |
 | Lens profile, PR 57 | only the editor's session | every session, compare's candidate and batch export included |
+| CI, `ci: lean runs` | Windows vcpkg never cached (11 min a run); Linux rebuilt opencv every run (2.5 to 5.5 min); main runs cancelled each other (3 of the last 5); no Windows selftest on a PR; MCP tests and greps never ran | vcpkg caches save whenever a run builds a package; every main commit gets a run; the Windows selftest on every PR; a `gates` job; a timeout on every job |
 
 ## Next, in order
 
