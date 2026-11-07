@@ -148,10 +148,11 @@ static partial class SelfTest {
     }
 
     static void HistogramDragChecks(MainWindow window, EngineModel engine) {
-        engine.Open(engine.Current);   // a clean history: one step is the drag's
+        engine.Open(engine.Current);
         // A session the cache no longer keeps decodes again, and the histogram ignores the pointer until it opens.
         var opening = Stopwatch.StartNew();
         while (engine.Opening && opening.ElapsedMilliseconds < 10000) Pump(5);
+        EditHistory.Restart();   // a clean history: one step is the drag's
         Settle(window);
         if (window.GetVisualDescendants().OfType<HistogramDrag>().SingleOrDefault() is not { } drag) {
             Check(false, "the histogram takes a drag");
