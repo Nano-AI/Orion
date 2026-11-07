@@ -11,10 +11,6 @@ static partial class DevelopFacade {
     [LibraryImport(Lib)]
     public static partial int orion_engine_histogram(nint engine, [Out] uint[] outBins, uint bins);
 
-    /// OrionLensProfile: int32 found, int32 approximate, char lens[128], char maker[64], int32 source.
-    [LibraryImport(Lib)]
-    public static partial int orion_engine_lens_profile(nint engine, [Out] byte[] profile);
-
     [LibraryImport(Lib)]
     public static partial nint orion_engine_lens(nint engine);
 
@@ -58,7 +54,7 @@ static partial class DevelopFacade {
     public static (string Name, bool Approximate, LensSource Source) LensProfile() {
         var engine = EngineModel.Shared.Handle;
         var raw = new byte[204];
-        if (engine == 0 || orion_engine_lens_profile(engine, raw) != 0 || BitConverter.ToInt32(raw, 0) == 0) return ("", false, LensSource.None);
+        if (engine == 0 || Native.orion_engine_lens_profile(engine, raw) != 0 || BitConverter.ToInt32(raw, 0) == 0) return ("", false, LensSource.None);
         string lens = CString(raw.AsSpan(8, 128)), maker = CString(raw.AsSpan(136, 64));
         return (lens.StartsWith(maker) || maker.Length == 0 ? lens : $"{maker} {lens}", BitConverter.ToInt32(raw, 4) != 0,
                 (LensSource)BitConverter.ToInt32(raw, 200));

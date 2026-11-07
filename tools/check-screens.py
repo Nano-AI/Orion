@@ -51,10 +51,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 ORION = ROOT / "shell" / "bin" / "Release" / "net10.0" / "Orion"
 SAMPLES = Path(os.environ.get("ORION_SAMPLES", ROOT / "samples"))
-os.environ.setdefault("DOTNET_ROOT", "/opt/homebrew/opt/dotnet/libexec")
+if sys.platform == "darwin":
+    os.environ.setdefault("DOTNET_ROOT", "/opt/homebrew/opt/dotnet/libexec")
 
 PHOTO_CANDIDATES = ["_PIC8220.ARW", "overexposed-background.ARW", "underexposedsubject.ARW", "_PIC8148.ARW"]
-PHOTO = next((SAMPLES / c for c in PHOTO_CANDIDATES if (SAMPLES / c).is_file()), SAMPLES / PHOTO_CANDIDATES[0])
+RAW_SUFFIXES = {".arw", ".cr2", ".cr3", ".nef", ".raf", ".orf", ".rw2", ".dng"}
+# Else any other RAW, never _PIC8095.ARW: it has people in the frame, and these renders are looked at.
+PHOTO = next((SAMPLES / c for c in PHOTO_CANDIDATES if (SAMPLES / c).is_file()),
+             next((p for p in sorted(SAMPLES.glob("*")) if p.suffix.lower() in RAW_SUFFIXES
+                   and p.is_file() and p.name != "_PIC8095.ARW"), SAMPLES / PHOTO_CANDIDATES[0]))
 
 TABS = ["Light", "Color", "Detail", "Optics", "Mask", "Crop", "Presets"]
 

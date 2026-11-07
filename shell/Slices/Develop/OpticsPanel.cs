@@ -16,12 +16,6 @@ public sealed class OpticsPanel : StackPanel {
     readonly LensPicker _picker;
     SectionPlate? _plate;
 
-    /// Engine.lensProfileEnabled: on by default when a profile is found, since a
-    /// correction the lens is known to need is not a creative decision. The
-    /// engine's, not the photo's: the sidecar does not hold it and an open does
-    /// not reset it, so a switch turned off stays off for every photo after.
-    static bool _profileEnabled = true;
-
     static EngineModel Engine => EngineModel.Shared;
 
     public OpticsPanel() {
@@ -33,20 +27,20 @@ public sealed class OpticsPanel : StackPanel {
     /// Engine.swift:779 — lens_profile is (enabled && found), pushed whenever either changes.
     internal void Refresh(bool render = false) {
         var (name, approximate, source) = DevelopFacade.LensProfile();
-        bool found = name.Length > 0, profiled = found && _profileEnabled;
+        bool found = name.Length > 0, profiled = found && Session.LensProfileEnabled;
         if (Engine.Handle != 0 && (render || Engine.Get("lens_profile") != (profiled ? 1 : 0)))
             Engine.Set("lens_profile", profiled ? 1 : 0);
 
         var rows = new List<Control>();
         if (found) {
             var toggle = new ToggleSwitch {
-                IsChecked = _profileEnabled, OnContent = null, OffContent = null,
+                IsChecked = Session.LensProfileEnabled, OnContent = null, OffContent = null,
                 Content = new StackPanel { Spacing = Space.Xs, Children = {
                     new TextBlock { Text = "Lens profile", FontSize = Faces.Label },
                     new TextBlock { Text = name, FontSize = Faces.Mark, Foreground = Palette.Dim, TextWrapping = Avalonia.Media.TextWrapping.Wrap, MaxLines = 2 },
                 } },
             };
-            toggle.IsCheckedChanged += (_, _) => { _profileEnabled = toggle.IsChecked == true; Refresh(render: true); };
+            toggle.IsCheckedChanged += (_, _) => { Session.LensProfileEnabled = toggle.IsChecked == true; Refresh(render: true); };
             rows.Add(toggle);
             rows.Add(Develop.Note(source == DevelopFacade.LensSource.Dng
                 ? "The camera's own correction, written into this DNG. It takes precedence over any profile. " +

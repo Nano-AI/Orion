@@ -17,7 +17,11 @@ cd "$(git rev-parse --show-toplevel)"
 [[ -z $(git status --porcelain --untracked-files=no -- . ':!shell/packages.lock.json') ]] ||
     { echo "open-pr: uncommitted changes; the gates must run on what the PR holds" >&2; exit 2; }
 
-export DOTNET_ROOT=${DOTNET_ROOT:-/opt/homebrew/opt/dotnet/libexec}
+case $(uname -s) in
+    Darwin) system=macos; export DOTNET_ROOT=${DOTNET_ROOT:-/opt/homebrew/opt/dotnet/libexec} ;;
+    Linux)  system=linux ;;
+    *) echo "open-pr: runs on macOS and Linux only" >&2; exit 2 ;;
+esac
 samples=${ORION_SAMPLES:-samples}
 raw=
 for c in _PIC8095.ARW overexposed-background.ARW _PIC8220.ARW _PIC8148.ARW underexposedsubject.ARW; do
@@ -42,12 +46,23 @@ step() {   # step NAME COMMAND...: runs it, keeps its last line, stops the scrip
 }
 
 step "build engine"     cmake --build build
-step "build native"     shell/native/build.sh
-step "build shell"      dotnet build -c Release shell
+if [[ $system == macos ]]; then
+    step "build native" shell/native/build.sh
+    step "build shell"  dotnet build -c Release shell
+else
+    echo "- ⏭ build native: not run; build.sh is macOS's, and here the engine build makes the shim" >>"$summary"
+    step "build shell"  dotnet build -c Release shell
+    # The engine build makes the shim only when configured with -DORION_SHELL_DIR=shell, and dotnet does not copy it.
+    step "copy native"  cp build/shell-native/liborion_shim.so shell/bin/Release/net10.0/
+fi
 step "orion-tests"      ./build/apps/tests/orion-tests
 # Held to the same stated skip list as CI (#376): a known failure passes with its reason, any other fails.
-step "selftest"         python3 tools/ci-selftest.py macos shell/bin/Release/net10.0/Orion "$raw"
-step "present_test"     shell/bin-native/present_test "$raw"
+step "selftest"         python3 tools/ci-selftest.py "$system" shell/bin/Release/net10.0/Orion "$raw"
+if [[ $system == macos ]]; then
+    step "present_test" shell/bin-native/present_test "$raw"
+else
+    echo "- ⏭ present_test: not run; it tests macOS's Metal zero-copy surface" >>"$summary"
+fi
 for gate in gestures screens modes wiring agent site; do
     step "check-$gate" "./tools/check-$gate.py"
 done

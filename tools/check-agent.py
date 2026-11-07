@@ -118,12 +118,13 @@ from check_agent_steps import STEPS, Context, Session, spawn   # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 # The development build of the app (`dotnet build -c Release shell`), which is
-# framework-dependent: it needs DOTNET_ROOT, defaulted below to Homebrew's.
+# framework-dependent: it needs DOTNET_ROOT, defaulted below to Homebrew's on macOS.
 ORION = ROOT / "shell" / "bin" / "Release" / "net10.0" / "Orion"
 # ORION_SAMPLES names another folder of RAWs: a worktree's `samples/` link can
 # dangle, and the gate copies its photograph out either way.
 SAMPLES = Path(os.environ.get("ORION_SAMPLES", ROOT / "samples"))
-os.environ.setdefault("DOTNET_ROOT", "/opt/homebrew/opt/dotnet/libexec")
+if sys.platform == "darwin":
+    os.environ.setdefault("DOTNET_ROOT", "/opt/homebrew/opt/dotnet/libexec")
 # The first of these that exists: `samples/` is not the same folder on every
 # machine.
 SAMPLE_CANDIDATES = ["_PIC8095.ARW", "overexposed-background.ARW", "_PIC8220.ARW",

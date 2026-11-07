@@ -101,6 +101,10 @@ public static unsafe partial class Native {
     [LibraryImport(Lib)]
     public static partial int orion_engine_release_render_memory(nint engine);
 
+    /// OrionLensProfile, 204 bytes: int32 found, int32 approximate, char lens[128], char maker[64], int32 source.
+    [LibraryImport(Lib)]
+    public static partial int orion_engine_lens_profile(nint engine, [Out] byte[] profile);
+
     /// GPU memory the process's device holds; 0 on Metal, where the footprint counts it.
     [LibraryImport(Lib)]
     public static partial int orion_engine_gpu_memory(nint engine, out ulong bytes);

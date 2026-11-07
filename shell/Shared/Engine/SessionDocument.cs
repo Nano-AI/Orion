@@ -25,7 +25,22 @@ public sealed partial class Session {
     public static Session? OpenEdited(string path, bool headless = false) {
         var s = Open(path, headless);
         s?.Restore();
+        s?.ApplyLensProfile();
         return s;
+    }
+
+    /// Engine.lensProfileEnabled: on by default when a profile is found, since a
+    /// correction the lens is known to need is not a creative decision. The
+    /// app's, not the photo's: the sidecar does not hold it, so every session
+    /// opens with it, a neighbour the cache keeps, compare's candidate and a
+    /// batch export as well as the photo in the editor. OpticsPanel's switch.
+    public static bool LensProfileEnabled = true;
+
+    /// Engine.swift:779: lens_profile is (enabled && found).
+    public void ApplyLensProfile() {
+        var profile = new byte[204];
+        bool found = Native.orion_engine_lens_profile(Handle, profile) == 0 && BitConverter.ToInt32(profile, 0) != 0;
+        Set("lens_profile", LensProfileEnabled && found ? 1 : 0);
     }
 
     void Restore() {
