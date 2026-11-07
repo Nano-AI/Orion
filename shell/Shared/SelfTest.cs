@@ -130,6 +130,7 @@ static partial class SelfTest {
         ZoomPresetChecks();
         SideBySideChecks();
         ToolsChecks();
+        ColorChecks();
         MaskUxChecks();
         MotionChecks();
         SidecarChecks();

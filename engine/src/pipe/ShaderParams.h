@@ -108,8 +108,12 @@ struct LinearAdjust {
     float         toneSigma;
     float         toneAnchor;
     float         _tonePad[2];
+    /// Black and white: the eight bands' gray mix, and whether it is on.
+    float         bwMix[8];
+    float         bwEnabled;
+    float         _bwPad[3];
 };
-static_assert(sizeof(LinearAdjust) == 496);
+static_assert(sizeof(LinearAdjust) == 544);
 
 /// The tone bands each process version renders with. A sidecar stores slider
 /// values and not results, so the bands a photograph was finished under have

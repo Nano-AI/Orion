@@ -16,7 +16,7 @@ namespace OrionShell.Agent;
 /// can produce.
 static class AgentComposite {
     public static readonly string[] Fields =
-        ["curve", "gradeShadow", "gradeMidtone", "gradeHighlight", "hueShift", "satShift", "lumShift", "layers", "spots", "maskComponents"];
+        ["curve", "gradeShadow", "gradeMidtone", "gradeHighlight", "hueShift", "satShift", "lumShift", "bwMix", "layers", "spots", "maskComponents"];
 
     static readonly string[] Bands = ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue", "Purple", "Magenta"];
     static readonly string[] SpotKeys = ["destX", "destY", "srcX", "srcY", "radius", "feather", "heal"];
@@ -60,7 +60,7 @@ static class AgentComposite {
         switch (key) {
             case "curve": Curve(value); break;
             case "gradeShadow" or "gradeMidtone" or "gradeHighlight": Grade(value, key); break;
-            case "hueShift" or "satShift" or "lumShift": Band(value, key); break;
+            case "hueShift" or "satShift" or "lumShift" or "bwMix": Band(value, key); break;
             case "layers": Elements(value, key, (o, label) => Layer(o, label)); break;
             case "spots": Elements(value, key, (o, label) => Spot(o, label)); break;
             case "maskComponents": Elements(value, key, (o, label) => Mask(o, label, photo)); break;
@@ -200,6 +200,8 @@ static class AgentComposite {
             ("gradeHighlight", "array", Zeros(3), GradeNote),
             ("hueShift", "array", Zeros(8), bands + SendComplete), ("satShift", "array", Zeros(8), bands + SendComplete),
             ("lumShift", "array", Zeros(8), bands + SendComplete),
+            ("bwMix", "array", Zeros(8), bands + " Only while blackWhite is 1: +1 brightens what was that color by up to two stops, "
+             + "-1 darkens it as much, scaled by how saturated it was; 0 everywhere is plain luminance." + SendComplete),
             ("layers", "array", new JsonArray(DevelopJson.DefaultLayer()), LayersNote + SendComplete),
             ("spots", "array", new JsonArray(spot),
              "Every element needs every SpotState field (destX, destY, srcX, srcY, radius, feather, heal); positions 0…1, radius and "

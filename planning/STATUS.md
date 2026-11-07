@@ -10,7 +10,7 @@ Keep it to this page: history is `git log`, work is [GitHub issues](https://gith
 The Avalonia app is Orion on macOS and ships as alpha pre-releases on GitHub.
 Windows and Linux build, test and package in CI on Dawn and run on real NVIDIA hardware on Linux; neither is a supported release yet.
 Feedback: a toolbar Feedback button and an occasional toast (after 10 active minutes, at most twice in 3 days, quiet once given for a version) open the Tally form with the system, hardware, session counts and the open photo's camera and format, never a path or name (`Chrome/Feedback.cs`, `FeedbackFacts.cs`).
-Shipped on `main`: export off macOS in sRGB, Display P3 and Adobe RGB with the camera's EXIF and XMP (Little CMS, LibRaw), JPEG XL export, foreign-XMP preservation, region-of-interest rendering, lens correction from DNG opcodes, stacking (noise and star modes, streamed), Velopack installers and updates, one palette and brand across app and site.
+Shipped on `main`: export off macOS in sRGB, Display P3 and Adobe RGB with the camera's EXIF and XMP (Little CMS, LibRaw), JPEG XL export, foreign-XMP preservation, region-of-interest rendering, lens correction from DNG opcodes, stacking (noise and star modes, streamed), Velopack installers and updates, one palette and brand across app and site, black and white with Lightroom's eight-band gray mix (S6.2, `research/bw-mix.md`).
 
 `main` passes every gate on a real Mac, on a Linux machine with an RTX 3070 (`tools/open-pr.sh` runs there too) and in CI on all three systems (issues 37 and 41 closed, #47, #48).
 

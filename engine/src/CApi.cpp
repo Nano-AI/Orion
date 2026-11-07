@@ -271,7 +271,9 @@ orion::pipe::Adjustments toAdjustments(OrionEngine* engine, const OrionAdjustmen
         a.hueShift[i] = adj->hue_shift[i];
         a.satShift[i] = adj->sat_shift[i];
         a.lumShift[i] = adj->lum_shift[i];
+        a.bwMix[i]    = std::clamp(adj->bw_mix[i], -1.0f, 1.0f);
     }
+    a.blackWhite = adj->black_white != 0;
     return a;
 }
 }  // namespace

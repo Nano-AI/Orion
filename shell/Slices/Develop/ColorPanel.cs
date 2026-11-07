@@ -7,7 +7,8 @@ using Avalonia.Media;
 namespace OrionShell.Develop;
 
 /// A port of the Swift app's DevelopPanels+Color.swift: presence, the three grading wheels
-/// with their balance, and the eight-band mixer with its targeted picker.
+/// with their balance, the eight-band mixer with its targeted picker, and the
+/// black and white conversion with its eight-band gray mix.
 [Panel("develop-color", Region.Tools, 10, Tab = "Color")]
 public sealed class ColorPanel : StackPanel {
     /// The mixer's band (Editor.band in OrionApp.swift): blue until a pick moves it.
@@ -16,6 +17,9 @@ public sealed class ColorPanel : StackPanel {
     readonly ContentControl _bandName = new() { VerticalAlignment = VerticalAlignment.Center };
     readonly Panel _bandSliders = new();
     readonly Segmented _mode = new(["Hue", "Saturation", "Luminance"], (int)TargetedAdjust.Current);
+    /// Lightroom's Treatment: Color or Black & white.
+    readonly Segmented _treatment = new(["Color", "Black & white"], 0);
+    readonly StackPanel _grayMix = new() { Spacing = Space.Md };
 
     public ColorPanel() {
         Spacing = SectionPlate.Gap;
@@ -53,6 +57,20 @@ public sealed class ColorPanel : StackPanel {
             "under the pointer belongs to, which beats guessing which of eight swatches the sky falls into.",
             tools, _mode, rail, _bandSliders));
 
+        foreach (var b in Enum.GetValues<HueBand>())
+            _grayMix.Children.Add(new AdjustmentSlider(TargetedAdjust.Name(b), "bw_mix", -1, 1, index: (int)b, baseValue: 0,
+                                                       tint: TrackTint.Luminance(TargetedAdjust.Centers[(int)b])));
+        _treatment.Changed += i => {
+            EngineModel.Shared.Set("black_white", i);
+            ShowGrayMix();
+        };
+        Children.Add(new SectionPlate("Treatment",
+            "Black & white renders the photograph in gray from its luminance. Each slider brightens or darkens what was " +
+            "that color: pull Blue down for a darker sky, push Orange up for lighter skin. Color grading still tones the result.",
+            _treatment, _grayMix));
+        EngineModel.Shared.Opened += ShowGrayMix;
+        EngineModel.Shared.ValuesChanged += ShowGrayMix;
+
         EngineModel.Shared.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(EngineModel.Tool)) ShowMode(); };
         // A pick on the photo moves the panel to the band it landed in.
         TargetedAdjust.Changed += () => { if (TargetedAdjust.ActiveBand is { } b) _band = b; ShowBand(); };
@@ -67,6 +85,14 @@ public sealed class ColorPanel : StackPanel {
         }
         ShowMode();
         ShowBand();
+        ShowGrayMix();
+    }
+
+    /// The gray mix is only there while the photograph is black and white, as Lightroom's B&W panel.
+    void ShowGrayMix() {
+        bool on = EngineModel.Shared.Get("black_white") != 0;
+        _treatment.Selected = on ? 1 : 0;
+        _grayMix.IsVisible = on;
     }
 
     void ShowMode() => _mode.IsVisible = EngineModel.Shared.Tool == CanvasTool.Targeted;

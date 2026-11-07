@@ -151,6 +151,7 @@ int main(int argc, char** argv) {
     gpu(testGuideEpsilonInStops);
     testMaskGeometryInverse();
     gpu(testLocalAdjustments);
+    gpu(testBlackWhiteMixGpu);
     gpu(testMaskRangeGpu);
     gpu(testMaskColorGpu);
     testBayerDecimation();

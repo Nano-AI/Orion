@@ -174,7 +174,7 @@ public sealed partial class Session {
 
     const int MaxSpots = 64;   // ORION_MAX_SPOTS
     static readonly string[] Channels = ["master", "red", "green", "blue"];
-    static readonly HashSet<string> NumberArrays = ["gradeShadow", "gradeMidtone", "gradeHighlight", "hueShift", "satShift", "lumShift"];
+    static readonly HashSet<string> NumberArrays = ["gradeShadow", "gradeMidtone", "gradeHighlight", "hueShift", "satShift", "lumShift", "bwMix"];
 
     /// A number DevelopState holds that is an OrionAdjustments field of the same name.
     static bool Scalar(string key, JsonNode? value) =>

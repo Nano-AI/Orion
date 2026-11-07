@@ -10,6 +10,7 @@
 
 #include "ops/tone_ops.slang"
 #include "ops/hsl_ops.slang"
+#include "ops/bw_ops.slang"
 #include "ops/coverage.slang"
 
 /// The log2 pivot a contrast bends about. `develop_display` uses the same one
@@ -87,6 +88,13 @@ struct LinearAdjustParams
     float toneSigma;
     float toneAnchor;
     float _tonePad[2];
+
+    /// Black and white, after every colour control and before the grade, so
+    /// the gray is what the photograph's colours were and a grade can still
+    /// tone it. research/bw-mix.md.
+    float bwMix[8];
+    float bwEnabled;
+    float _bwPad[3];
 };
 
 /// Bilinear lift of the guide coefficients from their subsampled grid.
@@ -292,6 +300,15 @@ void developLinear(uint3 tid : SV_DispatchThreadID,
             const float after = luminance2020(c);
             if (before > 1e-6f && after > 1e-6f) c *= before / after;
         }
+    }
+
+    if (p.bwEnabled != 0.0f)
+    {
+        // Copied out of the parameter block for the WGSL target (#375).
+        float mix[8];
+        [unroll]
+        for (int k = 0; k < 8; ++k) mix[k] = p.bwMix[k];
+        c = applyBlackWhite(c, mix);
     }
 
     // The coverage, drawn over the picture. Last, so it sits on top of every

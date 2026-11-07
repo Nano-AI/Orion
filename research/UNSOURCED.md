@@ -1543,3 +1543,12 @@ The shapes are sourced; the numbers that set how hard each one bites are chosen.
 - **Chosen, calibration:** a master is a plain per-sample median (an even count averages the middle two); a flat sample with no signal gets gain 1 and is left out of its channel's mean, where no signal is ≤ 0 over the dark or under 0.1 of the channel's mean (`kNoSignal`: a dead pixel or dust core would otherwise divide a light into a hot pixel a tripod stack cannot reject; 0.1 is a guess, a dust shadow is rarely darker than half); a sample clipped before calibration (at white, or 1 in a linear DNG) is left as it is, so demosaic and the clipped-core guard still see it as saturated; no separate flat-darks (the lights' master dark corrects the flats); a calibrated mosaic sample is rounded and clamped to [black, white], so a light below its dark clips at black. `stack/Calibrate.cpp`.
 - **Chosen, finder:** at least 5 frames; cadence agrees within ±2 s on (gap - shutter); astro tag at shutter >= 5 s and ISO >= 800, kept only when the middle frame's embedded preview has a mean luma (Rec. 709 weights on its encoded values) under 0.15 (`StackSuggestion.DarkLuma`).
 - **What would settle it:** real sequences (a 20-frame 20 s sky, a tripod noise set) measured for residual noise against √N, for star roundness after registration, and for how many suggestions a real library gets that its owner would not stack.
+
+## §33 - Black and white's slider-to-gain mapping - added 2026-11-07
+
+[bw-mix.md](bw-mix.md), `ops/bw_ops.slang`.
+The luminance baseline is sourced (BT.2020, Grundland and Dodgson 2007); the band membership is §4's.
+
+- **Chosen:** gray = Y · 2^(kBwStops · chroma · Σ w_b(h) s_b), chroma = (max − min) / max, kBwStops = 2. Two stops at full travel is a guess at Lightroom's range, not a measurement of it.
+- **Invariant tested** (`testBlackWhiteMixGpu`): every slider at 0 is exactly Rec.2020 Y; +1 on a pure band colour whose neighbours carry no weight (green) scales its gray by exactly 2^kBwStops = 4; every slider at −1 is 2^−kBwStops on any fully saturated colour.
+- **What would settle it:** Lightroom's B&W mix measured on a rendered colour chart, slider by slider, or a published per-hue filter factor table to map the travel onto.

@@ -28,7 +28,8 @@ public static class DevelopJson {
          "sharpenAmount":0,"sharpenRadius":1,"sharpenMasking":0,
          "curve":{"master":[{"x":0,"y":0},{"x":1,"y":1}],"red":[{"x":0,"y":0},{"x":1,"y":1}],
                   "green":[{"x":0,"y":0},{"x":1,"y":1}],"blue":[{"x":0,"y":0},{"x":1,"y":1}]},
-         "hueShift":[0,0,0,0,0,0,0,0],"satShift":[0,0,0,0,0,0,0,0],"lumShift":[0,0,0,0,0,0,0,0]}
+         "hueShift":[0,0,0,0,0,0,0,0],"satShift":[0,0,0,0,0,0,0,0],"lumShift":[0,0,0,0,0,0,0,0],
+         "blackWhite":0,"bwMix":[0,0,0,0,0,0,0,0]}
         """;
 
     /// LocalAdjustState() and MaskComponentState(), in declaration order.
@@ -45,7 +46,7 @@ public static class DevelopJson {
     static readonly string[] SpotKeys = ["destX", "destY", "srcX", "srcY", "radius", "feather", "heal"];
     static readonly string[] MaskStrings = ["matteId", "matteSource", "name"];   // String?, omitted when nil
     /// DevelopState's Int32 fields; every other number is a Float.
-    public static readonly HashSet<string> IntKeys = ["process", "rotateQuarters", "maskSpace", "localTintAxis"];
+    public static readonly HashSet<string> IntKeys = ["process", "rotateQuarters", "maskSpace", "localTintAxis", "blackWhite"];
     /// DevelopState's keys. Anything else in a sidecar is a newer build's, carried through a save untouched.
     public static readonly HashSet<string> Known = Defaults().Select(p => p.Key).ToHashSet();
     /// Read, never written (the decoder's legacy cases): these are not a newer build's and are dropped on save, as Swift drops them.
@@ -80,7 +81,7 @@ public static class DevelopJson {
         // Read, never written: the British spelling before decision #33.
         if (Float(c["denoiseColor"]) == null && Float(c["denoiseColour"]) is { } colour) s["denoiseColor"] = colour;
         if (c["lensChoice"] is JsonValue lens && lens.GetValueKind() == JsonValueKind.String) s["lensChoice"] = lens.GetValue<string>();
-        foreach (var (key, n) in new[] { ("gradeShadow", 3), ("gradeMidtone", 3), ("gradeHighlight", 3), ("hueShift", 8), ("satShift", 8), ("lumShift", 8) })
+        foreach (var (key, n) in new[] { ("gradeShadow", 3), ("gradeMidtone", 3), ("gradeHighlight", 3), ("hueShift", 8), ("satShift", 8), ("lumShift", 8), ("bwMix", 8) })
             if (Floats(c[key]) is { Count: var count } band && count == n) s[key] = Array(band);
 
         // The new key wins; the legacy scalars fill layer 1 when it is absent.

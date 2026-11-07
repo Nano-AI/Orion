@@ -18,6 +18,7 @@ add_executable(orion-tests
     tests_nlm.cpp
     tests_grade.cpp
     tests_linear.cpp
+    tests_bw.cpp
     tests_effects.cpp
     tests_display.cpp
     tests_device_memory.cpp
