@@ -52,6 +52,10 @@ static class CommandTable {
               () => { if (Comparing) SideBySide.Fit(); else CanvasState.Viewport.Reset(); }),
         Built("actual-size", "Actual size", "Cmd+D9, D9", "Viewport.swift", () => Loaded && Develop,
               () => { if (Comparing) SideBySide.ActualSize(); else CanvasState.Viewport.ToggleFitAndActual(); }),
+        // Lightroom's clipping warning (ClippingOverlay.cs): J for both ends, the histogram's flags for one each.
+        Built("show-clipping", "Show clipping", "J", "ClippingOverlay.cs", () => Loaded && Develop, Clipping.Toggle),
+        Built("show-shadow-clipping", "Show shadow clipping", null, "ClippingOverlay.cs", () => Loaded && Develop, () => Clipping.Shadows ^= true),
+        Built("show-highlight-clipping", "Show highlight clipping", null, "ClippingOverlay.cs", () => Loaded && Develop, () => Clipping.Highlights ^= true),
 
         // File
         Built("open-photo", "Open photo…", null, "OrionApp+Files.swift", () => true, LibraryFiles.OpenPhoto),

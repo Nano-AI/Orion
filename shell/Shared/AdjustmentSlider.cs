@@ -46,6 +46,7 @@ public sealed class AdjustmentSlider : StackPanel {
         _track = new AnalogTrack { Min = min, Max = max, Tint = tint, Scale = scale ?? Scale.For(unit, min, max) };
         _track.Changed += v => Apply(v);
         _track.Interacting += on => { if (on) EngineModel.Shared.BeginInteraction(); else EngineModel.Shared.EndInteraction(); };
+        if (CanvasSlice.Clipping.Tones.Contains(field)) ShowsClippingOnAlt();
 
         // As wide as the widest value it can show, so the box never moves while the value is dragged.
         _window.MinWidth = Math.Max(ReadoutWidth, Math.Ceiling(Math.Max(FigureWidth(Text(min)), FigureWidth(Text(max)))) + 2 * ReadoutPad);
@@ -81,6 +82,17 @@ public sealed class AdjustmentSlider : StackPanel {
         EngineModel.Shared.Opened += Reload;
         EngineModel.Shared.ValuesChanged += Reread;
         Reload();
+    }
+
+    /// Alt held during the drag shows the clipping overlay until the drag ends or Alt lifts, as
+    /// Lightroom's tone sliders do. The track's own press handler has begun the drag by the
+    /// time these run, so a double-click's reset, which begins none, shows nothing.
+    void ShowsClippingOnAlt() {
+        bool dragging = false;
+        void Hold(KeyModifiers keys) { if (dragging) CanvasSlice.Clipping.Held = keys.HasFlag(KeyModifiers.Alt); }
+        _track.Interacting += on => { dragging = on; if (!on) CanvasSlice.Clipping.Held = false; };
+        _track.AddHandler(PointerPressedEvent, (_, e) => Hold(e.KeyModifiers), RoutingStrategies.Bubble, handledEventsToo: true);
+        _track.AddHandler(PointerMovedEvent, (_, e) => Hold(e.KeyModifiers), RoutingStrategies.Bubble, handledEventsToo: true);
     }
 
     static double FigureWidth(string figure) {

@@ -78,7 +78,7 @@ sealed partial class App {
         using var rtb = new Avalonia.Media.Imaging.RenderTargetBitmap(size);
         rtb.Render(window);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        rtb.Save(path);
+        rtb.Save(path, new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
     }
 
     /// The dispatcher's own loop, with frames, for `seconds`: timers fire only there.

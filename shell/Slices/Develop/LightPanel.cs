@@ -21,12 +21,9 @@ public sealed class LightPanel : StackPanel {
             Padding = new Avalonia.Thickness(9, 0),
         };
         Children.Add(new SectionPlate("Light", null,
-            new AdjustmentSlider("Exposure", "exposure_ev", -5, 5, " EV"),
+            Tone("exposure_ev", " EV"),
             new AdjustmentSlider("Contrast", "contrast", 0.5f, 2),
-            new AdjustmentSlider("Highlights", "highlights", -1, 1),
-            new AdjustmentSlider("Shadows", "shadows", -1, 1),
-            new AdjustmentSlider("Whites", "whites", -1, 1),
-            new AdjustmentSlider("Blacks", "blacks", -1, 1)).With(auto));
+            Tone("highlights"), Tone("shadows"), Tone("whites"), Tone("blacks")).With(auto));
 
         Children.Add(new SectionPlate("Highlight recovery",
             "Where one channel clips before the others, it stops carrying detail while the rest still do — " +
@@ -38,4 +35,22 @@ public sealed class LightPanel : StackPanel {
         // Below the sliders: the control you reach for when a slider was not specific enough.
         Children.Add(new SectionPlate("Curve", null, new CurveEditor()));
     }
+
+    static AdjustmentSlider Tone(string field, string unit = "") {
+        var t = Tones.Of(field);
+        return new AdjustmentSlider(t.Name, field, t.Min, t.Max, unit);
+    }
+}
+
+/// The five tone sliders the histogram's regions drag, left to right (HistogramDrag),
+/// with the ranges the Light panel gives them.
+static class Tones {
+    public sealed record Tone(string Field, string Name, float Min, float Max);
+
+    public static readonly Tone[] All = [
+        new("blacks", "Blacks", -1, 1), new("shadows", "Shadows", -1, 1), new("exposure_ev", "Exposure", -5, 5),
+        new("highlights", "Highlights", -1, 1), new("whites", "Whites", -1, 1),
+    ];
+
+    public static Tone Of(string field) => All.Single(t => t.Field == field);
 }

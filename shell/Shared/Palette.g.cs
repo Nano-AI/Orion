@@ -52,6 +52,10 @@ public static class Palette {
     public static readonly IBrush ChanG = new ImmutableSolidColorBrush(Color.FromRgb(58, 168, 79));
     /// Histogram blue channel
     public static readonly IBrush ChanB = new ImmutableSolidColorBrush(Color.FromRgb(58, 111, 196));
+    /// The clipping overlay's blown highlights on the photo: saturated, so it reads as a mark, never as the picture
+    public static readonly IBrush ClipHigh = new ImmutableSolidColorBrush(Color.FromRgb(255, 42, 31));
+    /// The clipping overlay's crushed shadows on the photo
+    public static readonly IBrush ClipLow = new ImmutableSolidColorBrush(Color.FromRgb(31, 91, 255));
     /// Film base — the darkest value in the interface, under the strip
     public static readonly IBrush FilmBase = new ImmutableSolidColorBrush(Color.FromRgb(9, 8, 7));
     /// Sprocket perforations and the rebate edge — a hole shows the light through

@@ -126,6 +126,7 @@ static partial class SelfTest {
         DesignChecks();
         LayoutChecks();
         CanvasUxChecks();
+        ClippingChecks();
         SideBySideChecks();
         ToolsChecks();
         MaskUxChecks();

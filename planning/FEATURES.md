@@ -140,7 +140,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 | Side-by-side compare | M6 | ✅ Two photos, select and candidate, zoom and pan linked, ratings on the active side: `compare-side-by-side` (C), branch `lh/compare` (#400). The before/after Y-split of S6.6 is still the divider (#212) |
 | Busy state on photo open | M6 | S6.3 (#212) — #151: the canvas holds the *previous* photograph for the 210.9 ms of a cold open, and nothing anywhere marks it stale |
 | Slider color scales | M6 | S6.4 (#212) — temp blue→yellow, tint green→magenta, mixer tracks tinted per band. `AnalogTrack` is flat + accent today |
-| Interactive histogram | M6 | S6.5 (#212) — clipping overlay on the image, drag a region to move the matching slider |
+| Interactive histogram | M6 | ✅ S6.5 (#212): the clipping overlay on the canvas (`show-clipping`, J; the histogram's flags; Alt on a tone slider's drag), drawn over the picture, never rendered; a drag across one of the histogram's five regions moves its slider. The regions' widths are a choice: Lightroom documents none |
 | Soft proofing | M6 | S6.8 (#212) — lcms2 + OCIO already in the stack; UI plus a proof transform |
 | Keyboard-first workflow | M2 | Capture One's Speed Edit is the model |
 | Neutral-gray dark theme | M1 | Neutral surround improves color judgment |

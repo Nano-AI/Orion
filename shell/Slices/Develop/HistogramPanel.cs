@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -48,6 +49,10 @@ static class Levels {
         Bins = engine != 0 && DevelopFacade.orion_engine_histogram(engine, bins, BinCount) == 0 ? bins : [];
         Updated?.Invoke();
     }
+
+    /// An eight-bit channel value's bin, as Engine::histogram bins it. The first
+    /// and last bins are what the flags count and the clipping overlay paints.
+    public static int Bin(byte v) => Math.Min(BinCount - 1, (int)(v / 255f * BinCount));
 
     /// The share of pixels in the extreme bin, worst channel: a blown red is
     /// clipped, and averaging it with two clean channels reports a third of it.
@@ -97,6 +102,10 @@ public sealed class HistogramPanel : StackPanel {
     /// What the plate shows while it waits: a flat fill, never a made-up curve.
     readonly Border _waiting = new() { Background = Palette.Raised, CornerRadius = new CornerRadius(Radius.Sm - 1), IsVisible = false };   // 1 px inside the plate: concentric
     readonly Border _shadows = new(), _highlights = new() { HorizontalAlignment = HorizontalAlignment.Right };
+    readonly HistogramDrag _drag = new();
+    /// The region under the pointer, between the flags.
+    readonly TextBlock _region = new() { FontSize = Faces.Label, Foreground = Palette.Label, HorizontalAlignment = HorizontalAlignment.Center,
+                                          VerticalAlignment = VerticalAlignment.Center };
     readonly CaptureLine _capture = new();
     /// Bumped by each emptying, so only the latest one's wait can start the pulse.
     int _emptied;
@@ -108,15 +117,18 @@ public sealed class HistogramPanel : StackPanel {
         Margin = new Thickness(0, Space.Md);
         _plate.Transitions = [new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(100), Easing = new CubicEaseOut() }];
         var plate = new Border { BorderBrush = Palette.Line, BorderThickness = new Thickness(1), Background = Palette.FilmBase,
-                                 CornerRadius = new CornerRadius(Radius.Sm), Padding = new Thickness(1), Child = new Panel { Children = { _waiting, _plate } } };
+                                 CornerRadius = new CornerRadius(Radius.Sm), Padding = new Thickness(1), Child = new Panel { Children = { _waiting, _plate, _drag } } };
         Avalonia.Automation.AutomationProperties.SetName(plate, "Histogram");
         Children.Add(plate);
         var flags = new Grid { ColumnDefinitions = new("Auto,*,Auto"), Height = FlagsHeight };
         Grid.SetColumn(_highlights, 2);
-        flags.Children.AddRange([_shadows, _highlights]);
+        Grid.SetColumn(_region, 1);
+        flags.Children.AddRange([_shadows, _region, _highlights]);
+        _drag.Said += said => _region.Text = said;
         Children.Add(flags);
         Children.Add(_capture);
         Levels.Updated += Refresh;
+        CanvasSlice.Clipping.Changed += ShowFlags;
         EngineModel.Shared.PropertyChanged += (_, _) => { if (_pulsing != null && !Waiting) StopPulse(); };   // a photo that would not open
         EngineModel.Shared.Opened += ShowCapture;
         ShowCapture();
@@ -145,8 +157,7 @@ public sealed class HistogramPanel : StackPanel {
         else if (_plate.Bins.Length > 0) Fade(Stale, animate: true);
         else Fade(0, animate: false);
         _arrived |= has;
-        _shadows.Child = has ? Flag(Levels.Clipped(bins, true), true) : null;
-        _highlights.Child = has ? Flag(Levels.Clipped(bins, false), false) : null;
+        ShowFlags();
         // The 500 ms count from the latest swap, so browsing at speed never pulses; the tick decides whether anything is coming.
         // A task, not a DispatcherTimer: the headless selftest pumps jobs but no timers (as EngineModel's rest render).
         int emptied = ++_emptied;
@@ -154,6 +165,12 @@ public sealed class HistogramPanel : StackPanel {
         else if (_pulsing == null) Task.Delay(PulseAfter).ContinueWith(_ => Dispatcher.UIThread.Post(() => {
             if (emptied == _emptied && Waiting && _pulsing == null) StartPulse();
         }));
+    }
+
+    void ShowFlags() {
+        var bins = Levels.Bins;
+        _shadows.Child = bins.Length > 0 ? Flag(Levels.Clipped(bins, true), true) : null;
+        _highlights.Child = bins.Length > 0 ? Flag(Levels.Clipped(bins, false), false) : null;
     }
 
     void Fade(double opacity, bool animate) {
@@ -176,19 +193,29 @@ public sealed class HistogramPanel : StackPanel {
         _waiting.IsVisible = false;
     }
 
-    /// The share at one end, with a triangle pointing off that end. A reading,
-    /// not a button: the engine has no clipping overlay to show on the photo.
+    /// The share at one end, with a triangle pointing off that end, and Lightroom's
+    /// toggle for that end of the clipping overlay: a click shows it on the photo,
+    /// and the flag is ringed while it shows.
     static Control Flag(double share, bool pointsLeft) {
         bool lit = share >= ClipThreshold;
         var ink = lit ? Palette.Warn : Palette.Dim;
-        var flag = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Gap, MinWidth = 44, Background = Brushes.Transparent,
-                                    HorizontalAlignment = pointsLeft ? HorizontalAlignment.Left : HorizontalAlignment.Right };
+        bool showing = pointsLeft ? CanvasSlice.Clipping.Shadows : CanvasSlice.Clipping.Highlights;
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Gap };
+        var flag = new Border { MinWidth = 44, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
+                                BorderBrush = showing ? Palette.Label : Brushes.Transparent, BorderThickness = new Thickness(1),
+                                CornerRadius = new CornerRadius(Radius.Sm), Padding = new Thickness(Space.Xs, 0), Child = row,
+                                HorizontalAlignment = pointsLeft ? HorizontalAlignment.Left : HorizontalAlignment.Right };
+        flag.PointerPressed += (_, e) => {
+            Commands.Run(pointsLeft ? "show-shadow-clipping" : "show-highlight-clipping");
+            e.Handled = true;
+        };
         var triangle = new Path { Data = Geometry.Parse(pointsLeft ? "M7,0 L7,8 L0,4 Z" : "M0,0 L0,8 L7,4 Z"), Fill = ink,
                                   VerticalAlignment = VerticalAlignment.Center };
         var percent = Faces.Figure(PercentText(share), Faces.Label, ink);
-        flag.Children.AddRange(pointsLeft ? [triangle, percent] : [percent, triangle]);
-        string said = pointsLeft ? $"Shadows clipped: {PercentText(share)} of pixels at black"
-                                 : $"Highlights clipped: {PercentText(share)} of pixels at white";
+        row.Children.AddRange(pointsLeft ? [triangle, percent] : [percent, triangle]);
+        string said = (pointsLeft ? $"Shadows clipped: {PercentText(share)} of pixels at black"
+                                  : $"Highlights clipped: {PercentText(share)} of pixels at white")
+                      + (showing ? ". Click to hide them on the photo" : ". Click to show them on the photo");
         ToolTip.SetTip(flag, said);
         Avalonia.Automation.AutomationProperties.SetName(flag, said);
         return flag;
