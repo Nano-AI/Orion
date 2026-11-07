@@ -114,7 +114,9 @@ None of them opens a window.
 
 - Run every gate before claiming a code change works. Docs need none.
 - CI (`.github/workflows/build.yml`) builds and runs `orion-tests` and the selftest on all three systems for pushes to `main` and `ci/**` and for pull requests. `tools/ci-selftest.py` holds the selftest to a stated per-system skip list; the Linux runner has no GPU, so its GPU checks skip.
-  Except a Windows pull request: WARP, a CPU rasterizer, takes two hours over the full run, so there it is `orion-tests --cpu-only` and `--kernels` only, and the full suite and selftest run on the push to `main` (or `ci/**`) and nightly. A Windows-only failure therefore shows up after merging unless the branch is `ci/**`.
+  Except a Windows pull request: WARP, a CPU rasterizer, takes most of an hour over the full `orion-tests`, so there it is `orion-tests --cpu-only`, `--kernels` and the selftest, and the full suite runs on the push to `main` (or `ci/**`) and nightly. A Windows-only rendering failure therefore shows up after merging unless the branch is `ci/**`.
+  Its `gates` job runs `(cd mcp && npm test)`, `check-wiring.py` and `check-gestures.py`; the other gates need a GPU and run only in `open-pr.sh`.
+  Only a pull request cancels its own older run: every push to `main` gets a verdict.
 - `check-gestures.py` and `check-wiring.py` are greps, not compilers: they catch a deleted call, not a wrong one, and reflection or a name built at run time is invisible to them. Triage their reports by hand.
 - A call from the harness does not count as use: `check-wiring.py` reports every method in `shell/` whose only callers are `SelfTest*`, the screenshot scenes or `Unattended.cs`, and a legitimate one says why in `HARNESS_ONLY`.
 - A deleted command-line dispatch opens a window instead of exiting, so `check-modes.py` and `check-screens.py` catch it by timeout.

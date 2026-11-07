@@ -7,22 +7,26 @@ name: Build (macOS, Windows, Linux)
 # once a release carries it, and making one is the developer's call.
 
 # Documentation builds nothing (#409): Markdown, planning/, research/, feedback/,
-# docs/ and web/ (which pages.yml deploys), and tools/check-site.py, which reads
-# only web/ (#412). paths-ignore skips a push or pull request that is all
-# documentation; the `changes` job below skips the builds when only this push is,
-# e.g. a doc fix pushed onto a pull request whose code has already built. Keep the
-# three lists the same.
+# docs/, brand/, .claude/ and web/ (which pages.yml deploys), and
+# tools/check-site.py, which reads only web/ (#412). paths-ignore skips a push or
+# pull request that is all documentation; the `changes` job below skips the builds
+# when only this push is, e.g. a doc fix pushed onto a pull request whose code has
+# already built. Keep the three lists the same.
 #
-# Windows has no GPU here (WARP, a CPU rasterizer): its full orion-tests and
-# selftest take two hours, so a pull request runs the GPU-free tests and the
-# kernel compile there, and a push to main or ci/**, and the nightly, run it all
-# (#412). macOS and Linux run everything on every push and pull request.
+# Windows has no GPU here (WARP, a CPU rasterizer): its full orion-tests takes most
+# of an hour, so a pull request runs the GPU-free tests, the kernel compile and the
+# selftest there, and a push to main or ci/**, and the nightly, run it all (#412).
+# macOS and Linux run everything on every push and pull request.
+#
+# Only a pull request cancels its own older run. Elsewhere each run is a group of
+# its own, so every commit on main gets a verdict: a shared group, even without
+# cancel-in-progress, still drops a queued run for a newer one.
 on:
   push:
     branches: [main, 'ci/**']
-    paths-ignore: ['**/*.md', 'planning/**', 'research/**', 'feedback/**', 'docs/**', 'web/**', 'tools/check-site.py']
+    paths-ignore: ['**/*.md', 'planning/**', 'research/**', 'feedback/**', 'docs/**', 'brand/**', '.claude/**', 'web/**', 'tools/check-site.py']
   pull_request:
-    paths-ignore: ['**/*.md', 'planning/**', 'research/**', 'feedback/**', 'docs/**', 'web/**', 'tools/check-site.py']
+    paths-ignore: ['**/*.md', 'planning/**', 'research/**', 'feedback/**', 'docs/**', 'brand/**', '.claude/**', 'web/**', 'tools/check-site.py']
   schedule:
     - cron: '17 4 * * *'   # nightly, Windows only: the full suite its pull requests skip
   workflow_dispatch:
@@ -33,7 +37,6 @@ permissions:
 env:
   SHELL_DIR: shell   # the one place this workflow names the shell's path
   SLANG_VERSION: 2026.14.1           # third_party/slang's version (decision #375)
-  DAWN_CACHE: 106704a9-1             # Dawn's commit, and a revision: bump it when tools/build-dawn.sh changes
   # SHA-256 of each download that is run or ships, from the release's own digest.
   SLANG_SHA256_LINUX: 21f2d7847385a770e569fb61b1507a7794d742d97850bce0432bff0032ca005f
   SLANG_SHA256_WINDOWS: 5ed0a59d650a0af0aca45d5db4e083b3d8fb5cea05748747dd95dfbe9c580658
@@ -53,6 +56,7 @@ jobs:
   # No base to compare (a new PR, a force-push, a manual run): build.
   changes:
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     outputs:
       code: ${{ steps.diff.outputs.code }}
     steps:
@@ -65,9 +69,30 @@ jobs:
         run: |
           code=true
           if [ -n "$BEFORE" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-            git diff --name-only "$BEFORE" "$AFTER" | grep -vE '\.md$|^(planning|research|feedback|docs|web)/|^tools/check-site\.py$' | grep -q . || code=false
+            git diff --name-only "$BEFORE" "$AFTER" | grep -vE '\.md$|^(planning|research|feedback|docs|brand|\.claude|web)/|^tools/check-site\.py$' | grep -q . || code=false
           fi
           echo "code=$code" | tee -a "$GITHUB_OUTPUT"
+
+  # The gates that need no build: the MCP server against its fake app, and the two
+  # greps over shell/. check-agent, -screens, -modes and the bench drive a real app
+  # on a GPU, which no runner here has.
+  gates:
+    needs: changes
+    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
+    concurrency: { group: "build-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}-gates", cancel-in-progress: "${{ github.event_name == 'pull_request' }}" }
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020   # v4.4.0
+        with: { node-version: '24' }   # node --experimental-strip-types runs server.ts as is
+      - name: MCP server against the fake app
+        working-directory: mcp
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+      - run: tools/check-wiring.py
+      - run: tools/check-gestures.py
 
   # Built, tested and packaged in Ubuntu 22.04, so the AppImage starts on glibc 2.35
   # and later (decision #404): Ubuntu 22.04, Debian 12 and newer. Clang from
@@ -78,8 +103,10 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
     # Per job, not per workflow: a doc-only push must not cancel a build it then skips.
-    concurrency: { group: "build-${{ github.ref }}-linux", cancel-in-progress: true }
+    concurrency: { group: "build-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}-linux", cancel-in-progress: "${{ github.event_name == 'pull_request' }}" }
     runs-on: ubuntu-24.04
+    # Each timeout holds a run whose Dawn or vcpkg cache missed: Dawn alone builds in 20 minutes.
+    timeout-minutes: 45
     container: ubuntu:22.04@sha256:076e7bf82319619f28dd0aa9c02ab34b055ad37100395b4f49a2ffba04fb5e11
     # A container job's steps default to sh (dash), which has no arrays or pipefail;
     # this is the bash -e the host runner gave them before the container (#404).
@@ -130,13 +157,19 @@ jobs:
           git clone --depth 1 --branch 2026.10.16 https://github.com/microsoft/vcpkg "$ORION_VCPKG"
           "$ORION_VCPKG/bootstrap-vcpkg.sh" -disableMetrics
           mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+          touch "$RUNNER_TEMP/vcpkg-mark"   # tools/ci-vcpkg-cache.sh: older than any archive this run builds
+      # Never an exact hit: the newest cache restores, and the run saves a fresh one
+      # only when it built a package (a compiler update changes an ABI hash) or dropped one.
       - name: vcpkg packages (cached)
         id: vcpkg
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: vcpkg-linux-jammy-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'tools/vcpkg-triplets/*', 'tools/vcpkg-ports/**') }}
-          restore-keys: vcpkg-linux-jammy-   # vcpkg's own cache is by package ABI: an older one still serves
+          key: vcpkg-linux-jammy-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'tools/vcpkg-ports/**', 'tools/vcpkg-triplets/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          # vcpkg's own cache is by package ABI: an older one still serves.
+          restore-keys: |
+            vcpkg-linux-jammy-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'tools/vcpkg-ports/**', 'tools/vcpkg-triplets/**') }}-
+            vcpkg-linux-jammy-
 
       # The runner has no GPU, so Dawn's Vulkan backend runs on a CPU driver.
       # SwiftShader, at the commit Dawn's DEPS pins: Mesa's lavapipe (25.2) cannot
@@ -185,7 +218,7 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: third_party/dawn-build
-          key: dawn-linux-jammy-${{ env.DAWN_CACHE }}   # built in the 22.04 container (#404)
+          key: dawn-linux-jammy-${{ hashFiles('tools/build-dawn.sh') }}   # built in the 22.04 container (#404); the script pins Dawn's commit
       - name: Dawn (build)
         if: steps.dawn.outputs.cache-hit != 'true'
         run: tools/build-dawn.sh && rm -rf third_party/dawn-src
@@ -218,7 +251,11 @@ jobs:
             -DCMAKE_SHARED_LINKER_FLAGS="$STATIC_RUNTIME" -DCMAKE_MODULE_LINKER_FLAGS="$STATIC_RUNTIME" \
             -DCMAKE_EXE_LINKER_FLAGS="$STATIC_RUNTIME"
           cmake --build build -- -k 0   # every error in one run, not the first
-      - if: always() && steps.vcpkg.outputs.cache-hit != 'true'
+      - name: vcpkg packages (prune)
+        id: vcpkg-used
+        if: always() && steps.vcpkg.outcome == 'success'
+        run: tools/ci-vcpkg-cache.sh "$VCPKG_DEFAULT_BINARY_CACHE" build "$RUNNER_TEMP/vcpkg-mark"
+      - if: always() && steps.vcpkg-used.outputs.changed == 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
@@ -278,6 +315,7 @@ jobs:
   linux-floor:
     needs: linux
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -323,15 +361,15 @@ jobs:
   windows:
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    # The nightly in a group of its own, so it and a push's run on main never cancel each other.
-    concurrency: { group: "build-${{ github.ref }}-windows${{ github.event_name == 'schedule' && '-nightly' || '' }}", cancel-in-progress: true }
+    concurrency: { group: "build-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}-windows", cancel-in-progress: "${{ github.event_name == 'pull_request' }}" }
     runs-on: windows-2022
+    # FULL's condition: WARP's full orion-tests alone takes 47 minutes.
+    timeout-minutes: ${{ github.event_name != 'pull_request' && 150 || 60 }}
     defaults:
       run: { shell: bash }
     env:
-      FULL: ${{ github.event_name != 'pull_request' }}   # the whole suite, the selftest and the packages (#412)
+      FULL: ${{ github.event_name != 'pull_request' }}   # the whole suite and the packages (#412)
       ORION_VCPKG: ${{ github.workspace }}/../vcpkg   # not VCPKG_ROOT, which msvc-dev-cmd points at Visual Studio's
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/../vcpkg-cache
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
         with: { fetch-depth: 0 }
@@ -343,14 +381,20 @@ jobs:
         run: |
           git clone --depth 1 --branch 2026.10.16 https://github.com/microsoft/vcpkg "$ORION_VCPKG"
           "$ORION_VCPKG/bootstrap-vcpkg.bat" -disableMetrics
-          mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+          # actions/cache refuses a path with '..' in it, as ORION_VCPKG's. runner.temp
+          # is not available to a job's env, so it is set here.
+          echo "VCPKG_DEFAULT_BINARY_CACHE=$RUNNER_TEMP/vcpkg-cache" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/vcpkg-cache"
+          touch "$RUNNER_TEMP/vcpkg-mark"   # as the linux job's
       - name: vcpkg packages (cached)
         id: vcpkg
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: vcpkg-win-${{ hashFiles('vcpkg.json') }}
-          restore-keys: vcpkg-win-   # vcpkg's own cache is by package ABI: an older one still serves
+          key: vcpkg-win-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'tools/vcpkg-ports/**', 'tools/vcpkg-triplets/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            vcpkg-win-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'tools/vcpkg-ports/**', 'tools/vcpkg-triplets/**') }}-
+            vcpkg-win-
 
       - name: Slang
         run: |
@@ -366,7 +410,7 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: third_party/dawn-build
-          key: dawn-windows-${{ env.DAWN_CACHE }}
+          key: dawn-windows-${{ hashFiles('tools/build-dawn.sh') }}
       - name: Dawn (build)
         if: steps.dawn.outputs.cache-hit != 'true'
         run: tools/build-dawn.sh && rm -rf third_party/dawn-src
@@ -400,14 +444,19 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE="$ORION_VCPKG/scripts/buildsystems/vcpkg.cmake" \
             -DVCPKG_TARGET_TRIPLET=x64-windows-release -DORION_SHELL_DIR="$SHELL_DIR"
           cmake --build build -- -k 0   # every error in one run, not the first
-      - if: always() && steps.vcpkg.outputs.cache-hit != 'true'
+      - name: vcpkg packages (prune)
+        id: vcpkg-used
+        if: always() && steps.vcpkg.outcome == 'success'
+        run: tools/ci-vcpkg-cache.sh "$VCPKG_DEFAULT_BINARY_CACHE" build "$RUNNER_TEMP/vcpkg-mark"
+      - if: always() && steps.vcpkg-used.outputs.changed == 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
           key: ${{ steps.vcpkg.outputs.cache-primary-key }}
 
       # A pull request: every test that creates no GPU device, then every kernel
-      # compiled on Dawn. Seconds, where WARP takes most of an hour to render the rest.
+      # compiled on Dawn. Seconds, where WARP takes most of an hour to render the rest;
+      # the selftest below still runs.
       - name: orion-tests --cpu-only, then --kernels (pull request)
         if: env.FULL != 'true'
         run: |
@@ -436,15 +485,15 @@ jobs:
           "$cdb" -lines -c "g; .ecxr; ~*kn 40; q" ./build/apps/tests/orion-tests.exe 2>&1 | tail -300
 
       # The shell and the packages still run when orion-tests failed (the job stays
-      # red): one run then reports every step, not the first failure. A pull request
-      # skips the full run, so these too (#412): macOS and Linux build the shell there.
+      # red): one run then reports every step, not the first failure. The selftest
+      # runs on a pull request too, the packages only on the full run (#412).
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9   # v4
-        if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
+        if: ${{ !cancelled() }}
         with: { dotnet-version: '10.0.x' }
 
       - name: Shell selftest (headless)
         id: selftest
-        if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
+        if: ${{ !cancelled() }}
         run: |
           env -u Platform dotnet build "$SHELL_DIR" -c Release   # msvc-dev-cmd sets Platform=x64, which moves bin/ under x64/
           cp build/shell-native/*.dll "$SHELL_DIR/bin/Release/net10.0/"
@@ -456,13 +505,13 @@ jobs:
             bin/Release/net10.0/Orion.exe "$RUNNER_TEMP/selftest.dng"
 
       - name: Setup.exe, portable zip and update feed (Velopack)
-        if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
+        if: ${{ !cancelled() && env.FULL == 'true' }}
         run: |
           dotnet tool install -g vpk --version "$VPK_VERSION"
           VPK="$HOME/.dotnet/tools/vpk" tools/package-windows.sh "$SHELL_DIR" build dist
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4
-        if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
+        if: ${{ !cancelled() && env.FULL == 'true' }}
         with:
           # Uploaded after a failure too, for a look, but never under a green run's name.
           name: orion-windows${{ (steps.tests.outcome != 'success' || steps.selftest.outcome != 'success') && '-tests-failed' || '' }}
@@ -471,8 +520,12 @@ jobs:
   macos:
     needs: changes
     if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
-    concurrency: { group: "build-${{ github.ref }}-macos", cancel-in-progress: true }
+    concurrency: { group: "build-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}-macos", cancel-in-progress: "${{ github.event_name == 'pull_request' }}" }
     runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: 1      # the runner image's formulae, not a minute of tap updates
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
         with: { fetch-depth: 0 }     # git describe names the package
@@ -494,7 +547,7 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830   # v4
         with:
           path: third_party/dawn-build
-          key: dawn-macos-${{ env.DAWN_CACHE }}
+          key: dawn-macos-${{ hashFiles('tools/build-dawn.sh') }}
       - name: Dawn (build)
         if: steps.dawn.outputs.cache-hit != 'true'
         run: tools/build-dawn.sh && rm -rf third_party/dawn-src
