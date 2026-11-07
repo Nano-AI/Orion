@@ -65,6 +65,10 @@ int main(int argc, char** argv) {
     gpu(testGpuBudget42MpGpu);
     gpu(testWarmGraphMatchesFreshGpu);
     gpu(testMemoryRuleGpu);
+    gpu(testKeptPhotoHoldsNothingGpu);
+    gpu(testIdleTrimGpu);
+    gpu(testRegionGoesAfterFullRenderGpu);
+    gpu(testGrainPlateSharedGpu);
     gpu(testDawnParityGpu);
     gpu(testEveryKernelCompilesOnDawnGpu);
 

@@ -58,7 +58,7 @@ struct Nvml {
     }
 
     /// Free bytes on the NVIDIA device with this PCI device id, else unknown.
-    std::uint64_t free(std::uint32_t deviceId) const {
+    std::uint64_t free(std::uint32_t deviceId, std::uint64_t& total) const {
         unsigned int n = 0;
         if (!ok || count(&n) != 0) return Device::kUnknown;
         for (unsigned int i = 0; i < n; ++i) {
@@ -67,7 +67,7 @@ struct Nvml {
             Memory m{};
             if (handle(i, &h) != 0 || pci(h, &p) != 0) continue;
             if ((p.pciDeviceId >> 16) != deviceId && n > 1) continue;   // one card: no need to match
-            if (memory(h, &m) == 0) return m.free;
+            if (memory(h, &m) == 0) { total = m.total; return m.free; }
         }
         return Device::kUnknown;
     }
@@ -81,12 +81,12 @@ std::uint64_t readNumber(const std::filesystem::path& file) {
 }
 
 /// amdgpu's counters for the card with this PCI device id, else unknown.
-std::uint64_t amdFree(std::uint32_t deviceId) {
+std::uint64_t amdFree(std::uint32_t deviceId, std::uint64_t& total) {
     std::error_code ec;
     for (const auto& card : std::filesystem::directory_iterator("/sys/class/drm", ec)) {
         const auto dev = card.path() / "device";
         if (readNumber(dev / "vendor") != 0x1002 || readNumber(dev / "device") != deviceId) continue;
-        const std::uint64_t total = readNumber(dev / "mem_info_vram_total");
+        total = readNumber(dev / "mem_info_vram_total");
         const std::uint64_t used = readNumber(dev / "mem_info_vram_used");
         if (total > 0) return total > used ? total - used : 0;
     }
@@ -96,18 +96,26 @@ std::uint64_t amdFree(std::uint32_t deviceId) {
 }  // namespace
 #endif
 
-std::uint64_t driverFreeBytes(std::uint32_t vendorId, std::uint32_t deviceId) noexcept {
+std::uint64_t driverFreeBytes(std::uint32_t vendorId, std::uint32_t deviceId,
+                              std::uint64_t* total) noexcept {
+    std::uint64_t card = 0;
+    if (total) *total = 0;
 #ifdef __linux__
     try {
+        std::uint64_t free = Device::kUnknown;
         if (vendorId == 0x10DE) {
             static const Nvml nvml;
-            return nvml.free(deviceId);
+            free = nvml.free(deviceId, card);
+        } else if (vendorId == 0x1002) {
+            free = amdFree(deviceId, card);
         }
-        if (vendorId == 0x1002) return amdFree(deviceId);
+        if (total && free != Device::kUnknown) *total = card;
+        return free;
     } catch (...) {}
 #else
     (void)vendorId;
     (void)deviceId;
+    (void)card;
 #endif
     return Device::kUnknown;
 }

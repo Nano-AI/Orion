@@ -26,6 +26,7 @@ add_library(orion_engine STATIC
     src/CApiExport.cpp
     src/CApiDisplay.cpp
     src/Engine.cpp
+    src/EngineMemory.cpp
     src/ResourcePaths.cpp
     src/gpu/Gpu.cpp
     src/gpu/Readback.cpp

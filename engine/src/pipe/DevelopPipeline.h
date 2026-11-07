@@ -202,6 +202,14 @@ public:
     /// Pipeline::render's, for the last pass.
     double render(bool wait = true);
 
+    /// What a photo kept but not shown gives back (#318): the outputs, the
+    /// brush accumulator, its share of the grain plate and, given `source`,
+    /// the source texture. `source` is the samples last uploaded, kept on the
+    /// CPU in rows of `width()` texels; the next render uploads it again. Null
+    /// keeps the source on the device. The small tables, mattes, strokes and
+    /// LUT stay: nothing else holds them.
+    void releaseDevice(std::shared_ptr<const void> source) noexcept;
+
     /// What the out-of-memory message names (#406): the effect whose texture
     /// the device refused on the last render ("clarity", "texture", ...), else
     /// every heavy effect that is on ("clarity, denoise and texture"), else
@@ -477,9 +485,12 @@ private:
                           const std::array<float, 4>& camMul);
     void pushStaticLocalParams();
     void pushStaticMaskParams();
-    /// The grain plate. After `compile`, because it is an upload rather than a
-    /// declaration.
-    void uploadGrainPlate();
+    /// Binds the device's one grain plate (DevelopOutput.cpp), made on the first
+    /// graph that wants grain.
+    void attachGrainPlate();
+    /// Before a render: what `releaseDevice` gave back that the render reads.
+    void restoreDevice();
+    std::shared_ptr<const void> parkedSource_;
 
     // One per stage of `apply`, in the order `apply` calls them.
     void applyWhiteBalance(const Adjustments&, const ApplyContext&);

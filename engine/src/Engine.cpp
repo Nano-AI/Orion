@@ -32,6 +32,19 @@ gpu::OutOfMemory outOfMemory(const pipe::DevelopPipeline& graph, std::uint64_t f
                             " needs " + gb(graph.neededBytes()) + ", " + gb(free) + " free");
 }
 
+template <class Image>
+std::shared_ptr<const Image> kept(Image image) {
+    return std::make_shared<const Image>(std::move(image));
+}
+
+/// The samples `DevelopPipeline` uploads, owned by their image.
+std::shared_ptr<const void> sourceOf(const std::shared_ptr<const raw::BayerImage>& i) {
+    return {i, i->samples.data()};
+}
+std::shared_ptr<const void> sourceOf(const std::shared_ptr<const raw::LinearImage>& i) {
+    return {i, i->rgba.data()};
+}
+
 }  // namespace
 
 Engine::Engine() : device_(gpu::Device::create()) {
@@ -115,8 +128,9 @@ void Engine::openDecoded(raw::DecodedImage decoded) {
             // the decimation is a second, smaller copy of the mosaic nobody
             // would render (#312).
             if (preview_ && !headless_) {
-                const auto small = raw::decimate(image, kPreviewScale);
-                if (preview_->canReload(small)) preview_->reload(small);
+                const auto small = kept(raw::decimate(image, kPreviewScale));
+                previewSource_ = preview_->canReload(*small) ? sourceOf(small) : nullptr;
+                if (previewSource_) preview_->reload(*small);
             }
             develop_->graph().setReleaseEveryRender(headless_);
             camera_ = image.camera;
@@ -136,7 +150,7 @@ void Engine::openDecoded(raw::DecodedImage decoded) {
 
         // The preview image. Decimated once here rather than per render: it is
         // the same pixels every time, and at 24 MP the decimation is not free.
-        const auto small = raw::decimate(image, kPreviewScale);
+        const auto small = kept(raw::decimate(image, kPreviewScale));
 
         // ⚠ Built after the full graph and allowed to fail. A machine that cannot
         // find room for the preview's intermediates should still be able to edit
@@ -146,7 +160,7 @@ void Engine::openDecoded(raw::DecodedImage decoded) {
         std::unique_ptr<pipe::DevelopPipeline> smallNext;
         try {
             smallNext = std::make_unique<pipe::DevelopPipeline>(
-                *device_, res::shaderDir(), small);
+                *device_, res::shaderDir(), *small);
             // ⚠ One grain field at two resolutions, not two realisations of it.
             // The plate is addressed in frame coordinates, so the preview has to
             // say how many frame pixels each of its pixels covers or it will show
@@ -159,6 +173,7 @@ void Engine::openDecoded(raw::DecodedImage decoded) {
 
         develop_ = std::move(next);
         preview_ = std::move(smallNext);
+        previewSource_ = preview_ ? sourceOf(small) : nullptr;
         camera_  = image.camera;
     }, decoded);
 
@@ -404,15 +419,6 @@ double Engine::renderPreview() {
     return ms;
 }
 
-void Engine::releaseRenderMemory() noexcept {
-    if (develop_) develop_->graph().releaseOutputs();
-    if (preview_) preview_->graph().releaseOutputs();
-    if (region_)  region_->graph().releaseOutputs();
-    if (display_) display_->release();   // the kernel stays compiled
-    samples_.reset();
-    device_->reclaim();
-}
-
 pipe::DisplayCopy& Engine::displayCopy() {
     if (!display_) display_ = std::make_unique<pipe::DisplayCopy>(*device_, res::shaderDir());
     return *display_;
@@ -502,6 +508,14 @@ double Engine::render() {
     }
     fullReleased_ = false;
     fullCurrent_ = true;
+    // The mirror of a region's release of the full graph: back at fit, the
+    // region's outputs (0.3-0.9 GB) are not what the canvas shows.
+    if (const auto* g = region_ ? &region_->graph() : nullptr;
+        g && g->intermediateBytes() > (g->hasSource() ? g->sourceTexture().sizeBytes() : 0)) {
+        region_->graph().releaseOutputs();
+        regionCurrent_ = false;
+        device_->reclaim();
+    }
     return ms;
 }
 

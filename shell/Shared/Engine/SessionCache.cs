@@ -99,9 +99,10 @@ public sealed class SessionCache : ISessionSource {
     public Bitmap? Picture(int index) => _pictures.GetValueOrDefault(index);
 
     /// The photo on screen ran out of GPU memory: closes every decoded neighbour and
-    /// decodes none from then on (#392). At 24 MP each holds ~260 MB of the card,
-    /// the margin by which a Monochrome click (clarity, 2.3 GB) missed on a 3 GB card.
-    /// The pictures stay: they are CPU memory. False when there was nothing to give back.
+    /// decodes none from then on (#392). A kept one holds under 1 MB of the card
+    /// (Engine::releaseRenderMemory); what this frees is a decode in flight and the
+    /// graphs' compiled kernels. The pictures stay: they are CPU memory. False when
+    /// there was nothing to give back.
     public bool Shed() {
         bool any = _kept.Count > 0 || _decoding.Count > 0;
         _shed = true;

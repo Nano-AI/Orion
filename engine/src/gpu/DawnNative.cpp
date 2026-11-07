@@ -38,9 +38,11 @@ void describe(Context& c, const wgpu::Limits& limits) {
                              ai.device.data ? ai.device.length : 0);
     c.vendorId = ai.vendorID;
     c.deviceId = ai.deviceID;
+    std::uint64_t card = 0;   // not reported by WebGPU: the driver's, where it says
+    driverFreeBytes(c.vendorId, c.deviceId, &card);
     c.info = DeviceInfo{
         .name                  = "Dawn on " + device,
-        .recommendedWorkingSet = 0,   // not reported by WebGPU
+        .recommendedWorkingSet = card,
         .maxBufferLength       = limits.maxBufferSize,
         .unifiedMemory         = ai.adapterType != wgpu::AdapterType::DiscreteGPU,
         .supportsApple7        = false,

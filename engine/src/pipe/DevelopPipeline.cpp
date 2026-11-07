@@ -105,9 +105,6 @@ DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderD
     // texture alone, 198 against 52 ms at 42 MP, of which the eight-node chain
     // is most of the 52): the output a frugal render keeps first.
     pipeline_.setCostWeight(nNlm_, 40.0f);
-
-    // Once per graph. The plate is 33 MB and identical for every photograph.
-    uploadGrainPlate();
 }
 
 DevelopPipeline::DevelopPipeline(gpu::Device& device, const std::string& shaderDir,
@@ -162,8 +159,10 @@ void DevelopPipeline::clearPaintState() {
         matteLive_[i][0] = 0;
         matteLive_[i][1] = 0;
         matteDirty_[i] = true;
+        pipeline_.resizeAux(auxMatte_[i], 1, 1);
     }
     accumOwner_ = -1;
+    parkedSource_.reset();   // the last photo's; `reload` uploads this one's
 }
 
 void DevelopPipeline::reload(const raw::BayerImage& image) {
@@ -552,7 +551,29 @@ void DevelopPipeline::apply(const Adjustments& adj) {
     primed_  = true;
 }
 
+void DevelopPipeline::releaseDevice(std::shared_ptr<const void> source) noexcept {
+    pipeline_.releaseOutputs();
+    try {
+        releaseBrushAccum();
+        pipeline_.shareAux(auxGrainPlate_, nullptr);
+    } catch (...) {}   // a 1x1 refused: the next render meets the same card and says so
+    if (source) {
+        parkedSource_ = std::move(source);
+        pipeline_.releaseSource();
+    }
+}
+
+void DevelopPipeline::restoreDevice() {
+    if (parkedSource_) {
+        pipeline_.setSource(parkedSource_.get(), std::size_t(width_) * (linearSource_ ? 8 : 2));
+        parkedSource_.reset();
+    }
+    if (!pipeline_.hasSource()) throw std::runtime_error("render: the source was released and not kept");
+    if (graining_) attachGrainPlate();
+}
+
 double DevelopPipeline::renderOnce(bool wait) {
+    restoreDevice();
     reconcileBrushAccum();
     const double ms = pipeline_.render(wait);
     commitBrushAccum();

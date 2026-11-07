@@ -699,8 +699,8 @@ void testFacadeSessionSeams() {
                std::to_string(opened) + " -> " + std::to_string(held) + " -> " +
                    std::to_string(g.allocatedBytes()));
         const auto& pg = engine.previewDevelop().graph();
-        report(pg.intermediateBytes() == pg.sourceTexture().sizeBytes(),
-               "the preview graph is released with it");
+        report(pg.intermediateBytes() == 0,
+               "the preview graph is released with it, its source too (kept on the CPU)");
         bool gone = false;
         try { (void)engine.develop().output(); } catch (const std::exception&) { gone = true; }
         report(gone, "the full output is gone until the next render");

@@ -115,6 +115,18 @@ static partial class SelfTest {
         Check(fresh.Read(Graph.Full) == null && fresh.Render(preview: false) == Graph.Full && fresh.Read(Graph.Full) != null,
               "after a release the full picture is gone until the next render brings it back");
         fresh.Dispose();
+
+        // Idle (EngineModel.IdleTrimAfter with no render), the pools give back what they hold:
+        // a render from empty, as after a swap back to a kept photo, frees each intermediate into them.
+        SetAside();
+        engine.Render(preview: false);
+        // The card alone off macOS: the working set moves by more than this with a collection.
+        long Held() => OperatingSystem.IsMacOS() ? Footprint(engine.Session!)
+            : Native.orion_engine_gpu_memory(engine.Handle, out ulong gpu) == 0 ? (long)gpu : 0;
+        long busy = Held(), rested = busy;
+        Frames(() => (rested = Held()) < busy - plane / 4, EngineModel.IdleTrimAfter.TotalSeconds + 7);   // the loop: it fires timers
+        Check(rested < busy - plane / 4 && engine.Session!.Size(Graph.Full) != default,
+              $"idle, the photo on screen gives back {(busy - rested) >> 20} MB its pools held, and keeps its picture");
         engine.Render(preview: false);
     }
 

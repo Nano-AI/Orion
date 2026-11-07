@@ -45,7 +45,10 @@ const gpu::Texture& DisplayCopy::reduce(const gpu::Texture& src, std::uint32_t w
                                         std::unique_ptr<gpu::Texture>& target,
                                         std::uint32_t& outWidth, std::uint32_t& outHeight) {
     sizeAt(width, height, level, outWidth, outHeight);
-    if (level == 0 && src.format() == gpu::PixelFormat::RGBA8Unorm) return src;
+    if (level == 0 && src.format() == gpu::PixelFormat::RGBA8Unorm) {
+        target.reset();   // the last graph's, at its size: nothing copies into it now
+        return src;
+    }
     if (!target || target->width() != outWidth || target->height() != outHeight) {
         target = gpu::Texture::create(device_, outWidth, outHeight, gpu::PixelFormat::RGBA8Unorm);
     }

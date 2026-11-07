@@ -540,11 +540,14 @@ OrionStatus orion_engine_region_size(const OrionEngine* engine,
 /* Renders dirty nodes. *out_ms receives GPU-side milliseconds (may be NULL). */
 OrionStatus orion_engine_render(OrionEngine* engine, double* out_ms);
 
-/* Gives both graphs' render textures back to the system and keeps the decoded
- * photo, its adjustments, strokes, mattes and LUT: for a photo a browser keeps
- * open but is not showing (decision #318). The output and preview textures are
- * NULL until the next render, which rebuilds them. Safe with nothing open. */
+/* Gives back every graph's device memory, sources too, and keeps the decoded photo,
+ * its adjustments, strokes, mattes and LUT on the CPU: a photo a browser keeps but
+ * is not showing (#318). Textures are NULL until the next render rebuilds them. */
 OrionStatus orion_engine_release_render_memory(OrionEngine* engine);
+
+/* An idle canvas's spare back: pooled textures, the full graph's cache when memory
+ * is short (never the picture), and with `full` nonzero all its outputs, as past fit. */
+OrionStatus orion_engine_trim(OrionEngine* engine, int full);
 
 /* Bytes of GPU memory the engine's device holds from the driver, every engine
  * in the process together (they share one device). What a process footprint
