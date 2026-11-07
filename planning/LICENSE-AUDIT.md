@@ -122,9 +122,24 @@ All dynamically linked. No GPL source code is compiled; only the runtime excepti
 - `dist/Orion.app/Contents/Frameworks/` (actual bundled dylibs listed)
 - `planning/DECISIONS.md` #43–45 (licensing decisions and open questions)
 
-**Not verified in tree:** OpenColorIO and lcms2 are documented as planned stack components but not found in code or build. They are pulled in as transitive dependencies of OpenCV but not directly referenced.
+**Not verified in tree:** OpenColorIO is documented as a planned stack component but not found in code or build.
+lcms2 is linked directly off macOS since 2026-11-07 (`engine/src/util/ExportColour.cpp`); on macOS it stays a transitive dependency of OpenCV.
 
 **Checked 2026-09-13 at commit: abf3a51**
+
+---
+
+## Export metadata and colour off macOS (2026-11-07)
+
+| Need | Chosen | Licence | Rejected, and why |
+|---|---|---|---|
+| ICC profiles and conversion | Little CMS 2 (`lcms`, vcpkg) | MIT | none needed: already shipped as libjxl's and OpenCV's dependency |
+| Reading the camera's EXIF | LibRaw, already the decoder | CDDL-1.0 (chosen) | exiv2: GPL-2.0+, never read or linked (#10) |
+| Writing EXIF and the TIFF | Orion's own directory writer, `engine/src/util/TiffIfd.cpp`, shared with the DNG writer, written from TIFF 6.0 and CIPA DC-008 (Exif 2.32) | Orion's | libexif: LGPL-2.1+, would be the first LGPL library shipped (LibRaw is taken under CDDL) with its source-offer duty, for ten tags; TinyEXIF and easyexif: read only; libtiff's EXIF directory writing needs a write, reload and rewrite of IFD0 its own test calls fragile, and OpenCV's TIFF encoder takes no metadata |
+| Writing XMP | a packet built as text in `ExportMetadata.cpp` | Orion's | an XMP toolkit: Adobe's XMP SDK is BSD but is a large C++ dependency for one flat packet |
+
+The Windows and Linux packages carry no new library: Little CMS, libtiff and zlib were already in them (`NOTICE`).
+zlib is linked directly by the engine off macOS, to deflate the TIFF export's strips; libtiff only by `orion-tests`, as the second reader of the exported TIFF.
 
 ---
 

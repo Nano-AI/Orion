@@ -121,6 +121,14 @@ struct RawInfo {
     float         aperture = 0;
     float         focalLength = 0;
     std::int64_t  timestamp = 0;
+    /// Degrees, minutes, seconds as LibRaw parsed them; `latRef` is 'N' or 'S',
+    /// `lonRef` 'E' or 'W', `altRef` 1 below sea level. Absent unless `parsed`.
+    struct Gps {
+        bool  parsed = false;
+        float latitude[3] = {}, longitude[3] = {};
+        float altitude = 0;
+        char  latRef = 0, lonRef = 0, altRef = 0;
+    } gps;
     /// A DNG's OpcodeList1, 2 and 3, byte for byte (big-endian, as stored) —
     /// where a DJI drone or a phone writes its own lens correction. Empty for
     /// every other format. Parsed by pipe/LensOpcodes.h.

@@ -140,6 +140,11 @@ void testExportFormats();
 void testExportWatermark();
 void testExportJxl();
 void testExportSharpening();
+#ifndef __APPLE__   // tests_export_tags.cpp
+void testExportColourTags();
+void testExportMetadataTags();
+void testExportTiffDeflate();
+#endif
 void testFloatToHalf();
 void testDngRoundTrip();
 void testLinearDngOpens();

@@ -50,6 +50,7 @@ add_library(orion_engine STATIC
     src/pipe/WhiteBalance.cpp
     src/util/ExportOps.cpp
     src/util/DngWriter.cpp
+    src/util/TiffIfd.cpp
     src/util/JxlWriter.cpp
     src/util/Memory.cpp
     src/merge/Merge.cpp
@@ -68,8 +69,8 @@ add_library(orion_engine STATIC
 add_library(Orion::Engine ALIAS orion_engine)
 
 # The macOS-only files and what replaces each elsewhere (decision #376's table):
-# Metal is the default backend there; export is ImageIO there and OpenCV's
-# imgcodecs plus libjxl elsewhere (ImageWriterPortable.cpp).
+# Metal is the default backend there; export is ImageIO there and, elsewhere,
+# OpenCV's imgcodecs, libjxl, Little CMS and LibRaw (ImageWriterPortable.cpp).
 if(APPLE)
     target_sources(orion_engine PRIVATE
         src/gpu/MetalDevice.mm
@@ -78,7 +79,11 @@ if(APPLE)
         src/util/JxlMetadata.mm
     )
 else()
-    target_sources(orion_engine PRIVATE src/util/ImageWriterPortable.cpp)
+    target_sources(orion_engine PRIVATE
+        src/util/ImageWriterPortable.cpp
+        src/util/ExportColour.cpp
+        src/util/ExportMetadata.cpp
+    )
 endif()
 
 target_include_directories(orion_engine
@@ -172,8 +177,14 @@ else()
     set(OPENCV_LIBRARIES ${OpenCV_LIBS})
     message(STATUS "OpenCV: ${OpenCV_VERSION}")
     set(OPENCV_LIBRARIES ${OPENCV_LIBRARIES} PARENT_SCOPE)
-    set_source_files_properties(src/util/ImageWriterPortable.cpp
+    set_source_files_properties(src/util/ImageWriterPortable.cpp src/util/ExportColour.cpp
         PROPERTIES INCLUDE_DIRECTORIES "${OPENCV_INCLUDE_DIR}")
+    # Little CMS: export's ICC profiles and conversions off macOS, where
+    # ColorSync does both (ExportColour.cpp). MIT, dynamically linked; NOTICE.
+    find_package(lcms2 CONFIG REQUIRED)
+    # zlib deflates the TIFF export's strips (ImageWriterPortable.cpp).
+    find_package(ZLIB REQUIRED)
+    target_link_libraries(orion_engine PRIVATE lcms2::lcms2 ZLIB::ZLIB)
 endif()
 set_source_files_properties(src/merge/Align.cpp src/stack/StarAlign.cpp
     PROPERTIES INCLUDE_DIRECTORIES "${OPENCV_INCLUDE_DIR}")

@@ -84,9 +84,10 @@ struct ExportOptions {
     /// A file whose EXIF, TIFF and GPS blocks are copied onto the export.
     /// Empty writes no metadata.
     ///
-    /// Read with ImageIO rather than exiv2, which is GPL — DECISIONS #10. It
-    /// reads the RAW's own blocks straight out of the container, so the export
-    /// carries the exposure, lens and date the picture was actually taken with.
+    /// Read with ImageIO on macOS and LibRaw elsewhere (ExportMetadata.h),
+    /// rather than exiv2, which is GPL (DECISIONS #10). Either reads the RAW's
+    /// own fields, so the export carries the exposure, lens and date the
+    /// picture was actually taken with.
     std::string metadataFrom;
 
     Metadata metadata = Metadata::NoLocation;

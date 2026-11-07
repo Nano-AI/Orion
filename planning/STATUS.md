@@ -10,7 +10,7 @@ Keep it to this page: history is `git log`, work is [GitHub issues](https://gith
 The Avalonia app is Orion on macOS and ships as alpha pre-releases on GitHub.
 Windows and Linux build, test and package in CI on Dawn and run on real NVIDIA hardware on Linux; neither is a supported release yet.
 Feedback: a toolbar Feedback button and an occasional toast (after 10 active minutes, at most twice in 3 days, quiet once given for a version) open the Tally form with the system, hardware, session counts and the open photo's camera and format, never a path or name (`Chrome/Feedback.cs`, `FeedbackFacts.cs`).
-Shipped on `main`: JPEG XL export, foreign-XMP preservation, region-of-interest rendering, lens correction from DNG opcodes, stacking (noise and star modes, streamed), Velopack installers and updates, one palette and brand across app and site.
+Shipped on `main`: export off macOS in sRGB, Display P3 and Adobe RGB with the camera's EXIF and XMP (Little CMS, LibRaw), JPEG XL export, foreign-XMP preservation, region-of-interest rendering, lens correction from DNG opcodes, stacking (noise and star modes, streamed), Velopack installers and updates, one palette and brand across app and site.
 
 `main` passes every gate on a real Mac, on a Linux machine with an RTX 3070 (`tools/open-pr.sh` runs there too) and in CI on all three systems (issues 37 and 41 closed, #47, #48).
 
@@ -30,12 +30,11 @@ This session (PRs 57 to 60), measured with `tools/bench.py --ab` on the RTX 3070
 1. Zero-copy present off macOS: Windows (D3D11 keyed mutex into ANGLE, opt-in) and Linux (the one Vulkan allocator, not yet built). Issue 24.
 2. A Linux CI runner with a GPU; AMD, Intel, native Wayland and a non-NixOS desktop are untested. Issue 24.
 3. A hand render still costs the UI thread 15 to 25 ms (window upload and encode) plus ~12 ms for the copy's take: a worker-thread engine, or a GPU-side window crop from the full graph's source, and the copy off the UI thread.
-4. Export off macOS writes sRGB only and carries no camera metadata.
-5. Adobe `.lcp` lens profiles wait on the developer: the reader is on branch `lcp-adobe-profiles`, and its only source for four field meanings is a patent. Issue 5.
-6. Owed checks: one real DJI `FC8482` DNG through the opcode path; stacking thresholds tuned on real star, flat and dark frames; band streaming for stacks over the memory available.
-7. Camera profiles. Issue 4.
-8. Smaller follow-ups: the lens switch reaches sessions already open; the selftest closes the canvases it leaves subscribed; an exact-size copy for the fit picture; highlight pins are unmeasured; a kept session's 5 MB decimated preview copy; frugal renders still wait inside `giveBack`.
-9. CI flake: macOS packaging failed once with `hdiutil: create failed - Resource busy` on a green selftest (PR 57); `tools/package-app.sh` should retry the image.
+4. Adobe `.lcp` lens profiles wait on the developer: the reader is on branch `lcp-adobe-profiles`, and its only source for four field meanings is a patent. Issue 5.
+5. Owed checks: one real DJI `FC8482` DNG through the opcode path; stacking thresholds tuned on real star, flat and dark frames; band streaming for stacks over the memory available.
+6. Camera profiles. Issue 4.
+7. Smaller follow-ups: the lens switch reaches sessions already open; the selftest closes the canvases it leaves subscribed; an exact-size copy for the fit picture; highlight pins are unmeasured; a kept session's 5 MB decimated preview copy; frugal renders still wait inside `giveBack`.
+8. CI flake: macOS packaging failed once with `hdiutil: create failed - Resource busy` on a green selftest (PR 57); `tools/package-app.sh` should retry the image.
 
 ## Hazards worth knowing
 

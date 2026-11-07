@@ -689,3 +689,21 @@ illuminant reads about +9.5 to +10. Illuminant A, which *is* defined as a
 Planckian radiator at 2856 K, reads tint 0.008 — that is the sanity check that
 the locus is right. Anyone writing a test that asserts `tint(D65) ≈ 0` will find
 it fails against real Adobe behaviour, and the test would be wrong, not the code.
+
+
+## Export colour spaces off macOS - 2026-11-07
+
+**Where:** `engine/src/util/ExportColour.cpp`, which builds the profiles in Little CMS and converts the graph's sRGB into them; macOS takes the same spaces from ColorSync's named ones (`ImageWriter.mm`).
+**Not a filter:** a change of encoding between published spaces, so the sources are the definitions the constants come from.
+
+- **sRGB:** IEC 61966-2-1:1999, *Multimedia systems and equipment - Colour measurement and management - Part 2-1: Default RGB colour space - sRGB*.
+  Primaries R (0.64, 0.33), G (0.30, 0.60), B (0.15, 0.06), white D65 (0.3127, 0.3290), and the piecewise curve with exponent 2.4 and the linear segment below 0.04045.
+- **Display P3:** the primaries of SMPTE EG 432-1:2010, *Digital Source Processing - Color Processing for D-Cinema*: R (0.680, 0.320), G (0.265, 0.690), B (0.150, 0.060).
+  Apple's Display P3 pairs them with D65 and the sRGB curve (Apple Developer Documentation, `CGColorSpace.displayP3`, introduced in macOS 10.11.2, 2015).
+- **Adobe RGB (1998):** Adobe Systems, *Adobe RGB (1998) Color Image Encoding*, version 2005-05, May 2005.
+  Primaries R (0.64, 0.33), G (0.21, 0.71), B (0.15, 0.06), white D65, and a pure gamma of 563/256 = 2.19921875.
+- **The profile format:** ICC.1:2001-04 (version 2.4), a matrix/TRC profile whose colorants are adapted to the D50 connection space by Bradford, the `chad` tag saying how.
+  Version 2, not 4, for the older readers that take only version 2.
+
+**Invariants tested** (`apps/tests/tests_export_tags.cpp`): each exported file's embedded profile, read back through its own container, un-adapts to the published primaries within 0.0015 in xy and evaluates the published curve at 0.5 within 0.002.
+sRGB's red converts to Display P3 (0.9175, 0.2003, 0.1386), the value the conversion in W3C's CSS Color Module Level 4 (2022) gives, and to Adobe RGB (0.8586, 0, 0), the two red luminances' ratio through Adobe's gamma, since the two spaces share that primary and white.
