@@ -233,6 +233,7 @@ void testHueSatMapGpu();
 void testColorGradeGpu();
 void testToneBandsWithoutGuide();
 void testLocalAdjustments();
+void testBlackWhiteMixGpu();
 void testLensAutoScale();
 void testOutputDepth();
 void testAgxLatitudeIsAnAnchoredRescale();

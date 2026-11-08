@@ -22,8 +22,9 @@ static class PresetStore {
         ("White balance", "temperature, tint", ["temperature_k", "tint"]),
         ("Light", "exposure, contrast, highlights, shadows, whites, blacks",
          ["exposure_ev", "contrast", "highlights", "shadows", "whites", "blacks", "highlight_recovery"]),
-        ("Color", "vibrance, saturation, the mixer, color grading",
-         ["vibrance", "saturation", "hue_shift", "sat_shift", "lum_shift", "grade_shadow", "grade_midtone", "grade_highlight", "grade_balance"]),
+        ("Color", "vibrance, saturation, the mixer, color grading, black & white",
+         ["vibrance", "saturation", "hue_shift", "sat_shift", "lum_shift", "grade_shadow", "grade_midtone", "grade_highlight", "grade_balance",
+          "black_white", "bw_mix"]),
         ("Curve", "the tone curve", []),
         ("Detail", "sharpening, noise reduction, lens corrections",
          ["sharpen_amount", "sharpen_radius", "sharpen_masking", "denoise_luma", "denoise_color", "denoise_detail", "denoise_nlm",
@@ -62,7 +63,7 @@ static class PresetStore {
         return [
             Look("Punch", ("contrast", 1.62f), ("blacks", -0.18f), ("whites", 0.12f), ("vibrance", 0.30f), ("clarity", 0.25f)),
             Look("Soft", ("contrast", 1.24f), ("blacks", 0.14f), ("highlights", -0.20f), ("vibrance", 0.10f), ("clarity", -0.15f)),
-            Look("Monochrome", ("saturation", -1.0f), ("contrast", 1.55f), ("clarity", 0.20f)),
+            Look("Monochrome", ("black_white", 1), ("contrast", 1.55f), ("clarity", 0.20f)),
             Look("Lift the shadows", ("fusion", 0.55f), ("shadows", 0.25f), ("blacks", 0.08f)),
         ];
     }

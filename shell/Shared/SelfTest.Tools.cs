@@ -202,7 +202,7 @@ static partial class SelfTest {
         Click(window, Row("Monochrome"));
         double grey = Chroma(engine.Picture);
         bool chosen = Row("Monochrome").On && builtIns.Where(n => n != "Monochrome").All(n => !Row(n).On);
-        Check(grey < 2 && colour > grey + 5 && chosen && engine.Get("saturation") == -1 && engine.Session!.Curve(0).Count == 2,
+        Check(grey < 2 && colour > grey + 5 && chosen && engine.Get("black_white") == 1 && engine.Session!.Curve(0).Count == 2,
               $"a click on Monochrome makes the render grey and shows it chosen (chroma {colour:0.0} → {grey:0.0})");
         Commands.Run("undo");
         Check(Chroma(engine.Picture) > colour - 1 && !Row("Monochrome").On && engine.Session!.Curve(0).SequenceEqual(bent),

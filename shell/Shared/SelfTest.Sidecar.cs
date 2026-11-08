@@ -11,9 +11,9 @@ static partial class SelfTest {
     static string Fixtures => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Fixtures"));
     static byte[] FixtureEdit(string fixture) => Sidecar.Read(Path.Combine(Fixtures, Path.ChangeExtension(fixture, ".ARW")))!.Develop!;
 
-    // The sidecar's keys, frozen from the Swift app's EditHistory.swift at #380 (GoldenChecks).
+    // The sidecar's keys, frozen from the Swift app's EditHistory.swift at #380 (GoldenChecks), and the two black and white added since.
     static readonly string[] DevelopKeys = [
-        "blacks", "clarity", "contrast", "cropH", "cropW", "cropX", "cropY", "curve", "dehaze", "denoiseColor",
+        "blackWhite", "blacks", "bwMix", "clarity", "contrast", "cropH", "cropW", "cropX", "cropY", "curve", "dehaze", "denoiseColor",
         "denoiseDetail", "denoiseLuma", "denoiseNlm", "denoiseSmoothness", "exposureEv", "fusion", "gradeBalance",
         "gradeHighlight", "gradeMidtone", "gradeShadow", "grainAmount", "grainSize", "highlightRecovery",
         "highlights", "hueShift", "layers", "lensCaBlue", "lensCaRed", "lensChoice", "lensDistortion", "lensVignette",

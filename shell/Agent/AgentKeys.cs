@@ -28,6 +28,9 @@ static class AgentKeys {
             + "written before the field existed reopens at 1 so it renders as it was finished. Leave it alone unless you mean to "
             + "re-render an old edit under the new bands"),
         ["vibrance"] = new("unitless", -1, 1), ["saturation"] = new("unitless", -1, 1), ["gradeBalance"] = new("unitless", -1, 1),
+        ["blackWhite"] = new("switch", 0, 1,
+            "1 renders the photograph in gray from its scene-linear luminance, 0 in color. bwMix then sets each hue band's gray; "
+            + "color grading still applies on top, so a split tone over black and white is a grade"),
         ["denoiseLuma"] = new("unitless", 0, 4), ["denoiseColor"] = new("unitless", 0, 4),
         ["denoiseDetail"] = new("unitless", 0, 1,
             "how far the luminance threshold backs off where the picture has more texture than noise: 0 is the fixed threshold every "

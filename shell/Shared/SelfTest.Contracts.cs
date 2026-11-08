@@ -30,6 +30,8 @@ static partial class SelfTest {
     static partial void ClippingChecks();
     // Lightroom parity: the zoom presets and keys.
     static partial void ZoomPresetChecks();
+    // M6 S6.2 and S6.1: black and white, white balance.
+    static partial void ColorChecks();
 
     static void CommandChecks() {
         // Every name a control binds to (Commands.Run/CanRun("…") in this tree) is registered.

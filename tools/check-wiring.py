@@ -131,6 +131,9 @@ KEYWORDS = {"if", "while", "for", "foreach", "switch", "return", "new", "using",
             "catch", "lock", "operator", "get", "set", "nameof", "typeof", "sizeof"}
 
 
+PINVOKE = re.compile(r"static (?:extern |unsafe )*(?:partial )?[\w*<>\[\]]+ ((?:orion|shim)_[a-z0-9_]+)\(")
+
+
 def uncommented(text):
     """The source with comments removed and string literals blanked: a name in
     a comment or a message is not a use. Verbatim and raw strings are left; a
@@ -160,6 +163,19 @@ def main():
         if not any(re.search(pattern, body) for name, body in sources.items() if not harness(name)):
             problems.append(f"{pattern} matches no product file — {why}.\n"
                             f"      A call from the harness does not count: that is what made this look wired the first time.")
+
+    # Every orion_*/shim_* the app P/Invokes is in the Windows DLL's export list:
+    # a declaration the list does not read is a crash there and nowhere else.
+    sys.dont_write_bytecode = True   # nothing written into the tree
+    sys.path.insert(0, str(ROOT / "shell" / "native"))
+    import gen_exports
+    exported = set(gen_exports.exports(ROOT / "engine" / "include" / "orion" / "orion.h", ROOT / "shell" / "native" / "shim.cpp"))
+    invoked = {n for body in sources.values() for n in PINVOKE.findall(body)}
+    # Defined in the Objective-C++ files: macOS's alone, called behind an OS check.
+    invoked -= {n for mm in (ROOT / "shell" / "native").glob("*.mm") for n in gen_exports.SHIM.findall(mm.read_text(encoding="utf-8"))}
+    for missing in sorted(invoked - exported):
+        problems.append(f"{missing} is P/Invoked by the app and missing from the Windows shim's exports "
+                        f"(shell/native/gen_exports.py): orion_shim.dll would throw EntryPointNotFoundException on the call.")
 
     # The sweep: every method declared in a product file, and who mentions it.
     declared, declarations = {}, {}
@@ -203,7 +219,8 @@ def main():
         return 1
 
     print(f"check-wiring: {len(EXPECTED)} declared mechanism(s) still called by the product; swept "
-          f"{len(declared)} product method(s), {len(found)} harness-only and all accounted for.")
+          f"{len(declared)} product method(s), {len(found)} harness-only and all accounted for; "
+          f"{len(invoked)} P/Invoke(s) exported.")
     return 0
 
 

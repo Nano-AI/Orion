@@ -303,7 +303,7 @@ export function createServer() {
         "that is a rejection, not a rendering glitch, and nothing was written. Cheap: returns " +
         "the merged state as JSON, about 40-100 tokens, including a `state` object (everything " +
         "the proposed file now holds) — read it before deciding the edit worked. Composite " +
-        "controls (curve, gradeShadow/Midtone/Highlight, hueShift/satShift/lumShift, layers, " +
+        "controls (curve, gradeShadow/Midtone/Highlight, hueShift/satShift/lumShift, bwMix, layers, " +
         "spots, maskComponents) replace the whole value: read the current one from a previous " +
         "result's `state` or from describe_edits' `example`, edit it, send it complete. Partial " +
         "elements are rejected. path is optional; defaults to the photo open in Orion.",

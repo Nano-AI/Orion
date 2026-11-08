@@ -23,7 +23,8 @@ static class SyncSettings {
     public static string[] Keys(int group) => group switch {
         0 => ["temperatureK", "tint"],
         1 => ["exposureEv", "contrast", "highlights", "shadows", "whites", "blacks", "highlightRecovery"],
-        2 => ["vibrance", "saturation", "hueShift", "satShift", "lumShift", "gradeShadow", "gradeMidtone", "gradeHighlight", "gradeBalance"],
+        2 => ["vibrance", "saturation", "hueShift", "satShift", "lumShift", "gradeShadow", "gradeMidtone", "gradeHighlight", "gradeBalance",
+              "blackWhite", "bwMix"],
         3 => ["curve"],
         4 => ["sharpenAmount", "sharpenRadius", "sharpenMasking", "denoiseLuma", "denoiseColor", "denoiseDetail", "denoiseNlm",
               "denoiseSmoothness", "lensDistortion", "lensVignette", "lensCaRed", "lensCaBlue"],

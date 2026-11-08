@@ -56,7 +56,7 @@ public sealed class SectionPlate : StackPanel {
     static readonly Dictionary<string, string> IconFor = new() {
         ["White balance"] = "thermometer", ["Light"] = "sun.max", ["Highlight recovery"] = "sun.horizon", ["Shadow lift"] = "moon",
         ["Curve"] = "curve", ["Presence"] = "drop", ["Clarity"] = "circle.lefthalf.filled", ["Dehaze"] = "sun.haze",
-        ["Color mixer"] = "circle.3", ["Color grading"] = "dial", ["Look"] = "wand.and.stars",
+        ["Color mixer"] = "circle.3", ["Treatment"] = "circle.lefthalf.filled", ["Color grading"] = "dial", ["Look"] = "wand.and.stars",
         ["Sharpening"] = "triangle", ["Noise reduction"] = "waveform", ["Grain"] = "grain", ["Vignette"] = "vignette",
         ["Lens"] = "camera.aperture", ["Perspective"] = "perspective", ["Capture"] = "camera",
         ["Masks"] = "theatermasks.fill", ["Spots"] = "bandage", ["Aspect"] = "aspectratio", ["Rotate"] = "rotate.right",

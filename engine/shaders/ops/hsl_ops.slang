@@ -69,6 +69,17 @@ float hueDistance(float a, float b)
     return min(d, 360.0f - d);
 }
 
+/// How much a hue belongs to band `i`, before normalizing over the eight.
+/// research/UNSOURCED.md §4. The black and white mix (bw_ops.slang) weights
+/// its bands with this too, so a mixer band and a gray band are the same hues.
+float hueBandWeight(float hue, uint i)
+{
+    // 60 degrees of falloff gives neighboring bands real overlap, which is
+    // what keeps a sky gradient from banding as it crosses aqua into blue.
+    const float w = max(0.0f, 1.0f - hueDistance(hue, kBandCenters[i]) / 60.0f);
+    return w * w;
+}
+
 /// hueShift/satShift/lumShift are 8 entries each, in -1..1.
 /// Applying this in display-adjacent HSL rather than scene-linear is
 /// deliberate: users judge "make the blues deeper" by what they see, and a
@@ -107,11 +118,7 @@ float3 applyColorMixer(float3 c,
     [unroll]
     for (uint i = 0; i < 8; ++i)
     {
-        // 60 degrees of falloff gives neighboring bands real overlap, which is
-        // what keeps a sky gradient from banding as it crosses aqua into blue.
-        const float d = hueDistance(hsl.x, kBandCenters[i]);
-        const float w = max(0.0f, 1.0f - d / 60.0f);
-        const float w2 = w * w;
+        const float w2 = hueBandWeight(hsl.x, i);
 
         hue   += hueShift[i] * w2;
         sat   += satShift[i] * w2;

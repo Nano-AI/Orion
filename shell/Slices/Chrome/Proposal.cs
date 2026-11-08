@@ -22,7 +22,7 @@ static partial class Proposal {
         ["exposureEv"] = "Exposure", ["temperatureK"] = "Temperature", ["highlightRecovery"] = "Highlight recovery",
         ["fusion"] = "Shadow lift", ["gradeShadow"] = "Shadows grading", ["gradeMidtone"] = "Midtones grading",
         ["gradeHighlight"] = "Highlights grading", ["gradeBalance"] = "Grading balance", ["hueShift"] = "Color mixer hue",
-        ["satShift"] = "Color mixer saturation", ["lumShift"] = "Color mixer luminance", ["curve"] = "Tone curve",
+        ["satShift"] = "Color mixer saturation", ["lumShift"] = "Color mixer luminance", ["blackWhite"] = "Black & white", ["bwMix"] = "Black & white mix", ["curve"] = "Tone curve",
         ["denoiseLuma"] = "Luminance noise", ["denoiseColor"] = "Color noise", ["denoiseDetail"] = "Noise detail",
         ["denoiseNlm"] = "Non-local noise", ["denoiseSmoothness"] = "Color smoothness", ["texture"] = "Texture",
         ["sharpenAmount"] = "Sharpening", ["sharpenRadius"] = "Sharpening radius", ["sharpenMasking"] = "Sharpening masking",

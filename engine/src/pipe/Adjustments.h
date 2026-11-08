@@ -154,6 +154,11 @@ struct Adjustments {
     std::array<float, 8> satShift{};
     std::array<float, 8> lumShift{};
 
+    /// Black and white: gray from the luminance, each hue band's gain set by
+    /// its bwMix slider, -1..1. research/bw-mix.md.
+    bool blackWhite = false;
+    std::array<float, 8> bwMix{};
+
     /// Extra quarter turns clockwise on top of the camera's own orientation.
     int rotateQuarters = 0;
 

@@ -42,6 +42,7 @@ support what it is attached to.
 | [`luts.md`](luts.md) | `.cube` files and tetrahedral interpolation |
 | [`exposure-fusion.md`](exposure-fusion.md) | Shadow lift that keeps local contrast — Mertens; Hessel & Morel |
 | [`auto-enhance.md`](auto-enhance.md) | Percentile auto-levels, and what has no published target |
+| [`bw-mix.md`](bw-mix.md) | Black and white: the BT.2020 luminance baseline (Grundland and Dodgson 2007), the mixer's bands, and the gain in stops that is Orion's own |
 | [`color-grading.md`](color-grading.md) | Three-way grading wheels, as ASC CDL per tonal zone — and why split toning is not a second panel |
 | [`vignette.md`](vignette.md) | The **creative** vignette — cos⁴ natural falloff, post-crop. Not the lens correction |
 | [`detail.md`](detail.md) | Sharpening and denoising |

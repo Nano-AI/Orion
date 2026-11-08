@@ -313,6 +313,8 @@ void DevelopPipeline::applyTone(const Adjustments& adj,
         adj.hueShift != lastAdj_.hueShift ||
         adj.satShift != lastAdj_.satShift ||
         adj.lumShift != lastAdj_.lumShift ||
+        adj.blackWhite != lastAdj_.blackWhite ||
+        adj.bwMix != lastAdj_.bwMix ||
         adj.exposureEv != lastAdj_.exposureEv ||
         adj.process    != lastAdj_.process    ||
         adj.highlights != lastAdj_.highlights ||
@@ -367,6 +369,8 @@ void DevelopPipeline::applyTone(const Adjustments& adj,
         std::copy(adj.hueShift.begin(), adj.hueShift.end(), la.hueShift);
         std::copy(adj.satShift.begin(), adj.satShift.end(), la.satShift);
         std::copy(adj.lumShift.begin(), adj.lumShift.end(), la.lumShift);
+        std::copy(adj.bwMix.begin(), adj.bwMix.end(), la.bwMix);
+        la.bwEnabled = adj.blackWhite ? 1.0f : 0.0f;
         pipeline_.setParams(nLinear_, &la, sizeof la);
     }
 }
@@ -703,7 +707,7 @@ bool DevelopPipeline::regionSupports(const Adjustments& a) {
     // ⚠ A deny-list: a new field is allowed until someone says otherwise, so
     // the size check makes them say. Decide whether it knows its position or
     // reads past the halo, refuse it here if so, then update the number.
-    static_assert(sizeof(Adjustments) == 3464, "classify the new Adjustments field for regions");
+    static_assert(sizeof(Adjustments) == 3504, "classify the new Adjustments field for regions");
     return !a.cropPreview && a.maskCount == 0 && a.spotCount == 0 &&
            a.grainAmount <= 0.0f && a.vignetteAmount == 0.0f &&
            a.dehaze == 0.0f && a.clarity == 0.0f && a.fusion == 0.0f &&
