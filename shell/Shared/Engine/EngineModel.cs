@@ -140,8 +140,14 @@ public sealed class EngineModel : INotifyPropertyChanged {
     (Avalonia.Rect Uv, Avalonia.PixelSize Pixels)? _asked;
     bool _askedRest, _posted, _regionRested, _refused;   // _refused: the region refused a hand's render; until the next shown
     DispatcherTimer? _landing;
+    /// The view whose rest render failed, until a render is shown. Asked again, it would
+    /// fail again, and the failure's own Timing change makes the canvas ask it again
+    /// (CanvasPanel.Refresh, Tell): a Render-priority chain that never lets the loop go.
+    (Avalonia.Rect Uv, Avalonia.PixelSize Pixels)? _failed;
+    bool _lastFailed;
 
     void Ask((Avalonia.Rect Uv, Avalonia.PixelSize Pixels) view, bool rest) {
+        if (rest && view == _failed) return;
         (_asked, _askedRest) = (view, rest);
         if (_posted) return;
         _posted = true;
@@ -155,8 +161,10 @@ public sealed class EngineModel : INotifyPropertyChanged {
         if (s.Busy) { Watch(); return; }
         _asked = null;
         if (Covered(view, _askedRest)) return;
-        if (_askedRest) Render(preview: false, ViewRegion.Around(view, ViewRegion.RestMargin));
-        else Hand(s, ViewRegion.Around(view, ViewRegion.HandMargin));
+        if (_askedRest) {
+            Render(preview: false, ViewRegion.Around(view, ViewRegion.RestMargin));
+            if (_lastFailed) _failed = view;
+        } else Hand(s, ViewRegion.Around(view, ViewRegion.HandMargin));
     }
 
     /// A region round where a hand is panning to: never the whole graph, which
@@ -329,7 +337,7 @@ public sealed class EngineModel : INotifyPropertyChanged {
     public void Close() {
         _asked = null;   // a view's render belongs to the photo it was for
         _landing?.Stop();
-        _region = null;
+        _region = _failed = null;
         _previewRead = false;
         if (_session != null) {
             Leaving?.Invoke();
@@ -420,7 +428,7 @@ public sealed class EngineModel : INotifyPropertyChanged {
         if (view is { } v) {
             // Before the region, whose submit this read would otherwise wait behind.
             if (!Interacting) Preview(s);
-            graph = s.RenderRegion(v.Uv, v.Pixels, Interacting, wait: false);
+            graph = RegionRender(s, v.Uv, v.Pixels, Interacting);
         }
         if (graph == Graph.None) graph = s.Render(preview);
         // Out of GPU memory: the decoded neighbours are a convenience, the photo on
@@ -429,6 +437,10 @@ public sealed class EngineModel : INotifyPropertyChanged {
         if (view == null || Interacting) _previewRead = false;
         return Present(s, graph, graph == Graph.Region ? view : null, sw, rested: !Interacting);
     }
+
+    /// The region render, for a test to make fail (selftest FailedRenderChecks): a GPU fault is not to be had on demand.
+    internal Func<Session, Avalonia.Rect, Avalonia.PixelSize, bool, Graph> RegionRender =
+        (s, uv, pixels, interacting) => s.RenderRegion(uv, pixels, interacting, wait: false);
 
     /// The small whole-frame pass: what the histogram reads while the full
     /// graph waits, and the picture under a pan until the next region. Read
@@ -443,11 +455,12 @@ public sealed class EngineModel : INotifyPropertyChanged {
         double render = sw.Elapsed.TotalMilliseconds;
         sw.Restart();
         var size = s.Size(graph);
-        if (size == default) {
+        _lastFailed = size == default;
+        if (_lastFailed) {
             SetTiming("render failed: " + s.LastError);
             return (render, 0);
         }
-        (_region, _regionRested, _refused) = (region, rested, false);
+        (_region, _regionRested, _refused, _failed) = (region, rested, false, null);
         Shown.ShowLive(s, graph, region?.Uv);
         double copy = sw.Elapsed.TotalMilliseconds;
         Last = (render, copy);
