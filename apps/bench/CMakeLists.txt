@@ -6,6 +6,7 @@ add_executable(orion-bench
     bench_compose.cpp
     bench_controls.cpp
     bench_gate.cpp
+    bench_heavy.cpp
     bench_fusion.cpp
     bench_memory.cpp
     bench_highlights.cpp

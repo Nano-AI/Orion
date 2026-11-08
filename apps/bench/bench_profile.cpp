@@ -277,11 +277,17 @@ void exportTiming(Bench& b) {
                            .watermark = {}}},
         };
 
+        // A case the writer refuses (off macOS, a colour space other than sRGB)
+        // is said and skipped, and the run still ends green.
         for (const auto& c : cases) {
             const std::string out = prefix + c.suffix;
             const auto t = Clock::now();
-            orion::util::writeImage(out, pixels.data(), ew, eh, rowBytes, c.opts);
-            std::printf("  %-14s %6.0f ms\n", c.suffix, msSince(t));
+            try {
+                orion::util::writeImage(out, pixels.data(), ew, eh, rowBytes, c.opts);
+                std::printf("  %-14s %6.0f ms\n", c.suffix, msSince(t));
+            } catch (const std::exception& e) {
+                std::printf("  %-14s not written: %s\n", c.suffix, e.what());
+            }
         }
     }
 }

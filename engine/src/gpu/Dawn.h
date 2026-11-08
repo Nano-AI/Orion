@@ -33,6 +33,8 @@ struct Context {
     DeviceInfo     info;
     /// The adapter's PCI ids, for the driver's free count (VramFree.cpp).
     std::uint32_t  vendorId = 0, deviceId = 0;
+    /// The device has `timestamp-query`, unquantized: CommandBuffer::timeOnGpu's clock.
+    bool           timestamps = false;
 
     /// Every prepared shader loaded on this device, by path, with the
     /// pipelines made from it (DawnKernel.cpp). After the device so it goes

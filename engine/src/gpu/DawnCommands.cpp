@@ -34,6 +34,8 @@ struct DawnCommandBuffer final : CommandBuffer::Impl {
     std::shared_ptr<bool> succeeded;
     wgpu::Future done{};
     std::chrono::steady_clock::time_point submitted;
+    bool         timed = false;
+    wgpu::Buffer stamps;   // a timed submit's two timestamps, until `clock` reads them
 
     ~DawnCommandBuffer() override {
         try { finished(true); } catch (...) {}   // a lost device: nothing left to wait for
@@ -93,6 +95,8 @@ struct DawnCommandBuffer final : CommandBuffer::Impl {
         recorded.push_back(std::move(r));
     }
 
+    void timeOnGpu() override { timed = ctx->timestamps; }
+
     void commit() override {
         ErrorScope scope(*ctx);
         submit();
@@ -117,14 +121,17 @@ struct DawnCommandBuffer final : CommandBuffer::Impl {
         if (ctx->instance.WaitAny(done, wait ? UINT64_MAX : 0) == wgpu::WaitStatus::TimedOut) return false;
         const bool ok = *succeeded;
         succeeded.reset();
-        gpuMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - submitted).count();
+        wallMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - submitted).count();
         if (!ok) throw std::runtime_error("GPU work failed: the queue did not finish");
+        ErrorScope scope(*ctx);
+        clock();
+        scope.check("GPU timestamps");
         return true;
     }
 
     void commitAndWait() override {
         // Nothing recorded: a submit would only wait on work queued before it.
-        if (recorded.empty()) { gpuMs = 0.0; return; }
+        if (recorded.empty()) { gpuMs = wallMs = 0.0; return; }
         const auto start = std::chrono::steady_clock::now();
         ErrorScope scope(*ctx);
         submit();
@@ -134,9 +141,32 @@ struct DawnCommandBuffer final : CommandBuffer::Impl {
             [&](wgpu::QueueWorkDoneStatus st, wgpu::StringView) {
                 done = st == wgpu::QueueWorkDoneStatus::Success;
             }));
-        gpuMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+        wallMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+        if (done) clock();
         scope.check("GPU work failed");
         if (!done) throw std::runtime_error("GPU work failed: the queue did not finish");
+    }
+
+    /// gpuMs from a timed submit's timestamps, once its work is done; wall time otherwise.
+    void clock() {
+        gpuMs = wallMs;
+        gpuClock = false;
+        if (!stamps) return;
+        wgpu::Buffer b = std::move(stamps);
+        stamps = nullptr;
+        bool mapped = false;
+        ctx->wait(b.MapAsync(wgpu::MapMode::Read, 0, 16, wgpu::CallbackMode::WaitAnyOnly,
+                             [&](wgpu::MapAsyncStatus st, wgpu::StringView) {
+                                 mapped = st == wgpu::MapAsyncStatus::Success;
+                             }));
+        if (!mapped) return;
+        const auto* t = static_cast<const std::uint64_t*>(b.GetConstMappedRange(0, 16));
+        // Nanoseconds: Dawn converts from the device's ticks.
+        if (t[1] >= t[0]) {
+            gpuMs = double(t[1] - t[0]) / 1.0e6;
+            gpuClock = true;
+        }
+        b.Unmap();
     }
 
     /// Encodes everything recorded and submits it; the recording is emptied either way.
@@ -156,7 +186,18 @@ struct DawnCommandBuffer final : CommandBuffer::Impl {
         }
 
         wgpu::CommandEncoder enc = ctx->device.CreateCommandEncoder();
-        wgpu::ComputePassEncoder pass = enc.BeginComputePass();
+        wgpu::QuerySet queries;
+        wgpu::PassTimestampWrites writes{};
+        wgpu::ComputePassDescriptor pd{};
+        if (timed) {
+            wgpu::QuerySetDescriptor qd{.type = wgpu::QueryType::Timestamp, .count = 2};
+            queries = ctx->device.CreateQuerySet(&qd);
+            writes.querySet = queries;
+            writes.beginningOfPassWriteIndex = 0;
+            writes.endOfPassWriteIndex = 1;
+            pd.timestampWrites = &writes;
+        }
+        wgpu::ComputePassEncoder pass = enc.BeginComputePass(&pd);
         for (auto& r : recorded) {
             if (r.hasParams) {
                 r.entries.push_back(wgpu::BindGroupEntry{.binding = r.paramBinding,
@@ -172,6 +213,16 @@ struct DawnCommandBuffer final : CommandBuffer::Impl {
             pass.DispatchWorkgroups(r.groupsX, r.groupsY, 1);
         }
         pass.End();
+        if (timed) {
+            wgpu::BufferDescriptor rd{.usage = wgpu::BufferUsage::QueryResolve | wgpu::BufferUsage::CopySrc,
+                                      .size = 16};
+            wgpu::Buffer resolved = ctx->device.CreateBuffer(&rd);
+            wgpu::BufferDescriptor md{.usage = wgpu::BufferUsage::MapRead | wgpu::BufferUsage::CopyDst,
+                                      .size = 16};
+            stamps = ctx->device.CreateBuffer(&md);
+            enc.ResolveQuerySet(queries, 0, 2, resolved, 0);
+            enc.CopyBufferToBuffer(resolved, 0, stamps, 0, 16);
+        }
         wgpu::CommandBuffer cmd = enc.Finish();
         ctx->queue.Submit(1, &cmd);
     }

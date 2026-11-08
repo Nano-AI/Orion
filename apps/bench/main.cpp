@@ -19,7 +19,7 @@
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        std::fprintf(stderr, "usage: orion-bench <raw-file> [output-prefix | --fusion-sweep | --memory-cycle | --roi | --stages [dir] [--demo]]\n");
+        std::fprintf(stderr, "usage: orion-bench <raw-file> [output-prefix | --fusion-sweep | --memory-cycle | --roi | --heavy | --stages [dir] [--demo]]\n");
         return 2;
     }
     const std::string path = argv[1];
@@ -28,6 +28,7 @@ int main(int argc, char** argv) {
     try {
         if (prefix == "--memory-cycle") return bench::memoryCycle(path) ? 0 : 1;
         if (prefix == "--roi") return bench::roiBench(path) ? 0 : 1;
+        if (prefix == "--heavy") return bench::heavyTick(path) ? 0 : 1;
         if (prefix == "--stages")
             return bench::stages(path, argc > 3 ? argv[3] : "docs/pipeline-graph/stages",
                                  argc > 4 && std::string(argv[4]) == "--demo") ? 0 : 1;
@@ -203,6 +204,7 @@ int main(int argc, char** argv) {
         bench::autoEnhance(b);
         bench::nodeProfiles(b);
         bench::brushProfiles(b);
+        bench::heavyProfiles(b);
         bench::exportTiming(b);
 
         return b.green() ? 0 : 1;

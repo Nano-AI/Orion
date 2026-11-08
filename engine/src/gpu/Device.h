@@ -34,6 +34,9 @@ struct DeviceInfo {
     std::uint64_t maxBufferLength       = 0;
     bool          unifiedMemory         = false;
     bool          supportsApple7        = false;
+    /// A profiled command buffer is timed on the GPU's clock: always on Metal,
+    /// on Dawn where the adapter has `timestamp-query`.
+    bool          gpuTimestamps         = false;
 };
 
 class Device {

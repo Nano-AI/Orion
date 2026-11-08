@@ -48,5 +48,6 @@ The clipping overlay's pixel checks wait for the canvas to hold the newest rende
 - The mask selftest checks need a lit sample: on a near-black frame their +10 of 255 never arrives, though the masks work.
 - On the Linux machine another process holds 2 GB of the 8 GB card for good; two Orion GPU runs at once run each other out of memory, so every gate and bench there goes under one lock (`flock`).
 - On Linux the shim builds only when CMake is configured with `-DORION_SHELL_DIR=shell`, and `dotnet build` does not copy it next to the app (`open-pr.sh` does).
-- 42 MP with clarity, denoise and texture all on is slow to tick (Luminance ~300 ms) and unprofiled.
+- 42 MP with clarity, denoise and texture on: a Luminance tick of the full graph is 155 ms in the engine and 161 ms in the app, against 69 ms of GPU work; the slowest node is `denoise:blur 0` at 5.1 ms (RTX 3070, `tools/bench.py --scenarios drag-heavy,engine-heavy`, GPU timestamps).
+  The batch is 80 ms of the 155: the other half is CPU before the submit, unprofiled.
 - Snapshots and mattes share a stem across `photo.ARW` and `photo.dng`.

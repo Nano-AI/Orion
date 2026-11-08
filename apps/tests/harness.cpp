@@ -53,7 +53,7 @@ void report(bool ok, const std::string& what, const std::string& detail) {
     }
     ++failures;
     std::printf("  FAIL  %s%s%s\n", what.c_str(),
-                detail.empty() ? "" : " \u2014 ", detail.c_str());
+                detail.empty() ? "" : " - ", detail.c_str());
 }
 
 void checkNear(double got, double want, double tol, const std::string& what) {

@@ -321,3 +321,64 @@ void testReleaseEveryRenderGpu() {
         report(false, "release-every-render fixture completes", e.what());
     }
 }
+
+void testProfileGpuClockGpu() {
+    section("Profiling times each node on the GPU's own clock (GPU)");
+    try {
+        auto device = orion::gpu::Device::create();
+        orion::pipe::DevelopPipeline d(*device, ORION_SHADER_DIR, noisyGrey(3072, 2048));
+        orion::pipe::Adjustments a;
+        a.wb = d.asShotWhiteBalance();
+        a.clarity = 1.0f;
+        a.denoiseLuma = 2.0f;
+        a.texture = 1.0f;
+        int ticks = 0;
+        // Luminance moved, so each render reruns the same dirty set.
+        const auto tick = [&](bool profiled) {
+            a.denoiseLuma = (++ticks % 2) ? 2.1f : 2.0f;
+            d.apply(a);
+            d.graph().setProfiling(profiled);
+            const double ms = d.render();
+            d.graph().setProfiling(false);
+            return ms;
+        };
+        // Untimed: the first renders carry pipeline compiles and first allocations.
+        d.apply(a);
+        d.render();
+        tick(false);
+        tick(true);
+
+        const auto median = [](std::vector<double> v) {
+            std::sort(v.begin(), v.end());
+            return v[v.size() / 2];
+        };
+        std::vector<double> batched, profiled;
+        const bool clocked = device->info().gpuTimestamps;
+        bool allClocked = true, clarity = false, withinWall = true;
+        for (int r = 0; r < 5; ++r) {
+            batched.push_back(tick(false));
+            tick(true);
+            double sum = 0.0;
+            for (const auto& t : d.graph().lastRun()) {
+                if (!t.executed) continue;
+                sum += t.ms;
+                allClocked = allClocked && t.gpuClock == clocked;
+                withinWall = withinWall && t.ms <= t.wallMs + 1e-6;
+                if (t.name == "clarity") clarity = clarity || t.ms > 0.0;
+            }
+            profiled.push_back(sum);
+        }
+        const double whole = median(batched), sum = median(profiled);
+        const std::string totals = "nodes " + std::to_string(sum) + " ms, batched " + std::to_string(whole) +
+                                   " ms (medians of 5)";
+        std::printf("  %s (%s)\n", totals.c_str(), clocked ? "GPU clock" : "no timestamp-query: wall time");
+        report(allClocked, clocked ? "every node that ran is timed on the GPU's clock"
+                                   : "without timestamps every node falls back to wall time");
+        report(clarity, "the clarity node reports a non-zero time");
+        report(withinWall, "no node's GPU time exceeds its own submit-to-completion wall time");
+        report(sum > whole / 3.0 && sum < whole * 3.0,
+               "the node times sum to within a factor of 3 of the batched render", totals);
+    } catch (const std::exception& e) {
+        report(false, "GPU-clock profiling fixture completes", e.what());
+    }
+}

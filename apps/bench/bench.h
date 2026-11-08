@@ -40,6 +40,9 @@ bool memoryCycle(const std::string& path);
 /// Issue #22: drag and settled cost at fit and at 100%. `--roi`.
 bool roiBench(const std::string& path);
 
+/// The heavy tick alone, full and preview graphs, node by node. `--heavy`.
+bool heavyTick(const std::string& path);
+
 /// One PNG per stage plus per-node timings, for docs/pipeline-graph.
 bool stages(const std::string& path, const std::string& outDir, bool demo);
 
@@ -128,6 +131,7 @@ void composed(Bench& b);            ///< bench_compose.cpp — the M3 features t
 void autoEnhance(Bench& b);         ///< bench_compose.cpp — it converged
 void nodeProfiles(Bench& b);        ///< bench_profile.cpp — where a clarity or dehaze drag goes
 void brushProfiles(Bench& b);       ///< bench_brush.cpp — where a brush stroke goes
+void heavyProfiles(Bench& b);       ///< bench_heavy.cpp - where the clarity, denoise and texture tick goes
 void exportTiming(Bench& b);        ///< bench_profile.cpp — what a write costs
 bool fusionSweep(const std::string& path); ///< focused full/preview fusion invalidation probe
 

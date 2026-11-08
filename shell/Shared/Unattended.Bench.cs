@@ -47,10 +47,11 @@ sealed partial class App {
                 case "open": break;
                 case "swap": SwapScenario(window, m); break;
                 case "drag": DragScenario(m, preview: true); DragScenario(m, preview: false); break;
+                case "drag-heavy": HeavyDragScenario(m); break;
                 case "render": RenderScenario(m); break;
                 case "export": ExportScenario(m); break;
                 case "side-by-side": SideBySideScenario(m); break;
-                default: throw new ArgumentException($"no bench scenario '{name}' (open, swap, drag, render, export, side-by-side; the pan is --bench --pan, Unattended.Pan.cs)");
+                default: throw new ArgumentException($"no bench scenario '{name}' (open, swap, drag, drag-heavy, render, export, side-by-side; the pan is --bench --pan, Unattended.Pan.cs)");
             }
             Native.orion_engine_gpu_memory(EngineModel.Shared.Handle, out ulong gpu);
             m["gpu_engine_mib"] = gpu / 1048576.0;
@@ -224,7 +225,7 @@ sealed partial class App {
         if (jump.Count > 0) m["swap_jump_ms"] = Median(jump);
     }
 
-    /// 60 ticks of an exposure drag, each the frame a hand would see: the
+    /// 60 ticks of a slider drag (exposure unless told), each the frame a hand would see: the
     /// write and its render, the queue, then the canvas's frame. The first five
     /// warm up. `ui` is the product's own work on the UI thread, as the pan
     /// counts it: the write with its render and every Rendered handler, and the
@@ -232,9 +233,10 @@ sealed partial class App {
     /// (see the note at the top): that raster also runs inside RunJobs, from the
     /// headless render timer's own DispatcherTimer, once a tick passes 16 ms.
     /// `raster`, frame less ui, is a reading only: it is no window's cost.
-    static void DragScenario(Dictionary<string, double> m, bool preview) {
+    static void DragScenario(Dictionary<string, double> m, bool preview, string field = "exposure_ev",
+                             float from = -1, float to = 1, string key = "drag") {
         var engine = EngineModel.Shared;
-        float start = engine.Get("exposure_ev");
+        float start = engine.Get(field);
         var ui = new List<double>();
         var frames = new List<double>();
         var renders = new List<double>();
@@ -242,7 +244,7 @@ sealed partial class App {
         for (int i = 0; i < 60; i++) {
             double drawn = CanvasPanel.DrawMilliseconds;
             var sw = Stopwatch.StartNew();
-            engine.Set("exposure_ev", -1 + 2 * i / 59f);
+            engine.Set(field, from + (to - from) * i / 59f);
             double set = sw.Elapsed.TotalMilliseconds;
             Dispatcher.UIThread.RunJobs();
             Heartbeat.Frame();
@@ -252,13 +254,25 @@ sealed partial class App {
             renders.Add(engine.Last.Render);
         }
         engine.EndInteraction();
-        engine.Set("exposure_ev", start);
-        string k = preview ? "drag_preview" : "drag_full";
+        engine.Set(field, start);
+        string k = preview ? $"{key}_preview" : $"{key}_full";
         m[$"{k}_ui_ms"] = Median(ui);
         m[$"{k}_ui_p95_ms"] = Quantile(ui, 0.95);
         m[$"{k}_frame_ms"] = Median(frames);
         m[$"{k}_raster"] = Median(frames.Zip(ui, (f, u) => f - u).ToList());   // no unit suffix: tools/bench_stats.py reads it, never judges it
         m[$"{k}_engine_ms"] = Median(renders);
+    }
+
+    /// The drag with clarity 1, denoise luminance 2 and texture 1 on, the
+    /// Luminance slider moved about 2: the heaviest common edit, timed as `drag`.
+    static void HeavyDragScenario(Dictionary<string, double> m) {
+        var engine = EngineModel.Shared;
+        engine.Set("clarity", 1);
+        engine.Set("texture", 1);
+        engine.Set("denoise_luma", 2);
+        Rest(new Heartbeat());
+        DragScenario(m, preview: true, "denoise_luma", 1.5f, 2.5f, "drag_heavy");
+        DragScenario(m, preview: false, "denoise_luma", 1.5f, 2.5f, "drag_heavy");
     }
 
     /// The first full-resolution render of the photo, as zooming in asks for
