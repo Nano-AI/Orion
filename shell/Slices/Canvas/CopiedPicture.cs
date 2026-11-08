@@ -40,6 +40,8 @@ sealed class CopiedPicture : IDisposable {
     internal Taker TakeCopy = (Session s, bool wait, ref WriteableBitmap? bitmap) => s.TakeCopy(wait, ref bitmap);
     /// A look again is scheduled: only ever while a copy is in flight.
     internal bool Looking => _looking;
+    /// The copy the canvas holds is of the last render it began copying.
+    internal bool Fresh => _held != null && _taken == _begun;
 
     /// For the bench: copies begun and taken, this thread's milliseconds in the
     /// native calls, and how many renders the picture drawn trails the engine.

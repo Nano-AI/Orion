@@ -1,8 +1,10 @@
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.VisualTree;
 using OrionShell.CanvasSlice;
 using OrionShell.Develop;
@@ -35,21 +37,25 @@ static partial class SelfTest {
     static void OverlayPixelChecks(EngineModel engine) {
         var canvas = new CanvasPanel();
         var window = Show(canvas);
+        // A slow GPU's copies (WARP's): each lands 200 ms after it is begun, and a draw meanwhile shows the one before.
+        var (begin, take, since) = (canvas.Copied.BeginCopy, canvas.Copied.TakeCopy, new Stopwatch());
+        canvas.Copied.BeginCopy = (s, graph, level) => { since.Restart(); return begin(s, graph, level); };
+        canvas.Copied.TakeCopy = (Session s, bool wait, ref WriteableBitmap? bitmap) => !wait && since.ElapsedMilliseconds < 200 ? 0 : take(s, wait, ref bitmap);
         try {
             engine.Set("exposure_ev", 5);   // blown: most of the frame in the last bin
-            var plain = PictureAt(window, canvas);
+            var plain = Landed(window, canvas);
             Commands.Run("show-clipping");
-            var (share, precise, found) = Agreement(plain, PictureAt(window, canvas), Palette.ClipHigh, high: true);
+            var (share, precise, found) = Agreement(plain, Landed(window, canvas), Palette.ClipHigh, high: true);
             Check(share > 0.05 && precise > 0.97 && found > 0.9,
                   $"J paints the blown pixels red on the canvas ({share:P1} of the frame red, {precise:P1} of it blown, {found:P1} of the blown red)");
             Commands.Run("show-clipping");
-            Check(!Clipping.Any && Agreement(plain, PictureAt(window, canvas), Palette.ClipHigh, high: true).Share < 0.002, "J again takes the overlay off");
+            Check(!Clipping.Any && Agreement(plain, Landed(window, canvas), Palette.ClipHigh, high: true).Share < 0.002, "J again takes the overlay off");
 
             engine.Set("exposure_ev", -5);
             engine.Set("blacks", -1);
-            plain = PictureAt(window, canvas);
+            plain = Landed(window, canvas);
             Commands.Run("show-shadow-clipping");
-            var shown = PictureAt(window, canvas);
+            var shown = Landed(window, canvas);
             (share, precise, found) = Agreement(plain, shown, Palette.ClipLow, high: false);
             Check(Clipping.Shadows && !Clipping.Highlights && share > 0.05 && precise > 0.97 && found > 0.9
                   && Agreement(plain, shown, Palette.ClipHigh, high: true).Share < 0.002,
@@ -58,6 +64,17 @@ static partial class SelfTest {
         } finally {
             window.Close();
         }
+    }
+
+    /// The drawn picture once the canvas holds the copy of the newest render, which a slow GPU lands after the draw that asked.
+    static (byte[] Px, List<int> At) Landed(Window window, CanvasPanel canvas) {
+        var waited = Stopwatch.StartNew();
+        var picture = PictureAt(window, canvas);
+        while (!canvas.Copied.Fresh && waited.ElapsedMilliseconds < 5000) {
+            Pump(5);
+            picture = PictureAt(window, canvas);
+        }
+        return picture;
     }
 
     /// Every other pixel of the drawn picture in the window at 2x, as offsets into its bytes.
@@ -132,6 +149,9 @@ static partial class SelfTest {
 
     static void HistogramDragChecks(MainWindow window, EngineModel engine) {
         engine.Open(engine.Current);   // a clean history: one step is the drag's
+        // A session the cache no longer keeps decodes again, and the histogram ignores the pointer until it opens.
+        var opening = Stopwatch.StartNew();
+        while (engine.Opening && opening.ElapsedMilliseconds < 10000) Pump(5);
         Settle(window);
         if (window.GetVisualDescendants().OfType<HistogramDrag>().SingleOrDefault() is not { } drag) {
             Check(false, "the histogram takes a drag");

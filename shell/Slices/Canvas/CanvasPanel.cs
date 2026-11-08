@@ -27,6 +27,7 @@ public sealed class CanvasPanel : Panel {
     readonly Drawn _picture;
     readonly SharedPicture _shared = new();   // under _picture: the canvas draws over it
     readonly CopiedPicture _copied = new();   // where _shared does not hold the picture (#386)
+    internal CopiedPicture Copied => _copied;
     readonly Halvings _shown = new(), _original = new();
     readonly ClippingMask _clipped = new(), _clippedUnder = new();
     (CanvasState.Scene, int, string) _noted;   // what _note says, for which scene, photo and message
