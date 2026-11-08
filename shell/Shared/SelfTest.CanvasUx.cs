@@ -29,6 +29,7 @@ static partial class SelfTest {
             WelcomeChecks();
             ZoomChecks(window, canvas);
             PanChecks(window, canvas);
+            FailedRenderChecks();
             ZoomHoldChecks(window, canvas);
             CompareUxChecks(window, canvas, overlay);
         } finally {
@@ -231,6 +232,33 @@ static partial class SelfTest {
         Check(Math.Abs(vp.Center.X - Math.Min(from + Viewport.Projected(0.1), 1 - edge)) < 1e-6,
               $"a flick travels its projection, 0.1/s → {Viewport.Projected(0.1):0.000} ({from:0.000} → {vp.Center.X:0.000})");
         RestingPanChecks(window, canvas);
+        vp.Reset();
+    }
+
+    /// A rest render the GPU fails under a gliding spring: the failure redraws the canvas, which asks
+    /// for the landing view again, a Render-priority job the loop runs before it looks at the clock.
+    /// Asked once, not until something lets the loop go: here the fault, which gives in after 100.
+    static void FailedRenderChecks() {
+        var vp = CanvasState.Viewport;
+        var engine = EngineModel.Shared;
+        vp.ZoomBy(3, new Point(0.5, 0.5));
+        Frames();
+        Frames(() => !engine.Busy, 2);
+        int failed = 0;
+        var real = engine.RegionRender;
+        engine.RegionRender = (s, uv, pixels, interacting) => ++failed <= 100 ? Graph.Failed : real(s, uv, pixels, interacting);
+        string took;
+        try {
+            vp.Begin();
+            vp.Settle(new Vector(-2, 0));
+            took = Frames();
+        } finally {
+            engine.RegionRender = real;
+        }
+        string said = engine.Timing;
+        engine.Set("exposure_ev", engine.Get("exposure_ev"));
+        Check(failed is > 0 and <= 3 && !vp.Live && !engine.Timing.StartsWith("render failed"),
+              $"a rest render that fails under a gliding spring is asked once, the glide ends and the next edit renders ({failed} failed renders, {took}, '{said}')");
         vp.Reset();
     }
 

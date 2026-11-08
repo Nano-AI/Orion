@@ -23,6 +23,8 @@ SKIP = {
             FIXTURE + ": no noise profile or ISO, so the denoise, grain and texture sliders wait",
         "past fit with a plain edit, the engine renders only the part in view":
             FIXTURE + ": the region graph declines it and the full graph renders",
+        "a rest render that fails under a gliding spring":
+            FIXTURE + ": the region graph declines it, and the full picture covers every view, so no rest render is asked",
         "a region past fit returns before its copy lands": FIXTURE + ": the region graph declines it and the full graph renders",
         "and once it lands, the region's copy": FIXTURE + ": the region graph declines it and the full graph renders",
         "the selection reaches the picture": FIXTURE + ": the subject Vision finds barely moves it",

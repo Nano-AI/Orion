@@ -34,6 +34,7 @@ This session (PRs 57 to 60), measured with `tools/bench.py --ab` on the RTX 3070
 
 On a GPU slower than 160 ms a render, a burst of typed values or held keys read the histogram and flat frame once per render; `Settled` now times the gap between renders, so it reads once, after the last.
 The clipping overlay's pixel checks wait for the canvas to hold the newest render's copy: on WARP that settle read had been landing it for them, and a copy stand-in that lands 200 ms late now shows it on any GPU; the histogram drag check also waits for the photo it reopens.
+A rest render that fails past fit (a lost device, shaders older than the engine) is asked once per view: the failure redrew the canvas, which asked for the landing view again, and that Render-priority chain froze the UI thread under a gliding spring (the Linux selftest spun 2 h 47 min on a tree with stale shaders beside the app).
 
 ## Next, in order
 
