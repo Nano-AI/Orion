@@ -79,13 +79,16 @@ public sealed class CanvasPanel : Panel {
     void Refresh() {
         Tell();
         var scene = CanvasState.Now;
-        _garden.IsVisible = _welcome.IsVisible = scene == CanvasState.Scene.Welcome;
-        _state.IsVisible = scene is CanvasState.Scene.Loading or CanvasState.Scene.Failed;
-        _choices.IsVisible = scene == CanvasState.Scene.Failed;
-        _loader.IsVisible = scene == CanvasState.Scene.Loading;
-        if (scene != _was) Arrive(scene);
         var engine = EngineModel.Shared;
-        if (_state.IsVisible) {
+        bool over = Over(scene == CanvasState.Scene.Picture && engine.Opening);
+        _garden.IsVisible = _welcome.IsVisible = scene == CanvasState.Scene.Welcome;
+        _state.IsVisible = over || scene is CanvasState.Scene.Loading or CanvasState.Scene.Failed;
+        _choices.IsVisible = scene == CanvasState.Scene.Failed;
+        _note.IsVisible = !over;
+        _loader.IsVisible = over || scene == CanvasState.Scene.Loading;
+        if (scene != _was) Arrive(scene);
+        if (_loader.IsVisible != _loading) Load();
+        if (_state.IsVisible && !over) {
             // Failure reads the raw file to say why: once per photo and message, not on every
             // viewport change (a pan over a failed render read 86 MB a frame, #401).
             var key = (scene, engine.Current, engine.Timing);
@@ -95,16 +98,36 @@ public sealed class CanvasPanel : Panel {
         _picture.InvalidateVisual();   // same bitmap, new pixels
     }
 
+    /// The loader's light, from the moment it shows until it hides.
+    void Load() {
+        _loading = _loader.IsVisible;
+        if (!_loading) return;
+        _loader.Reset();
+        Motion.Run(_loader, dt => { _loader.Advance(dt); return _loading; });
+    }
+    bool _loading;
+
+    /// A kept or embedded picture stands in while the photo decodes: the loader
+    /// joins it only once `waiting` has held for OverAfter, as the histogram's
+    /// pulse waits, so the usual swap never flashes it. Timed on the clock, not
+    /// the loader's frames, which Reduce Motion runs all at once.
+    bool Over(bool waiting) {
+        if (!waiting) { _overFrom = 0; return false; }
+        if (_overFrom == 0) {
+            _overFrom = System.Diagnostics.Stopwatch.GetTimestamp();
+            Avalonia.Threading.DispatcherTimer.RunOnce(Refresh, OverAfter);
+        }
+        return System.Diagnostics.Stopwatch.GetElapsedTime(_overFrom) >= OverAfter;
+    }
+    long _overFrom;
+    static readonly TimeSpan OverAfter = TimeSpan.FromMilliseconds(500);
+
     /// A scene's motion, started once as the canvas arrives in it: the welcome
-    /// rises in and its garden starts drifting; the loader starts its light.
-    /// Both stop when their scene goes. Under Reduce Motion, Motion.Run runs a
-    /// frame or two and stops, so everything simply appears.
+    /// rises in and its garden starts drifting. It stops when its scene goes.
+    /// Under Reduce Motion, Motion.Run runs a frame or two and stops, so
+    /// everything simply appears.
     internal void Arrive(CanvasState.Scene scene) {
         _was = scene;
-        if (scene == CanvasState.Scene.Loading) {
-            _loader.Reset();
-            Motion.Run(_loader, dt => { _loader.Advance(dt); return CanvasState.Now == CanvasState.Scene.Loading; });
-        }
         if (scene != CanvasState.Scene.Welcome) return;
         Motion.Run(_garden, dt => { _garden.Advance(dt); return CanvasState.Now == CanvasState.Scene.Welcome; });
         // The rows fade in turn; the rise is the column's, whose transform is ours alone. A row's own

@@ -32,6 +32,7 @@ static partial class SelfTest {
             FailedRenderChecks();
             ZoomHoldChecks(window, canvas);
             CompareUxChecks(window, canvas, overlay);
+            JumpChecks(window, canvas);
         } finally {
             CompareState.Clear();
             CanvasState.Viewport.Reset();
@@ -454,6 +455,46 @@ static partial class SelfTest {
         Shot(window, "compare-zoomed");
         CanvasState.Viewport.Reset();
         engine.Set("exposure_ev", ev);
+    }
+
+    /// A jump past the kept photos, as a click in the filmstrip makes it: every
+    /// frame until the render lands shows a picture (the camera's embedded
+    /// preview), never the blank ground the whole decode used to show.
+    static void JumpChecks(Window window, CanvasPanel canvas) {
+        var engine = EngineModel.Shared;
+        var (photos, at) = (engine.Photos.ToList(), engine.Current);
+        string photo = photos[at];
+        // Thirty spellings (dir/./name...) are thirty photos to the cache, so 25 is past both tiers of 0.
+        var spelt = Enumerable.Range(0, 30).Select(k => Path.Combine([Path.GetDirectoryName(photo)!, .. Enumerable.Repeat(".", k), Path.GetFileName(photo)])).ToList();
+        engine.Load(spelt);
+        engine.Open(0);
+        Frames(() => !engine.Opening, 30);
+        engine.Open(25);
+        int frames = 0, blank = 0;
+        for (var wait = Stopwatch.StartNew(); engine.Opening && wait.Elapsed.TotalSeconds < 30; frames++) {
+            var (px, stride, c) = Pixels(window, canvas);
+            // Left of the loader and its note, which sit at the centre.
+            if (Flat(px, stride, new Rect(c.X + c.Width * 0.1, c.Y + c.Height * 0.3, c.Width * 0.25, c.Height * 0.4))) blank++;
+            Frames(() => true);
+        }
+        Check(frames > 0 && blank == 0 && !engine.Opening && engine.Session != null,
+              $"a jump past the kept photos shows a picture in every frame until its render ({blank} of {frames} frames blank)");
+        engine.Load(photos);
+        engine.Open(at);
+        Frames(() => !engine.Opening && !engine.Cache.Busy, 60);
+    }
+
+    /// One shade throughout: the canvas's ground, no picture on it.
+    static bool Flat(byte[] px, int stride, Rect r) {
+        double sum = 0, squares = 0;
+        long n = 0;
+        for (int y = (int)r.Y; y < (int)r.Bottom; y += 4)
+            for (int x = (int)r.X; x < (int)r.Right; x += 4, n++) {
+                int i = y * stride + x * 4;
+                double v = (px[i] + px[i + 1] + px[i + 2]) / 3.0;
+                (sum, squares) = (sum + v, squares + v * v);
+            }
+        return n == 0 || squares / n - sum / n * (sum / n) < 4;   // a standard deviation under 2 of 255
     }
 
     /// ORION_SHOTS=<dir>: the window at 2× as <dir>/<name>.png, for a person to look at.

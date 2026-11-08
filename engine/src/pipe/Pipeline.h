@@ -118,6 +118,8 @@ public:
 
     /// Uploads the source mosaic. Marks the whole graph dirty.
     void setSource(const void* samples, std::size_t bytesPerRow);
+    /// Milliseconds the last `setSource` held its caller: the texture and its upload.
+    [[nodiscard]] double sourceUploadMs() const noexcept { return uploadMs_; }
 
     /// Drops the source texture until the next `setSource`, which allocates it
     /// again (#318): a kept photo's mosaic lives on the CPU. ⚠ A render before
@@ -495,6 +497,7 @@ private:
     gpu::PixelFormat sourceFormat_ = gpu::PixelFormat::R16Uint;
     std::uint32_t width_ = 0, height_ = 0;
     bool compiled_ = false;
+    double uploadMs_ = 0;
     bool profiling_ = false;
     /// `setReleaseEveryRender`. Survives `compile()` and `setSource()`, so a
     /// headless engine that reloads the graph for the next frame keeps it.

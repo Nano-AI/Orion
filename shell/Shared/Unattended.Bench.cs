@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
@@ -225,6 +226,43 @@ sealed partial class App {
         }
         if (neighbour.Count > 0) m["swap_neighbour_ms"] = Median(neighbour);
         if (jump.Count > 0) m["swap_jump_ms"] = Median(jump);
+        OpenSplit(engine.Photos[(engine.Current + n / 4) % n], m);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct OrionOpenTimings { public double Create, Read, Unpack, Copy, Info, Build, Upload, Decimate; }
+
+    [LibraryImport(Native.Lib)]
+    private static partial int orion_engine_open_timings(nint engine, out OrionOpenTimings timings);
+
+    /// Where a jump's wait goes: one photo opened as the cache's worker opens it
+    /// (SessionCache.Start), stage by stage, the engine's own stages from
+    /// orion_engine_open_timings. What swap_jump_ms has beyond their sum is the
+    /// UI thread's: the queue, the arrival's render and the frame.
+    static void OpenSplit(string path, Dictionary<string, double> m) {
+        var sw = Stopwatch.StartNew();
+        using var s = Session.OpenEdited(path) ?? throw new InvalidOperationException($"{path} did not open: {Session.OpenFailure(path)}");
+        double opened = sw.Elapsed.TotalMilliseconds;
+        sw.Restart();
+        s.Render(preview: true);
+        double render = sw.Elapsed.TotalMilliseconds;
+        sw.Restart();
+        s.Read(Graph.Preview);
+        double copy = sw.Elapsed.TotalMilliseconds;
+        orion_engine_open_timings(s.Handle, out var t);
+        double engine = t.Create + t.Read + t.Unpack + t.Copy + t.Info + t.Build + t.Upload + t.Decimate;
+        m["open_engine_create_ms"] = t.Create;   // the device's, and the merge and stack graphs' build
+        m["open_libraw_read_ms"] = t.Read;       // LibRaw's open: the file read and its parse
+        m["open_libraw_unpack_ms"] = t.Unpack;
+        m["open_mosaic_copy_ms"] = t.Copy;
+        m["open_info_ms"] = t.Info;              // the metadata read again, and the lens lookup
+        m["open_graph_build_ms"] = t.Build;      // both graphs' shaders and textures
+        m["open_upload_ms"] = t.Upload;          // both graphs' sources onto the card
+        m["open_decimate_ms"] = t.Decimate;
+        m["open_sidecar_ms"] = opened - engine;  // the sidecar's edit and the lens profile set, the shim around them
+        m["open_first_render_ms"] = render;      // the preview graph from the mosaic: demosaic onward
+        m["open_read_back_ms"] = copy;           // the preview off the card, as the cache keeps it
+        m["open_total_ms"] = opened + render + copy;
     }
 
     /// 60 ticks of a slider drag (exposure unless told), each the frame a hand would see: the

@@ -1,4 +1,5 @@
 #include "pipe/Pipeline.h"
+#include "util/Stopwatch.h"
 
 #include <memory>
 
@@ -340,8 +341,10 @@ bool Pipeline::nodeDirty(int nodeId) const {
 void Pipeline::setSource(const void* samples, std::size_t bytesPerRow) {
     if (!compiled_) throw std::runtime_error("setSource before compile()");
     finishPending();
+    util::Stopwatch clock;
     if (!source_) source_ = gpu::Texture::create(device_, width_, height_, sourceFormat_, /*linear=*/true);
     source_->upload(samples, bytesPerRow);
+    uploadMs_ = clock.ms();
     std::fill(dirty_.begin(), dirty_.end(), true);
 }
 
