@@ -17,14 +17,17 @@ static partial class SelfTest {
         var engine = EngineModel.Shared;
         Arrived(engine);   // an earlier check may have left a background decode in flight
         if (engine.Handle == 0) { Check(false, "the tools checks need an open photo"); return; }
-        engine.Open(engine.Current);   // a clean history
+        engine.Open(engine.Current);
         Arrived(engine);
+        EditHistory.Restart();   // a clean history
         CropChecks(engine);
         engine.Open(engine.Current);
         Arrived(engine);
+        EditHistory.Restart();
         PresetChecks(engine);
         engine.Open(engine.Current);
         Arrived(engine);
+        EditHistory.Restart();
         SliderSweep(engine);
         FixedControlChecks(engine);
         LensChecks(engine);

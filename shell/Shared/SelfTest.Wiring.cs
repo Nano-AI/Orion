@@ -35,6 +35,7 @@ static partial class SelfTest {
         var engine = EngineModel.Shared;
         if (engine.Handle == 0) return;
         UndoChecks(engine);
+        UndoPerPhoto(engine);
         CompareChecks(engine);
         DragPictureChecks(engine);
         GalleryChecks(engine);
@@ -44,7 +45,7 @@ static partial class SelfTest {
     }
 
     static void UndoChecks(EngineModel engine) {
-        engine.Open(engine.Current);   // a clean history: earlier checks' settled renders are steps too
+        EditHistory.Restart();   // a clean history: earlier checks' settled renders are steps too
         float ev = engine.Get("exposure_ev"), contrast = engine.Get("contrast");
         engine.Set("exposure_ev", ev + 1);
         engine.Set("exposure_ev", ev + 1.5f);   // the same control inside 0.6 s: one step
@@ -62,6 +63,39 @@ static partial class SelfTest {
         Commands.Run("undo");
         Check(engine.Get("exposure_ev") == ev + 1.5f, "a reset undoes");
         engine.Set("exposure_ev", ev);
+    }
+
+    /// Each photo keeps its own history across a switch, as Lightroom's does:
+    /// two photos of one raw, so the same pixels and two histories.
+    static void UndoPerPhoto(EngineModel engine) {
+        var list = engine.Photos.ToList();
+        int current = engine.Current;
+        string dir = Directory.CreateTempSubdirectory("orion-undo-").FullName;
+        try {
+            string a = Path.Combine(dir, "a.ARW"), b = Path.Combine(dir, "b.ARW");
+            File.CreateSymbolicLink(a, list[current]);
+            File.CreateSymbolicLink(b, list[current]);
+            engine.Load([a, b]);
+            void Go(int i) { engine.Open(i); Arrived(engine); }
+            Go(0);
+            float ev = engine.Get("exposure_ev");
+            engine.Set("exposure_ev", ev + 1);
+            Go(1);
+            bool fresh = !EditHistory.CanUndo;
+            engine.Set("contrast", engine.Get("contrast") + 0.2f);
+            Go(0);
+            bool kept = EditHistory.CanUndo && EditHistory.UndoLabel == "exposure_ev";
+            Commands.Run("undo");
+            bool undone = engine.Get("exposure_ev") == ev && !EditHistory.CanUndo && EditHistory.CanRedo;
+            Go(1);
+            Check(fresh && kept && undone && EditHistory.UndoLabel == "contrast" && !EditHistory.CanRedo,
+                  $"undo survives a switch of photos: A's edit undoes after B, and B's history is its own (B fresh {fresh}, A kept {kept}, A undone {undone}, B's step '{EditHistory.UndoLabel}')");
+        } finally {
+            engine.Load(list);
+            engine.Open(current);
+            Arrived(engine);
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     /// The toolbar and the canvas read one compare state: toggling either way, both follow.

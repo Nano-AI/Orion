@@ -5,7 +5,9 @@ namespace OrionShell.Develop;
 
 /// A port of the Swift app's EditHistory.swift over the session's field values: whole
 /// snapshots rather than deltas, a new branch drops the redoable tail, fifty
-/// deep, reset on every open. Swift records where a control calls
+/// deep. Each photo keeps its own, as Lightroom's does: one left is kept by its
+/// path, the last `Kept` of them, and comes back when the photo does, if the
+/// photo still stands where its history left it (Matches). Swift records where a control calls
 /// `engine.edit(label)`; here every settled render is a candidate, so a panel
 /// cannot forget to record itself. A drag settles once, at its full render.
 /// The label is the control's (CropEdit.Commit) when one said, otherwise the
@@ -18,6 +20,9 @@ static partial class EditHistory {
     sealed record Entry(string Label, float[] State, MaskShape[] Masks, DateTime Time);
 
     const int Depth = 50;
+    /// Photos whose history is kept once left. An entry is a few kilobytes of floats,
+    /// so twenty full histories are a few megabytes; the cache keeps no more pictures.
+    const int Kept = 20;
     static readonly TimeSpan Coalesce = TimeSpan.FromSeconds(0.6);
     /// View state the crop tab writes, not edits: Swift keeps them out of DevelopState.
     /// And spot_count, which the spots row below carries with the spots themselves:
@@ -27,8 +32,11 @@ static partial class EditHistory {
         .Where(f => !NotEdits.Contains(f.Name))
         .SelectMany(f => Enumerable.Range(0, f.Length).Select(i => (f.Name, i))).ToArray();
 
-    static readonly List<Entry> _entries = new();
+    static List<Entry> _entries = new();
     static int _position = -1;
+    /// Whose history is standing, and the others' by path, least recently left first.
+    static string? _photo;
+    static readonly List<(string Photo, List<Entry> Entries, int Position)> _kept = new();
     static string? _label;
     static readonly Dictionary<string, Entry> _defaults = new();
 
@@ -52,9 +60,33 @@ static partial class EditHistory {
 
     static void Opened() {
         var opened = new Entry("Opened", Snapshot(), MaskRows(), DateTime.Now);
-        _defaults.TryAdd(E.Photos[E.Current], opened);
+        string photo = E.Photos[E.Current];
+        _defaults.TryAdd(photo, opened);
+        if (_photo != null && _position >= 0) {
+            _kept.RemoveAll(k => k.Photo == _photo);
+            _kept.Add((_photo, _entries, _position));
+            if (_kept.Count > Kept) _kept.RemoveAt(0);
+        }
+        _photo = photo;
+        int at = _kept.FindIndex(k => k.Photo == photo);
+        if (at >= 0) {
+            var (_, entries, position) = _kept[at];
+            _kept.RemoveAt(at);
+            if (Matches(entries[position], opened)) {
+                (_entries, _position, _label) = (entries, position, null);
+                Changed?.Invoke();
+                return;
+            }
+        }
         Reset(opened);
     }
+
+    /// The photo opened as its history left it: an edit made elsewhere since (another
+    /// app on the sidecar, a sync) makes the history someone else's, and it starts again.
+    static bool Matches(Entry left, Entry now) => left.State.SequenceEqual(now.State) && SameMasks(left.Masks, now.Masks);
+
+    /// A fresh history on the photo standing, for a check that counts steps from zero.
+    internal static void Restart() => Reset(new Entry("Opened", Snapshot(), MaskRows(), DateTime.Now));
 
     /// Names the next settled edit, as `engine.edit("Crop") { … }` does.
     public static void Label(string label) => _label = label;
@@ -133,8 +165,7 @@ static partial class EditHistory {
     }
 
     static void Reset(Entry opened) {
-        _entries.Clear();
-        _entries.Add(opened);
+        _entries = [opened];
         _position = 0;
         _label = null;
         Changed?.Invoke();
