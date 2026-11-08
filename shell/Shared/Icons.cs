@@ -17,6 +17,8 @@ public static class Icons {
 
     static readonly Dictionary<string, string> Paths = new() {
         ["xmark"] = "M6,6 L18,18 M18,6 L6,18",
+        // Lightroom's pick: a pennant on its staff.
+        ["flag"] = "M6,21 V3.5 M6,4.5 H18 L15,9 L18,13.5 H6",
         ["plus"] = "M12,5 L12,19 M5,12 L19,12",
         ["minus"] = "M5,12 L19,12",
         // Three dots as small rings: at the one stroke a round cap alone was a speck.

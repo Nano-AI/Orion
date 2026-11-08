@@ -28,6 +28,8 @@ static partial class SelfTest {
     static partial void SideBySideChecks();
     // Lightroom parity: the clipping overlay and the interactive histogram.
     static partial void ClippingChecks();
+    // Lightroom parity: the zoom presets and keys.
+    static partial void ZoomPresetChecks();
 
     static void CommandChecks() {
         // Every name a control binds to (Commands.Run/CanRun("…") in this tree) is registered.
@@ -54,8 +56,9 @@ static partial class SelfTest {
         string[] registered = ["tab-light", "tab-color", "tab-detail", "tab-optics", "tab-mask", "tab-crop", "tab-presets", "gallery",
             "compare", "compare-side-by-side", "compare-link", "compare-swap", "compare-make-select",
             "swap-split", "fit", "actual-size", "show-clipping", "show-shadow-clipping", "show-highlight-clipping",
+            "zoom-1-4", "zoom-1-2", "zoom-1-1", "zoom-2-1", "zoom-4-1", "zoom-in", "zoom-out",
             "open-photo", "open-folder", "export", "export-all", "hdr-merge", "stack", "stop-batch",
-            "reveal-session-log", "undo", "redo", "reset-adjustments", "rotate-left", "rotate-right", "reject", "rate-0", "rate-1", "rate-2",
+            "reveal-session-log", "undo", "redo", "reset-adjustments", "rotate-left", "rotate-right", "reject", "pick", "flag-reject", "unflag", "rate-0", "rate-1", "rate-2",
             "rate-3", "rate-4", "rate-5", "next-photo", "previous-photo", "select-all", "deselect", "trash", "delete-rejected", "apply-crop",
             "cancel-crop", "mask-overlay", "mask-feather-less", "mask-feather-more", "delete-mask-shape", "toggle-assistant",
             "copy-mcp-setup", "approve-proposal", "reject-proposal", "check-for-updates", "restart-to-update", "feedback"];

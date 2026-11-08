@@ -87,6 +87,32 @@ sealed class Viewport(Action? shown = null) {
         if (IsFit) Jump(Math.Log(Math.Max(1, 1 / Math.Max(FitScale, 0.0001))), Center); else Reset();
     }
 
+    /// Lightroom's zoom presets, as screen pixels per image pixel: 1:4, 1:2, 1:1, 2:1, 4:1.
+    public static readonly double[] Ratios = [0.25, 0.5, 1, 2, 4];
+
+    /// Screen pixels per image pixel on show.
+    public double Ratio => FitScale * Zoom;
+
+    /// `ratio` screen pixels per image pixel about `anchor` (normalized view), never below fit:
+    /// a jump, as the keys' 0 and 9.
+    public void ZoomTo(double ratio, Point anchor) {
+        if (_locked) return;
+        Motion.Stop(this);
+        (_hand, Landing) = (false, null);
+        double zoom = Math.Clamp(ratio / Math.Max(FitScale, 0.0001), 1, MaxZoom);
+        ZoomBy(zoom / Zoom, anchor);
+    }
+
+    /// Ctrl+= and Ctrl+-: the next preset past the ratio on show, in or out; out of the
+    /// smallest, fit. In past the largest, nothing.
+    public void StepZoom(int direction, Point anchor) {
+        double now = Ratio;
+        double? next = direction > 0 ? Ratios.Where(r => r > now * 1.001).Cast<double?>().FirstOrDefault()
+                                     : Ratios.Where(r => r < now / 1.001).Cast<double?>().LastOrDefault();
+        if (next is { } r && r / Math.Max(FitScale, 0.0001) > 1.001) ZoomTo(r, anchor);
+        else if (direction < 0) ZoomTo(0, anchor);
+    }
+
     /// A hand takes hold: a spring in flight stops where it is, and the hand carries on from there.
     public void Begin() { if (_locked) return; Motion.Stop(this); (_hand, Landing) = (true, null); }
 
@@ -292,6 +318,8 @@ static class CanvasState {
 
     /// Under the cursor while a picking tool is armed (TargetedAdjust's hover*).
     public static Point? HoverPoint { get; private set; }
+    /// The pointer over the canvas, as a normalized view point: what the zoom keys zoom about. Null off it.
+    public static Point? Pointer { get; set; }
     public static Color HoverColor { get; private set; }
     public static string HoverCaption { get; private set; } = "";
 

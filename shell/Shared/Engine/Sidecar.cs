@@ -11,11 +11,13 @@ namespace OrionShell;
 ///
 /// `xmp:Rating` -1..5 (-1 is rejected) and `xmp:Label` are the Adobe fields
 /// other editors read; `orion:Develop` is the edit, base64 of DevelopJson.
+/// `orion:Pick` is Lightroom's pick flag, which Lightroom keeps in its catalog
+/// and no XMP field carries: Orion's own, "1" when picked and absent otherwise.
 ///
 /// ⚠ `IMG.xmp` is the same file Lightroom, Camera Raw, Capture One and darktable
-/// keep their own work in, so Orion reads and writes only its three fields
+/// keep their own work in, so Orion reads and writes only its own fields
 /// (decision #370). A file Orion wrote itself is rewritten byte for byte as
-/// before; any other is parsed, those three fields changed in the tree, and
+/// before; any other is parsed, those fields changed in the tree, and
 /// every other node kept. One it cannot parse or place them in is never written.
 ///
 /// Which file is a photo's (decision #405, Adobe's convention in full): `IMG.xmp`
@@ -28,6 +30,8 @@ namespace OrionShell;
 public sealed class Sidecar {
     public int Rating;
     public bool Rejected;
+    /// Lightroom's pick, the third flag beside reject and none; never both with Rejected.
+    public bool Picked;
     public string? Label;
     /// The develop JSON, or null when the file carries none.
     public byte[]? Develop;
@@ -184,7 +188,7 @@ public sealed class Sidecar {
         }
     }
 
-    /// Orion's three fields out of any XMP packet, by namespace rather than by
+    /// Orion's fields out of any XMP packet, by namespace rather than by
     /// prefix (an older Adobe file says `xap:` for `xmp:`), as an attribute or
     /// an element of the same name: XMP allows either (XMP Part 1, serialization).
     public static Sidecar Parse(string text) {
@@ -195,6 +199,7 @@ public sealed class Sidecar {
             s.Rejected = rating < 0;
             s.Rating = (int)Math.Clamp(rating, 0, 5);
         }
+        s.Picked = !s.Rejected && Get(x.Descriptions, OrionPick) == "1";
         s.Label = Get(x.Descriptions, XmpLabel);
         s.Source = Get(x.Descriptions, OrionSource);
         s.RawFileName = Get(x.Descriptions, CrsRawFileName);
@@ -207,7 +212,7 @@ public sealed class Sidecar {
     static readonly XNamespace Rdf = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
     static readonly XName XmpRating = XName.Get("Rating", "http://ns.adobe.com/xap/1.0/"),
         XmpLabel = XName.Get("Label", "http://ns.adobe.com/xap/1.0/"), OrionDevelop = XName.Get("Develop", "http://orion.photo/ns/1.0/"),
-        OrionSource = XName.Get("Source", "http://orion.photo/ns/1.0/"),
+        OrionSource = XName.Get("Source", "http://orion.photo/ns/1.0/"), OrionPick = XName.Get("Pick", "http://orion.photo/ns/1.0/"),
         CrsRawFileName = XName.Get("RawFileName", "http://ns.adobe.com/camera-raw-settings/1.0/");
 
     /// The document and the top-level rdf:Description elements of its one
@@ -227,7 +232,7 @@ public sealed class Sidecar {
         var rdf = doc.Descendants(Rdf + "RDF").ToList();
         var descriptions = rdf.Count == 1 ? rdf[0].Elements(Rdf + "Description").ToList() : [];
         var odd = descriptions.SelectMany(d => d.Elements())
-            .Where(e => e.Name == XmpRating || e.Name == XmpLabel || e.Name == OrionDevelop || e.Name == OrionSource)
+            .Where(e => e.Name == XmpRating || e.Name == XmpLabel || e.Name == OrionDevelop || e.Name == OrionSource || e.Name == OrionPick)
             .FirstOrDefault(e => e.HasElements || e.Attributes().Any(a => !a.IsNamespaceDeclaration));
         why = rdf.Count != 1 ? $"{rdf.Count} rdf:RDF elements where XMP has one"
             : descriptions.Count == 0 ? "no rdf:Description to hold Orion's fields"
@@ -254,6 +259,7 @@ public sealed class Sidecar {
     public string Text() {
         var attributes = new List<string> { $"xmp:Rating=\"{(Rejected ? -1 : Rating)}\"" };
         if (!string.IsNullOrEmpty(Label)) attributes.Add($"xmp:Label=\"{Escape(Label)}\"");
+        if (Picked) attributes.Add("orion:Pick=\"1\"");
         if (Source != null) attributes.Add($"orion:Source=\"{Escape(Source)}\"");
         if (Develop != null) attributes.Add($"orion:Develop=\"{Convert.ToBase64String(Develop)}\"");
         return "<?xpacket begin=\"﻿\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n" +
@@ -268,7 +274,7 @@ public sealed class Sidecar {
                "<?xpacket end=\"w\"?>";
     }
 
-    /// `existing`, another tool's packet, with only Orion's three fields
+    /// `existing`, another tool's packet, with only Orion's own fields
     /// changed (Swift's `Sidecar.merged`, step for step): each is set where it
     /// already is, removed when Orion has no value, and otherwise added as an
     /// attribute of the first rdf:Description, declaring `xmp`/`orion` there if
@@ -279,6 +285,7 @@ public sealed class Sidecar {
         foreach (var (name, prefix, value) in new[] {
                      (XmpRating, "xmp", (Rejected ? -1 : Rating).ToString(CultureInfo.InvariantCulture)),
                      (XmpLabel, "xmp", string.IsNullOrEmpty(Label) ? null : Label),
+                     (OrionPick, "orion", Picked ? "1" : null),
                      (OrionSource, "orion", Source),
                      (OrionDevelop, "orion", Develop == null ? null : Convert.ToBase64String(Develop)) }) {
             var attributes = x.Descriptions.SelectMany(d => d.Attributes(name)).ToList();

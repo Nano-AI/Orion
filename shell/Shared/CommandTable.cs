@@ -56,6 +56,11 @@ static class CommandTable {
         Built("show-clipping", "Show clipping", "J", "ClippingOverlay.cs", () => Loaded && Develop, Clipping.Toggle),
         Built("show-shadow-clipping", "Show shadow clipping", null, "ClippingOverlay.cs", () => Loaded && Develop, () => Clipping.Shadows ^= true),
         Built("show-highlight-clipping", "Show highlight clipping", null, "ClippingOverlay.cs", () => Loaded && Develop, () => Clipping.Highlights ^= true),
+        // Lightroom's zoom presets, about the pointer when it is over the canvas, else the centre.
+        .. Viewport.Ratios.Select(r => Built($"zoom-{Ratio(r).Replace(':', '-')}", $"Zoom {Ratio(r)}", null, "CanvasState.cs",
+                                              () => Loaded && Develop && !Comparing, () => CanvasState.Viewport.ZoomTo(r, ZoomAnchor))),
+        Built("zoom-in", "Zoom in", "Cmd+OemPlus", "CanvasState.cs", () => Loaded && Develop && !Comparing, () => CanvasState.Viewport.StepZoom(1, ZoomAnchor)),
+        Built("zoom-out", "Zoom out", "Cmd+OemMinus", "CanvasState.cs", () => Loaded && Develop && !Comparing, () => CanvasState.Viewport.StepZoom(-1, ZoomAnchor)),
 
         // File
         Built("open-photo", "Open photo…", null, "OrionApp+Files.swift", () => true, LibraryFiles.OpenPhoto),
@@ -84,6 +89,10 @@ static class CommandTable {
         // Over the selection when the focus is part of one (cullScope), so the keys and the strip's menu agree.
         Built("reject", "Reject", "R", "Library.swift", () => Focused != null,
               () => LibraryModel.Shared.SetRejected(Scope, !Focused!.Rejected)),
+        // Lightroom's flags: P picks, X rejects, U clears either. R stays the reject toggle.
+        Built("pick", "Pick", "P", "LibraryModel.cs", () => Focused != null, () => LibraryModel.Shared.SetFlag(Scope, LibraryModel.Flag.Picked)),
+        Built("flag-reject", "Flag as rejected", "X", "LibraryModel.cs", () => Focused != null, () => LibraryModel.Shared.SetFlag(Scope, LibraryModel.Flag.Rejected)),
+        Built("unflag", "Unflag", "U", "LibraryModel.cs", () => Focused != null, () => LibraryModel.Shared.SetFlag(Scope, LibraryModel.Flag.None)),
         .. Enumerable.Range(0, 6).Select(n => Built($"rate-{n}", n == 0 ? "No rating" : $"{n} star{(n == 1 ? "" : "s")}",
                                                     n == 0 ? "OemTilde" : $"D{n}", "Library.swift",
                                                     () => Focused != null, () => LibraryModel.Shared.SetRating(Scope, n))),
@@ -129,6 +138,11 @@ static class CommandTable {
     // stub(#315): <the row's Owner> owns this until the logic moves below the facade
     static Command Stub(string name, string title, string? keys, string owner, Func<bool> canRun) =>
         new(name, title, keys, owner, canRun, null);
+
+    static Avalonia.Point ZoomAnchor => CanvasState.Pointer ?? new Avalonia.Point(0.5, 0.5);
+
+    /// A preset as Lightroom names it: 1:4 under 1, 2:1 over.
+    static string Ratio(double r) => r < 1 ? $"1:{Math.Round(1 / r)}" : $"{Math.Round(r)}:1";
 
     /// handleKey's Escape: an armed tool first, from any tab; then the crop,
     /// reset to the whole frame, and back to Light.
