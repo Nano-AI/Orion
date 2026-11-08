@@ -15,7 +15,7 @@ namespace OrionShell;
 
 /// the Swift app's ToolButton.swift's CanvasTool: what a click on the canvas does.
 /// MaskDraw: a mask shape being drawn on the photo, one armed tool among the rest (#211).
-public enum CanvasTool { None, Targeted, MaskColor, Spot, MaskDraw }
+public enum CanvasTool { None, Targeted, MaskColor, Spot, MaskDraw, WhiteBalance }
 
 /// The buttons of Controls.dc.html, ranked by importance rather than coloured by meaning.
 public enum ButtonKind {

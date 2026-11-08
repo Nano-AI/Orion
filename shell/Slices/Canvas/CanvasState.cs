@@ -363,7 +363,7 @@ static class CanvasState {
     /// A panel shown alone with --panel: it acts as if its tab were selected.
     public static bool Alone(string panel) => App.Run.Panel == panel;
 
-    public static bool WantsLoupe => EngineModel.Shared.Tool is CanvasTool.Targeted or CanvasTool.MaskColor;
+    public static bool WantsLoupe => EngineModel.Shared.Tool is CanvasTool.Targeted or CanvasTool.MaskColor or CanvasTool.WhiteBalance;
 
     /// OrionApp+Canvas.swift `.onChange(of: tab)`: anything armed belongs to the
     /// panel that armed it; the crop tab previews the whole frame, locks the

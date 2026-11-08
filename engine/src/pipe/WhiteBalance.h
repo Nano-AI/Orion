@@ -34,4 +34,25 @@ std::array<float, 3> multipliersFor(const WhiteBalance&, const float xyzToCam[9]
 /// UI can open on the camera's own choice rather than an arbitrary default.
 WhiteBalance estimateFrom(const std::array<float, 3>& camMul, const float xyzToCam[9]);
 
+/// The temperature and tint under which `patch`, camera RGB as rendered with
+/// `gains` (green 1), comes out neutral: the white balance eyedropper's
+/// inversion. `asShotMul` and `asShotRef` are the camera's multipliers and the
+/// locus's at its estimate, the anchor the render divides by
+/// (DevelopPipeline::applyCapture). research/white-balance.md.
+WhiteBalance neutralFor(const std::array<float, 3>& patch, const std::array<float, 3>& gains,
+                        const std::array<float, 3>& asShotMul, const std::array<float, 3>& asShotRef,
+                        const float xyzToCam[9]);
+
+/// Lightroom's fixed presets, in its order, as points on the DNG model.
+/// Daylight, Cloudy and Shade sit on the CIE daylight locus, +10 of Adobe's
+/// tint units above the Planckian; the rest on the Planckian.
+/// research/white-balance.md, research/UNSOURCED.md §33.
+struct WhiteBalancePreset { const char* name; WhiteBalance wb; };
+inline constexpr float kDaylightTint = 10.0f / 150.0f;
+inline constexpr WhiteBalancePreset kWhiteBalancePresets[] = {
+    {"Daylight", {5500.0f, kDaylightTint}}, {"Cloudy", {6500.0f, kDaylightTint}},
+    {"Shade", {7500.0f, kDaylightTint}},    {"Tungsten", {2850.0f, 0.0f}},
+    {"Fluorescent", {3800.0f, 0.0f}},       {"Flash", {5500.0f, 0.0f}},
+};
+
 }  // namespace orion::pipe

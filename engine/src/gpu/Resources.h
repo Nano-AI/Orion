@@ -61,6 +61,10 @@ public:
     void download(void* dst, std::size_t bytesPerRow,
                   std::uint32_t width, std::uint32_t height) const;
 
+    /// Reads the width x height rectangle whose top-left is (x, y), clipped to the texture.
+    void downloadRect(void* dst, std::size_t bytesPerRow, std::uint32_t x, std::uint32_t y,
+                      std::uint32_t width, std::uint32_t height) const;
+
     /// Reads one pixel. Cheap on unified memory — no blit, no round trip.
     void readPixel(std::uint32_t x, std::uint32_t y, void* dst) const;
 

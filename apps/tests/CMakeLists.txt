@@ -9,6 +9,7 @@ add_executable(orion-tests
     main.cpp
     harness.cpp
     tests_color.cpp
+    tests_white_balance.cpp
     tests_io.cpp
     tests_geometry.cpp
     tests_perspective.cpp

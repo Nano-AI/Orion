@@ -234,6 +234,8 @@ void testColorGradeGpu();
 void testToneBandsWithoutGuide();
 void testLocalAdjustments();
 void testBlackWhiteMixGpu();
+void testWhiteBalanceNeutral();
+void testWhiteBalanceAtGpu();
 void testLensAutoScale();
 void testOutputDepth();
 void testAgxLatitudeIsAnAnchoredRescale();

@@ -42,6 +42,19 @@ public sealed partial class Session {
         if (Native.shim_auto_enhance(Shim) == 0) throw new InvalidOperationException($"Auto failed: {LastError.Split('\n')[0]}");
     }
 
+    /// orion_engine_white_balance_at into this session's temperature and tint:
+    /// the patch around `uv` neutral, or with no point the whole frame grey on
+    /// average. Does not render. A refusal changes nothing and says why.
+    public void WhiteBalanceAt(Avalonia.Point? uv, float radius) {
+        var at = uv ?? new Avalonia.Point(0.5, 0.5);
+        if (Native.shim_white_balance(Shim, (float)at.X, (float)at.Y, uv == null ? -1 : radius) == 0)
+            throw new InvalidOperationException($"White balance: {LastError.Split('\n')[0]}");
+    }
+
+    /// The camera's own temperature and tint, read from the engine.
+    public (float TemperatureK, float Tint) AsShot() =>
+        Native.shim_as_shot(Shim, out float k, out float t) != 0 ? (k, t) : throw new InvalidOperationException("As shot failed: no photo");
+
     /// Each MaskShape number by its OrionMaskComponent name: Engine.swift's
     /// cAdjustments row, both ways. The selftest holds this to shim_mask_field_count.
     internal static readonly (string Name, Func<MaskShape, float> Value, Action<MaskShape, float> Put)[] MaskFields = [

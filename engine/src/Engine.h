@@ -182,6 +182,12 @@ public:
     /// move, in place. Renders several times — it is a one-click action, not
     /// something on the interaction path. research/auto-enhance.md.
     void autoEnhance(pipe::Adjustments& adj);
+
+    /// Writes the white balance that makes the patch around displayed point
+    /// (u, v) neutral into `adj`, `radius` a fraction of the frame's width; a
+    /// negative radius balances the whole frame to grey on average. False, with
+    /// `adj` untouched, when there is nothing to balance on. EngineWhiteBalance.cpp.
+    bool whiteBalanceAt(float u, float v, float radius, pipe::Adjustments& adj);
     void exportImage(const std::string& path, const util::ExportOptions&);
 
     /// Encodes with these options and reports the byte count without writing.

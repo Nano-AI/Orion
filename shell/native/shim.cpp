@@ -274,6 +274,23 @@ int shim_auto_enhance(Shim* s) {
            orion_engine_set_adjustments(s->engine, &s->adj) == ORION_OK;
 }
 
+// The white balance from the picture (orion_engine_white_balance_at), into the
+// block and pushed; the rest stays as sent.
+int shim_white_balance(Shim* s, float u, float v, float radius) {
+    shim_settle(s);
+    return orion_engine_white_balance_at(s->engine, u, v, radius, &s->adj) == ORION_OK &&
+           orion_engine_set_adjustments(s->engine, &s->adj) == ORION_OK;
+}
+
+// The camera's own temperature and tint, read only.
+int shim_as_shot(Shim* s, float* temperature_k, float* tint) {
+    OrionAdjustments camera{};
+    if (orion_engine_as_shot(s->engine, &camera) != ORION_OK) return 0;
+    *temperature_k = camera.temperature_k;
+    *tint = camera.tint;
+    return 1;
+}
+
 // The mask group, Engine.swift's cAdjustments + Engine+Brush.swift's
 // pushStrokes, in three calls: shim_mask_set each row's fields by C name
 // (no push), shim_mask_stroke each row's dabs, then shim_mask_commit.

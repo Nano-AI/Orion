@@ -90,6 +90,7 @@ public sealed class ColorLoupe : Panel {
         static byte Byte(float v) => (byte)Math.Round(Math.Clamp(v, 0, 1) * 255);
         var hue = Hue(s.Scene);
         string caption = EngineModel.Shared.Tool == CanvasTool.MaskColor ? "click sets the mask color"
+                       : EngineModel.Shared.Tool == CanvasTool.WhiteBalance ? "click makes this neutral"
                        : hue is { } h ? Bands[Band(h)] : "neutral — no hue";
         CanvasState.SetHover(p, Color.FromRgb(Byte(s.Display[0]), Byte(s.Display[1]), Byte(s.Display[2])), caption);
     }

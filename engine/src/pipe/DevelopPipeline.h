@@ -25,6 +25,7 @@
 #include "raw/RawImage.h"
 
 #include <array>
+#include <optional>
 #include <utility>
 #include <memory>
 #include <string>
@@ -236,6 +237,12 @@ public:
 
     /// The camera's own white balance, used as the starting point.
     [[nodiscard]] WhiteBalance asShotWhiteBalance() const noexcept { return asShot_; }
+
+    /// The white balance under which the last render's patch at frame point
+    /// (fx, fy), `radius` pixels either way, would be neutral; with a negative
+    /// radius, the whole frame's mean (grey world). Empty when the patch has no
+    /// pixel that is neither clipped nor black. DevelopNeutral.cpp.
+    [[nodiscard]] std::optional<WhiteBalance> neutralWhiteBalance(float fx, float fy, int radius) const;
 
     [[nodiscard]] const gpu::Texture& output() const { return pipeline_.output(); }
 

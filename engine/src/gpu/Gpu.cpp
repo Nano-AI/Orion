@@ -170,6 +170,12 @@ void Texture::download(void* dst, std::size_t bytesPerRow,
                     std::min(height, height_));
 }
 
+void Texture::downloadRect(void* dst, std::size_t bytesPerRow, std::uint32_t x, std::uint32_t y,
+                           std::uint32_t width, std::uint32_t height) const {
+    if (x >= width_ || y >= height_) return;
+    impl_->download(dst, bytesPerRow, x, y, std::min(width, width_ - x), std::min(height, height_ - y));
+}
+
 void Texture::readPixel(std::uint32_t x, std::uint32_t y, void* dst) const {
     if (x >= width_ || y >= height_) return;
     impl_->download(dst, bytesPerPixel(format_), x, y, 1, 1);

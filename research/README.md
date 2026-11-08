@@ -30,6 +30,7 @@ support what it is attached to.
 |---|---|
 | [`agent-interaction.md`](agent-interaction.md) | How an agent drives Orion: reply format, CLI over a warm socket, no eval, and the sources behind `get_stats`, `get_proxy region` and `detect_faces`. ⚠ The socket/CLI surface it designed was retired by #280; the survey and the token arithmetic stand - #272-#274, #280 |
 | [`color-pipeline.md`](color-pipeline.md) | Scene-referred design, camera matrices, white balance, AgX display transform |
+| [`white-balance.md`](white-balance.md) | The white balance selector's inversion, Auto as grey world (Buchsbaum 1980), and the presets on the CIE daylight locus and illuminant A |
 | [`camera-profiles.md`](camera-profiles.md) | The rest of a DNG profile — BaselineExposure and HueSatMap |
 | [`demosaic.md`](demosaic.md) | CFA interpolation, and the gap between what we ship and RCD proper |
 | [`black-level.md`](black-level.md) | Noise below black: why the mosaic keeps its sign to the camera profile (EMVA 1288 §2.7, Foi 2009), why the display's lift is noise and not bias, the point-sampled preview, and the patent search |

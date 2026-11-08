@@ -89,7 +89,7 @@ static partial class EditHistory {
     internal static void Restart() => Reset(new Entry("Opened", Snapshot(), MaskRows(), DateTime.Now));
 
     /// Names the next settled edit, as `engine.edit("Crop") { … }` does.
-    public static void Label(string label) => _label = label;
+    public static void Label(string? label) => _label = label;
 
     /// Every field slot, then the tone curve: it is not an OrionAdjustments field
     /// the table reaches, so without it a curve edit, or a preset's, never undid.

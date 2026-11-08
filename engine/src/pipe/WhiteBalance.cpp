@@ -212,4 +212,18 @@ WhiteBalance estimateFrom(const std::array<float, 3>& camMul, const float xyzToC
     return {best, tint};
 }
 
+WhiteBalance neutralFor(const std::array<float, 3>& patch, const std::array<float, 3>& gains,
+                        const std::array<float, 3>& asShotMul, const std::array<float, 3>& asShotRef,
+                        const float xyzToCam[9]) {
+    // Each channel's gain scaled by green over its own value takes the patch to
+    // R = G = B. The render applies asShotMul * multipliersFor(wb) / asShotRef,
+    // so the locus is searched for the multipliers that ratio implies.
+    std::array<float, 3> want{};
+    for (int c = 0; c < 3; ++c) {
+        const float neutral = gains[c] * patch[1] / std::max(patch[c], 1e-9f);
+        want[c] = neutral * asShotRef[c] / std::max(asShotMul[c], 1e-9f);
+    }
+    return estimateFrom(want, xyzToCam);
+}
+
 }  // namespace orion::pipe
