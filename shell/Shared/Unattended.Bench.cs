@@ -126,11 +126,13 @@ sealed partial class App {
         sw.Restart();
         var window = MakeWindow();
         if (window == null) return null;
+        m["window_build_ms"] = sw.Elapsed.TotalMilliseconds;   // MainWindow and every panel constructed
         (window.Width, window.Height) = (1440, 900);   // one laptop-sized window, so every run lays out the same filmstrip
         window.Show();
         window.UpdateLayout();
         Dispatcher.UIThread.RunJobs();
         m["window_ms"] = sw.Elapsed.TotalMilliseconds;
+        m["window_layout_ms"] = m["window_ms"] - m["window_build_ms"];   // shown, measured, arranged, its first jobs run
         m["responsive_ms"] = SinceLaunch();
         m["photos"] = EngineModel.Shared.Photos.Count;
 

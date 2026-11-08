@@ -72,6 +72,7 @@ cmake --build "$BUILD" --target orion_engine -j4
 dotnet publish "$SRC/Orion.csproj" -c Release -r osx-arm64 --self-contained \
     -p:DebugType=None -p:DebugSymbols=false --nologo -v quiet -o "$MACOS"
 echo "  publish   $(ls "$MACOS" | wc -l | tr -d ' ') files, .NET $(dotnet --version)"
+python3 "$ROOT/tools/package-gates.py" ready-to-run "$MACOS"   # Orion.csproj's PublishReadyToRun
 
 # ── Resources ───────────────────────────────────────────────────────────────
 mkdir -p "$RES/data" "$FW"

@@ -28,6 +28,7 @@ This session (PRs 57 to 60), measured with `tools/bench.py --ab` on the RTX 3070
 | Undo across photos (Lightroom parity) | history reset on every open | each photo keeps its own, the last 20 left, 50 steps each |
 | Denoise threshold per starlet scale, ISO 8000 frame, PR 66 (research/high-iso.md §7) | luma 0.82-1.63x off its noise, chroma at luma's deviation (0.61-3.8x under) | a measured per-scale, per-class table after RCD, luma and chroma apart, within 5% |
 | Zoom presets and pick flags (Lightroom parity) | fit and 1:1 only; rating and reject only | 1:4 to 4:1 by command and Ctrl+= / Ctrl+-; P, X, U flags in `orion:Pick`, a Picked filter |
+| Launch to first picture, a published build (ReadyToRun) | 1348 ms, the window 1039 (built 519, laid out 510) | 870 ms, the window 452 (299, 153); one more pass over 50 ms after it (frozen 102 to 156 ms) |
 
 On a GPU slower than 160 ms a render, a burst of typed values or held keys read the histogram and flat frame once per render; `Settled` now times the gap between renders, so it reads once, after the last.
 The clipping overlay's pixel checks wait for the canvas to hold the newest render's copy: on WARP that settle read had been landing it for them, and a copy stand-in that lands 200 ms late now shows it on any GPU; the histogram drag check also waits for the photo it reopens.
