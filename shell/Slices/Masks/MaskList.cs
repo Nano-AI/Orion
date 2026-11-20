@@ -90,7 +90,7 @@ sealed class MaskList : StackPanel {
     /// the canvas, as a new mask does; a range has no placing, so it lands at once.
     IEnumerable<Control> IntoItems(int compose) => [
         Item("Radial", () => _group.Arm(2, compose)), Item("Linear", () => _group.Arm(1, compose)),
-        Item("Brush", () => _group.Arm(3, compose)),
+        Item("Brush", () => _group.Arm(3, compose)), Item("Path", () => _group.Arm(MaskGroup.PathTool, compose)),
         new Separator(),
         Item("Brightness range", () => _group.AddInto(5, compose)), Item("Color range", () => _group.AddInto(6, compose)),
     ];
@@ -171,7 +171,7 @@ sealed class MaskList : StackPanel {
         }
         label.Children.Add(new StackPanel {
             Orientation = Orientation.Horizontal, Spacing = Space.Sm, Margin = new Thickness(Space.Xs, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
-            Children = { KindGlyph(m.Kind), new TextBlock { Text = MaskGroup.KindName(m.Kind), FontSize = Faces.Mark, VerticalAlignment = VerticalAlignment.Center } },
+            Children = { KindGlyph(MaskGroup.ShownKind(m)), new TextBlock { Text = MaskGroup.KindName(MaskGroup.ShownKind(m)), FontSize = Faces.Mark, VerticalAlignment = VerticalAlignment.Center } },
         });
 
         var pick = new Border {

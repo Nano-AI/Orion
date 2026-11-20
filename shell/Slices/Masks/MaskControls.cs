@@ -84,10 +84,10 @@ static class MaskControls {
     }
 
     /// A mask kind's mark: a ring in a ring for a radial (not an eye: the eye is
-    /// visibility), ramp lines for a linear, the pencil for a brush. From the
-    /// shared table, so it keeps the one grid and the one stroke.
+    /// visibility), ramp lines for a linear, the pencil for a brush, an outline
+    /// on its points for a path. From the shared table, so it keeps the one grid and the one stroke.
     public static Control KindGlyph(int kind, double size = IconSize.Sm) => Icons.Create(kind switch {
-        2 => "mask.radial", 1 => "mask.linear", 3 => "pencil", 5 => "mask.range", 6 => "eyedropper", _ => "circle",
+        2 => "mask.radial", 1 => "mask.linear", 3 => "pencil", 5 => "mask.range", 6 => "eyedropper", MaskGroup.PathTool => "mask.path", _ => "circle",
     }, size, Palette.Text);
 
     public static MenuItem Item(string header, Action act) {

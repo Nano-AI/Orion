@@ -62,16 +62,19 @@ public static class MatteStore {
     /// Puts each kind-4 row's matte in its engine slot, by its id, and clears
     /// the slots no matte row holds. Only slots whose id changed are touched, so
     /// this is cheap on every push; a reorder, a removal or an undo moves the
-    /// rasters with their rows. Pushes the adjustments, does not render. True when a slot changed.
+    /// rasters with their rows. A path row's id is its PathMatte.Key, and its
+    /// matte is filled here rather than read. Pushes the adjustments, does not
+    /// render. True when a slot changed.
     public static unsafe bool Upload(Session s, IReadOnlyList<MaskShape> rows) {
         var held = HeldBy.GetOrCreateValue(s);
         bool changed = false;
         for (int i = 0; i < held.Slots.Length; i++) {
-            string? want = i < rows.Count && rows[i].Kind == 4 ? rows[i].MatteId : null;
+            var row = i < rows.Count && rows[i].Kind == 4 ? rows[i] : null;
+            string? path = row == null ? null : PathMatte.Key(row), want = path ?? row?.MatteId;
             if (held.Slots[i] == want) continue;
             changed = true;
             held.Slots[i] = null;
-            if (want != null && Read(s.Path, want) is { } m) {
+            if (want != null && (path != null ? PathMatte.Fill(s, row!) : Read(s.Path, want)) is { } m) {
                 fixed (float* a = m.Alpha)
                     if (Native.orion_engine_set_mask_matte(s.Handle, i, a, m.Width, m.Height) == 0) {
                         held.Slots[i] = want;

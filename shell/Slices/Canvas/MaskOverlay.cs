@@ -32,7 +32,7 @@ static class MaskModel {
 /// writes the result to MaskGroup, which pushes it to the engine.
 [Panel("canvas-mask", Region.Canvas, 30)]
 public sealed class MaskOverlay : Panel, ICustomHitTest {
-    enum Gesture { None, Handle, Draw, Paint }
+    enum Gesture { None, Handle, Draw, Paint, Path }
 
     static bool ReduceMotion => OrionShell.Motion.Reduced;
     static readonly Cursor Hand = new(StandardCursorType.Hand), Cross = new(StandardCursorType.Cross), NoCursor = new(StandardCursorType.None);
@@ -42,6 +42,7 @@ public sealed class MaskOverlay : Panel, ICustomHitTest {
     readonly TextBlock _pillText = new() { FontSize = Faces.Label, Foreground = Palette.Text, VerticalAlignment = VerticalAlignment.Center };
     readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromMilliseconds(16) };
     readonly List<(DateTime At, double Over)> _trail = [];
+    readonly PathPen _pen = new();
     Gesture _gesture;
     MaskHandle _handle;
     MaskHandle? _hot;                      // pressed: accent from pointer-down, before any move
@@ -103,6 +104,7 @@ public sealed class MaskOverlay : Panel, ICustomHitTest {
         if (!Showing) return;
         var map = Map;
         foreach (var (row, at) in Pins(map)) Pin(c, at, G.Hover == G.LayerOf(row));
+        if (_pen.Draw(c, map)) return;
         if (G.Current is not { } m) return;
         if (IsBrush) { BrushRing(c, map, m); return; }
         if (G.Drawing != 0 && _gesture != Gesture.Draw) return;   // armed: the next press draws, the old handles step back
@@ -163,14 +165,14 @@ public sealed class MaskOverlay : Panel, ICustomHitTest {
     }
 
     /// A white line over a dark halo; dashes are in points, as Swift gives them.
-    static void Stroke(DrawingContext c, Geometry g, double opacity, double[]? dash) {
+    internal static void Stroke(DrawingContext c, Geometry g, double opacity, double[]? dash) {
         c.DrawGeometry(null, new Pen(Ink.Black(0.55 * opacity), 3.5, dash == null ? null : new DashStyle(dash.Select(d => d / 3.5), 0)), g);
         c.DrawGeometry(null, new Pen(Ink.White(opacity), 1.5, dash == null ? null : new DashStyle(dash.Select(d => d / 1.5), 0)), g);
     }
 
     static Geometry Polygon(IEnumerable<Point> points) => new PolylineGeometry(points.ToList(), true);
 
-    /// One pin per shape outside the selected mask: a gradient's centre, a stroke's first dab.
+    /// One pin per shape outside the selected mask: a gradient's centre, a stroke's first dab, a path's first point.
     static IEnumerable<(int Row, Point At)> Pins(PictureMap map) {
         int layer = G.SelectedLayer;
         for (int i = 0; i < G.Shapes.Count; i++) {
@@ -178,6 +180,7 @@ public sealed class MaskOverlay : Panel, ICustomHitTest {
             if (G.LayerOf(i) == layer || m.Hidden) continue;
             if (m.Kind is 1 or 2) yield return (i, map.FramePoint(new Point(m.CenterX, m.CenterY)));
             else if (m.Kind == 3 && m.BrushStroke.Count >= 2) yield return (i, map.FramePoint(new Point(m.BrushStroke[0], m.BrushStroke[1])));
+            else if (m.Kind == 4 && m.PathPoints.Count >= 2) yield return (i, map.FramePoint(new Point(m.PathPoints[0], m.PathPoints[1])));
         }
     }
 
@@ -202,6 +205,7 @@ public sealed class MaskOverlay : Panel, ICustomHitTest {
         if (show) _pillText.Text = G.Drawing switch {
             1 => "Drag from where the effect is full to where it fades out.",
             2 => "Drag on the photo to draw a radial mask. A click drops one there.",
+            MaskGroup.PathTool => "Click to add a point, drag to curve it. Click the first point or press Enter to close.",
             _ => $"Paint on the photo. Hold {(OperatingSystem.IsMacOS() ? "Option" : "Alt")} to erase.",
         };
         if (_pillShown == show) return;
@@ -229,7 +233,7 @@ public sealed class MaskOverlay : Panel, ICustomHitTest {
         if (!Showing) return false;
         var map = Map;
         if (G.Drawing != 0 || IsBrush) return map.Rect.Contains(p);
-        return (Shape is { } s && MaskLayout.Hit(p, s, map) != null) || PinAt(p, map) != null;
+        return (Shape is { } s && MaskLayout.Hit(p, s, map) != null) || PinAt(p, map) != null || PathPen.Hits(p, map);
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e) {
@@ -239,7 +243,9 @@ public sealed class MaskOverlay : Panel, ICustomHitTest {
         var q = map.FrameUnit(p);
         StopSpring();   // interrupted: the next drag starts from what is on screen
         var engine = EngineModel.Shared;
-        if (G.Drawing is 1 or 2) {
+        if (_pen.Press(p, map)) {
+            _gesture = Gesture.Path;
+        } else if (G.Drawing is 1 or 2) {
             int kind = G.Drawing;
             engine.BeginInteraction();
             if (!G.Create(kind, MaskLayout.Drawn(kind, q, q, click: true).WriteTo)) { engine.EndInteraction(); return; }
@@ -273,6 +279,7 @@ public sealed class MaskOverlay : Panel, ICustomHitTest {
         var map = Map;
         if (IsBrush) { _cursor = p; G.BrushPreview = false; _layer.InvalidateVisual(); }
         if (_gesture == Gesture.None) { Hover(p, map); return; }
+        if (_gesture == Gesture.Path) { _pen.Move(p, map); _layer.InvalidateVisual(); return; }
         if (G.Current is not { } m) return;
         var q = map.FrameUnit(p);
         switch (_gesture) {
@@ -306,8 +313,9 @@ public sealed class MaskOverlay : Panel, ICustomHitTest {
     /// A pin under the pointer previews its mask's coverage until the pointer leaves it.
     void Hover(Point p, PictureMap map) {
         int? row = IsBrush || G.Drawing != 0 ? null : PinAt(p, map);
-        Cursor = G.Drawing is 1 or 2 ? Cross : IsBrush ? NoCursor
-               : row != null || (Shape is { } s && MaskLayout.Hit(p, s, map) != null) ? Hand : null;
+        Cursor = G.Drawing == MaskGroup.PathTool ? PathPen.Closes(p, map) ? Hand : Cross
+               : G.Drawing is 1 or 2 ? Cross : IsBrush ? NoCursor
+               : row != null || (Shape is { } s && MaskLayout.Hit(p, s, map) != null) || PathPen.Hits(p, map) ? Hand : null;
         if (row is { } r) { _hovering = true; G.Hover = G.LayerOf(r); }
         else if (_hovering) { _hovering = false; G.Hover = null; }
     }
@@ -331,6 +339,7 @@ public sealed class MaskOverlay : Panel, ICustomHitTest {
         _gesture = Gesture.None;
         _hot = null;
         _carry = 0;
+        if (gesture == Gesture.Path) { _pen.Release(); G.Settle(); return; }
         string kind = MaskGroup.KindName(G.Kind).ToLowerInvariant();
         EditHistory.Label(gesture switch {
             Gesture.Paint => _erasing ? "Erase" : "Paint",

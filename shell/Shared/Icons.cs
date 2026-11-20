@@ -28,6 +28,8 @@ public static class Icons {
         ["mask.radial"] = "M3,12 A9,9 0 1 0 21,12 A9,9 0 1 0 3,12 Z M8.5,12 A3.5,3.5 0 1 0 15.5,12 A3.5,3.5 0 1 0 8.5,12 Z",
         ["mask.linear"] = "M4,5 L20,5 M4,12 L20,12 M4,19 L20,19",
         ["mask.range"] = "M3,18 L9,18 L12,6 L15,18 L21,18",
+        // A closed curve through three square points: the pen's path.
+        ["mask.path"] = "M5,18 C3,10 8,4 13,5 C19,6 22,13 18,18 Z M4,17 H6 V19 H4 Z M12,4 H14 V6 H12 Z M17,17 H19 V19 H17 Z",
         ["minus.circle"] = "M3,12 A9,9 0 1 0 21,12 A9,9 0 1 0 3,12 Z M8,12 L16,12",
         ["chevron.down"] = "M6,9 L12,15 L18,9",
         ["chevron.up"] = "M6,15 L12,9 L18,15",

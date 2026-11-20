@@ -64,8 +64,7 @@ public sealed class MaskGroup {
         var rows = session?.ReadMaskGroup() ?? [];
         // A photo just opened has no rows here yet: its names come from its sidecar (Session.Document).
         var named = Shapes.Count > 0 ? Shapes : Session.Rows(session?.Document);
-        for (int i = 0; i < rows.Count && i < named.Count; i++)
-            (rows[i].Name, rows[i].MatteId, rows[i].MatteSource) = (named[i].Name, named[i].MatteId, named[i].MatteSource);
+        for (int i = 0; i < rows.Count && i < named.Count; i++) rows[i].CarryFrom(named[i]);
         Shapes.Clear();
         Shapes.AddRange(rows);
         _selected = Math.Clamp(_selected, 0, Math.Max(Shapes.Count - 1, 0));
@@ -87,8 +86,9 @@ public sealed class MaskGroup {
     public int SelectedLayer => Math.Min(LayerOf(_selected), Max - 1);
     public int LayerCount => Runs().Count;
 
-    /// The kind a press on the photo draws next: 1 linear, 2 radial, 3 brush, 0 none.
-    /// One-shot: the press that draws disarms it.
+    /// The kind a press on the photo draws next: 1 linear, 2 radial, 3 brush,
+    /// PathTool, 0 none. One-shot: the press that draws disarms it, or for the
+    /// pen, the path closing.
     public int Drawing {
         get => _drawing;
         set => Arm(value, null);
@@ -102,9 +102,34 @@ public sealed class MaskGroup {
     public void Arm(int kind, int? into) {
         if (_drawing == kind && DrawInto == into) return;
         (_drawing, DrawInto) = (kind, kind == 0 || Shapes.Count == 0 ? null : into);
+        PathDraft.Clear();
         var engine = EngineModel.Shared;
         if (kind != 0) engine.Tool = CanvasTool.MaskDraw;
         else if (engine.Tool == CanvasTool.MaskDraw) engine.Tool = CanvasTool.None;
+        Changed?.Invoke();
+    }
+
+    /// The pen, armed: not an engine kind. What it makes is a kind-4 row holding a path (research/masking.md §5b).
+    public const int PathTool = 7;
+
+    /// The points placed so far while the pen is armed, MaskShape.PathPoints' layout. No row exists until it closes.
+    public List<float> PathDraft { get; } = [];
+    public bool CanClosePath => _drawing == PathTool && PathDraft.Count >= 3 * PathMatte.Stride;
+
+    /// Enter, or a click on the first point: the draft becomes a row, one undo step,
+    /// and the pen disarms. A full group keeps the draft and the pen.
+    public bool ClosePath() {
+        if (!CanClosePath) return false;
+        var points = PathDraft.ToArray();
+        if (!Create(4, m => { m.PathPoints.AddRange(points); m.Feather = 0; })) return false;
+        Arm(0, null);
+        return true;
+    }
+
+    /// Delete or Backspace while the pen draws.
+    public void RemovePathPoint() {
+        if (PathDraft.Count < PathMatte.Stride) return;
+        PathDraft.RemoveRange(PathDraft.Count - PathMatte.Stride, PathMatte.Stride);
         Changed?.Invoke();
     }
 
@@ -191,8 +216,11 @@ public sealed class MaskGroup {
     }
 
     public static string KindName(int kind) => kind switch {
-        1 => "Linear", 2 => "Radial", 3 => "Brush", 4 => "Selection", 5 => "Range", 6 => "Color", _ => "Off",
+        1 => "Linear", 2 => "Radial", 3 => "Brush", 4 => "Selection", 5 => "Range", 6 => "Color", PathTool => "Path", _ => "Off",
     };
+
+    /// The kind a row shows as: PathTool for a matte row that holds a path.
+    public static int ShownKind(MaskShape m) => m is { Kind: 4, PathPoints.Count: > 0 } ? PathTool : m.Kind;
 
     /// The card's name: the first row's chosen name, else "Radial 2".
     public string DisplayName(int layer) {
@@ -200,7 +228,7 @@ public sealed class MaskGroup {
         if (layer < 0 || layer >= runs.Count) return "";
         var chosen = Shapes[runs[layer][0]].Name?.Trim();
         if (!string.IsNullOrEmpty(chosen)) return chosen;
-        string Word(int i) => Shapes[i].MatteSource ?? KindName(Shapes[i].Kind);
+        string Word(int i) => Shapes[i].MatteSource ?? KindName(ShownKind(Shapes[i]));
         string mine = Word(runs[layer][0]);
         int ordinal = runs.Take(layer + 1).Count(run => Word(run[0]) == mine);
         return $"{mine} {ordinal}";
@@ -218,7 +246,7 @@ public sealed class MaskGroup {
         if (Shapes.Count >= Max) return false;
         var m = new MaskShape { Kind = kind, StartsLayer = Shapes.Count > 0 };
         place?.Invoke(m);
-        Structural($"Add {KindName(kind).ToLowerInvariant()}", () => { Shapes.Add(m); _selected = Shapes.Count - 1; });
+        Structural($"Add {KindName(ShownKind(m)).ToLowerInvariant()}", () => { Shapes.Add(m); _selected = Shapes.Count - 1; });
         return true;
     }
 
