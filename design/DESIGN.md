@@ -19,8 +19,8 @@ Controls and states boards). Committed 2026-10-27.
 
 | Axis | Choice | Why |
 |---|---|---|
-| Neutrals | `tokens.json` greys unchanged, near-perfectly neutral | A tinted grey is a color cast in a raw editor (tokens.json's own rule) |
-| Accent | `accent` role, Periwinkle #8F9BC4 in `dusk` (cyan #4DB6C4 in `hubble` and `belt`), **interaction only**: edited value, slider fill, focus ring, pressed toggle, primary action, and the current selection (you are here). Words on it are Dusk ground #111B26. The edited dot is `status` | The brand identity's UI colour (#407), never in the mark. Low chroma (OKLCH C 0.062), so it reads as a quiet signal, not a brand flood. ⚠ It sits in the indigo band the cyan was chosen to avoid, and its lightness is the label grey's: see Brand identity |
+| Neutrals | `tokens.json` greys, near-perfectly neutral | A tinted grey is a color cast in a raw editor (tokens.json's own rule) |
+| Accent | `accent` role, Periwinkle #8F9BC4 in `dusk` (cyan #4DB6C4 in `hubble` and `belt`), **interaction only**: edited value, slider fill, focus ring, pressed toggle, primary action, and the current selection (you are here). Words on it are Dusk ground #111B26. The edited dot is `status` | The brand identity's UI colour (#407), never in the mark. Low chroma (OKLCH C 0.062), so it reads as a quiet signal, not a brand flood. ⚠ It sits in the indigo band the cyan was chosen to avoid, and its lightness is the dim grey's: see Brand identity |
 | Words | System face (SF Pro on macOS, Segoe UI on Windows) | Native controls read as native; Apple HIG. Deliberate override of the deslop skill's ban on system type |
 | Numbers | Barlow Semi Condensed 500, tabular | Every figure looks read off a dial; condensed fits five-digit Kelvin in a 54 px readout. SIL OFL 1.1, fine to bundle in a proprietary app |
 | Case | Sentence case everywhere; no tracked all-caps labels | Removes the most common generated-UI tell |
@@ -101,10 +101,10 @@ Measured for `dusk`, by `build-tokens.py`'s formulas:
 | Accent on the site's ground #0B0B0C | 7.17:1 |
 | Dusk ground on the accent (primary button) | 6.33:1 |
 | Dusk ground on the hovered primary (`AccentLift`, a quarter of the way to text: #A5AECD) | 7.89:1 |
-| Accent against dim, label | 1.25, 1.05:1; OKLab distance 0.080, 0.055 (cyan: 0.129, 0.097) |
+| Accent against dim, label | 1.13, 1.52:1; OKLab distance 0.063, 0.127 (cyan: 0.097, 0.131) |
 
 ⚠ The last row is the cost of the brand's colour.
-Periwinkle has the lightness of the label grey and little chroma, so an edited value or a lit control is told from its neighbours by hue alone, and less strongly than the cyan was.
+Periwinkle has the lightness of the dim grey and little chroma, so an edited value or a lit control is told from its neighbours by hue alone, and less strongly than the cyan was.
 Every enforced bar still passes; nothing enforces accent-against-grey, because the cyan never came near it.
 
 ## Proposed token changes (stage 2 applies these through `build-tokens.py`)
@@ -127,7 +127,7 @@ Nothing in `shell/` sets a colour, spacing, radius, font size, shadow or icon si
 | Radius | 3 · 5 · 7 | `lg` = `md` + 2: a well holding `md` controls 2 px in, so corners are concentric. A pill is half its height |
 | Shadow | one: black .7, y 1, blur 3 | Only under what a hand grabs (thumb, puck, compare handle); hover and press move it from there |
 | Icons | 24-unit grid kept, one 1.6 stroke, `sm` 12 / `md` 16 | Never stretched to a glyph's bounds; `sm` in a row of text, `md` on a button, tab or nameplate |
-| Colour roles | `warn` apart from `star`; `faint` not for words | A warning is not a rating; faint is 2.5:1 |
+| Colour roles | `warn` apart from `star`; `faint` not for words; `dim` 7:1 on panel and 4.5:1 on ground, raised, hover and surround; `label` 1.3:1 or more from dim and from text (`build-tokens.py` refuses less) | A warning is not a rating; faint is 2.5:1; at 5.0:1 (3.9:1 on hover) beta testers reported dim as faint |
 | Exempt | 1 px hairlines, ring offsets and the 2 px focus ring, the 80 px traffic lights, pills, the tab cells' room (8 at most, never under 4) | `SelfTest.Design` holds every tab name whole inside its cell at 322 and at the widest, with the room the names' face leaves at 322 each side, and the cells equal at the widest (#403) |
 | Exempt, ink | White and black at an opacity, and their stroke widths, wherever they draw over a photograph or a colour wheel (`Ink.White`/`Ink.Black`, the crop, mask, spot and loupe overlays, the navigator, the wheel's cross and puck outline) | They must read on any picture; a UI grey is tuned for the panels and vanishes on a mid-grey sky |
 | Exempt, data | The loupe's sampled colour, a colour mask's swatch, the histogram's channels, the watermark raster (it draws into the exported file) | They show the photograph's values, not the interface's |

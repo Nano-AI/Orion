@@ -61,7 +61,7 @@ public sealed class DetailPanel : StackPanel {
                                            help: "Press on the photo to place a spot, then drag out its source")]),
             Develop.Row(8, [_undoSpot, _clearSpots])));
 
-        _lutRemove = Develop.TextButton("Remove", Palette.Faint, () => {
+        _lutRemove = Develop.TextButton("Remove", Palette.Dim, () => {
             DevelopFacade.orion_engine_clear_lut(Engine.Handle);
             (_lutName, _lutError.Text) = ("", null);
             Engine.Render(preview: false);

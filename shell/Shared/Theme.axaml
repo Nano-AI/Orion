@@ -12,6 +12,11 @@
     <Setter Property="Foreground" Value="{x:Static local:Palette.Text}"/>
     <Setter Property="FontSize" Value="{x:Static local:Faces.Body}"/>
   </Style>
+  <!-- A disabled field's hint is faint, as a disabled button's words are. Fluent draws it
+       in the enabled hint's colour and opacity, which Theme.axaml.cs sets to dim and 1. -->
+  <Style Selector="TextBox:disabled /template/ TextBlock#PART_Placeholder">
+    <Setter Property="Foreground" Value="{x:Static local:Palette.Faint}"/>
+  </Style>
 
   <!-- Every scroll bar in the shell: a 4 px rail-grey pill in a 10 px lane over
        the content's edge, brighter under the pointer and while dragged, and never
