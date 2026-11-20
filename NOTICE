@@ -313,6 +313,447 @@ from the installed package into `Contents/Resources/licenses/`:
     linked as CLAUDE.md requires. COPYING.RUNTIME, the GPL-3.0 text (rendered
     from GCC's own gpl(7) page) and COPYING.LIB travel with the app.
 
+## Libraries OpenCV's image codecs and text rendering bring with them
+
+Since OpenCV 5.1, Homebrew's `imgproc` links HarfBuzz and its `features` and
+`video` link `imgcodecs`, so the same walk brings these too, each linked
+dynamically and each licence file copied verbatim from the installed package
+into `Contents/Resources/licenses/`. Where a library offers a choice of
+licence, the one Orion takes is named. Notices that Homebrew's build compiles
+in and that no copied file carries follow the list. An entry's added copyright
+lines are those its compiled source files carry and its licence file does not
+name, with names and addresses as the files give them; where one holder's files
+give different years, the years are combined.
+
+  HarfBuzz — Copyright © 2010-2022 Google, Inc. and the others its COPYING names. The "Old MIT" licence. Its sources also carry,
+    under the same licence, Copyright © 2016  Elie Roux <elie.roux@telecom-bretagne.eu>.
+    Its Unicode character database functions are Copyright (C) 2012 Grigori Goronzy, under the notice below. Its hash function,
+    fasthash, is Copyright (C) 2012 Zilong Tan (eric.zltan@gmail.com), under the MIT License. Its Universal Shaping Engine and
+    vowel-constraint tables are generated from Microsoft's data, Copyright (c) Microsoft Corporation, under the MIT License,
+    together with Unicode's character database files. Its emoji tables are generated from Unicode's emoji-data.txt, © 2026
+    Unicode®, Inc., under https://www.unicode.org/terms_of_use.html. Its other generated tables (`hb-ucd-table.hh` and the Indic
+    and Arabic tables) are built from Unicode's character database files alone. Of the tables built from those files, only the
+    emoji tables name terms.
+  FreeType — the FreeType License (FTL), taken over the GPL-2.0 FreeType also offers.
+    Portions of this software are copyright © 2026 The FreeType Project (https://freetype.org). All rights reserved.
+    This software is based in part on the work of the FreeType Team.
+    Its BDF and PCF drivers and its hash table are under the notices below.
+  Graphite2 — Copyright (c) 2011-2022 SIL International. The MIT License, taken over the LGPL-2.1+, MPL-2.0 and GPL-2.0+ it also offers.
+  GLib — Copyright the GLib authors (https://gitlab.gnome.org/GNOME/glib). LGPL-2.1-or-later.
+  GNU libintl, gettext's runtime library, through GLib — Copyright (C) 1995-2026 Free Software Foundation, Inc. LGPL-2.1-or-later.
+  PCRE2, through GLib — Copyright (c) 1997-2007 University of Cambridge, (c) 2007-2024 Philip Hazel. BSD 3-Clause with the PCRE2 exception.
+    Its just-in-time compiler, sljit, is under the BSD 2-Clause notice below.
+  libavif — Copyright 2019 Joe Drago. BSD 2-Clause. Its LICENSE carries the notices of the code it includes, among them libyuv's
+    scaler, which Homebrew's build compiles in. Its sources also carry, under the same licence, Copyright 2022-2024 Google LLC,
+    Copyright 2024 Brad Hards and, in `src/obu.c` beside the dav1d notice its LICENSE has, Copyright © 2018, Two Orioles, LLC.
+  libaom — Copyright (c) 2016, Alliance for Open Media. BSD 2-Clause, with the Alliance for Open Media Patent License 1.0, which travels as
+    `aom-PATENTS-1.0.txt`. Its Arm code also carries Copyright (c) 2014, 2023 The WebM project authors, under the same terms. Homebrew's
+    build compiles in fastfeat, under the BSD 3-Clause notice below, and vector, Copyright (c) 2016 Peter Goldsborough, under the MIT
+    License.
+  dav1d — Copyright © 2018-2025, VideoLAN and dav1d authors. BSD 2-Clause. Its sources also carry, under the same licence: Copyright ©
+    2018-2024, Two Orioles, LLC; Copyright © 2015, 2018-2026, Martin Storsjo; Copyright © 2015, 2018, 2024, Janne Grunau; Copyright ©
+    2018, Niklas Haas; and Copyright © 2024, Arm Limited.
+  libvmaf, through libaom — Copyright (c) 2020 Netflix, Inc. BSD-2-Clause-Patent, which carries its own patent grant. It compiles in
+    LIBSVM, Xiph's PSNR-HVS and Tom Distler's IQA library, under the notices below; a port of av-metrics' CIEDE2000, Copyright (c)
+    2019 Joshua Holmer, under the MIT License; and mkdirp, whose files say only "Copyright (c) 2013 Stephen Mathieson" and "MIT
+    licensed".
+  libwebp, with libwebpmux, libwebpdemux and libsharpyuv — Copyright (c) 2010, Google Inc. BSD 3-Clause.
+  libpng — Copyright (c) 1995-2026 The PNG Reference Library Authors and the others its LICENSE names. PNG Reference Library License v2,
+    and v1 for the code of libpng 0.5 through 1.6.35. Its Arm palette code also carries Copyright (c) 2017-2018 Arm Holdings, under the
+    same licence.
+  LibTIFF — Copyright (c) 1988-1997 Sam Leffler, (c) 1991-1997 Silicon Graphics, Inc. The libtiff licence; its LZW code under the
+    University of California's notice in the same file. Its codecs add these copyright notices under the same terms: Copyright (c)
+    2010, Andrey Kiselev <dron@ak4719.spb.edu>; Copyright (c) 2017, Planet Labs; Copyright (c) 2018, Mapbox; Copyright (c) 2022 Even
+    Rouault; Copyright (c) Joris Van Damme <info@awaresystems.be> and Copyright (c) AWare Systems <http://www.awaresystems.be/>. Its
+    CCITT fax decoder is "derived, with permission, from the code in Frank Cringle's viewfax program; Copyright (C) 1990, 1995
+    Frank D. Cringle." Its PixarLog and SGI LogLuv codecs are under their own notices below, which also name Pixar and Greg Larson.
+    Its hash set is Copyright (c) 2008-2009, Even Rouault <even dot rouault at spatialys.com>, under the MIT License.
+  OpenJPEG — Copyright (c) 2002-2014, Universite catholique de Louvain (UCL), Belgium, and the others its LICENSE names. BSD 2-Clause.
+    Its sources also carry, under the same licence: Copyright (c) 2006-2007, Parvatha Elangovan; Copyright (c) 2007, Callum Lerwick
+    <seg@haxxed.com>; Copyright (c) 2007, Jonathan Ballard <dzonatas@dzonux.net>; Copyright (c) 2008, Jerome Fimes, Communications &
+    Systemes <jerome.fimes@c-s.fr>; Copyright (c) 2010-2011, Kaori Hagihara; Copyright (c) 2012, Carl Hetherington; Copyright (c)
+    2015, Mathieu Malaterre <mathieu.malaterre@gmail.com>; Copyright (c) 2015, Matthieu Darbois; Copyright (c) 2016, Even Rouault;
+    Copyright (c) 2017, IntoPIX SA <support@intopix.com>; Copyright (c) 2017, IntoPix SA <contact@intopix.com>; Copyright (c) 2021,
+    Aous Naman; Copyright (c) 2021, Kakadu Software Pty Ltd, Australia; and Copyright (c) 2021, The University of New South Wales,
+    Australia.
+  OpenEXR (libOpenEXR, libOpenEXRCore, libIex, libIlmThread) and Imath — Copyright Contributors to the OpenEXR Project. BSD 3-Clause.
+    OpenEXR's sources also carry, under the same licence: Copyright (c) DreamWorks Animation LLC and Contributors of the OpenEXR
+    Project; Copyright (c) Weta Digital, Ltd and Contributors to the OpenEXR Project; Copyright (c) Autodesk and Contributors of the
+    OpenEXR Project; and Copyright (c) Pixar Animation Studios and Contributors of the OpenEXR Project.
+  OpenJPH, through OpenEXR — Copyright (c) 2019, Aous Naman; Kakadu Software Pty Ltd; The University of New South Wales. BSD 2-Clause.
+    Its sources also carry, under the same licence, Copyright (c) 2026, Osamu Watanabe.
+  libdeflate, through OpenEXR — Copyright 2016 Eric Biggers, Copyright 2024 Google LLC. MIT.
+  XZ Utils' liblzma, through LibTIFF — 0BSD.
+  Zstandard, through OpenEXR and LibTIFF — Copyright (c) Meta Platforms, Inc. and affiliates. BSD 3-Clause, taken over the GPL-2.0 it
+    also offers. Its sources also carry, under that choice, Copyright (c) Yann Collet, Meta Platforms, Inc. and affiliates; Copyright
+    (c) Yann Collet - Meta Platforms, Inc (xxHash); and Copyright (c) 2016 Tino Reichardt. Its decoders of the legacy formats v0.1 to
+    v0.7 are under the BSD 2-Clause notice below. Its dictionary builder compiles in libdivsufsort-lite, Copyright (c) 2003-2008 Yuta
+    Mori, under the MIT License.
+
+The MIT License's terms for the components above whose text is not in
+`licenses/` (HarfBuzz's fasthash, Microsoft's shaping data, libaom's vector,
+libvmaf's CIEDE2000 port and mkdirp, LibTIFF's hash set and libdivsufsort-lite)
+are those in the MIT section below.
+
+GLib and libintl are under the GNU Lesser General Public License 2.1 or later.
+Each is a separate dynamic library in `Contents/Frameworks`: HarfBuzz loads
+GLib, and GLib loads libintl. Orion's own code calls neither. The licence's
+text travels as `LGPL-2.1-or-later.txt`, copied from GLib's package (gettext's
+installs only the GPL-3.0 that covers its programs).
+
+HarfBuzz's Unicode character database functions (`src/hb-ucd.cc`):
+
+    Copyright (C) 2012 Grigori Goronzy <greg@kinoho.net>
+
+    Permission to use, copy, modify, and/or distribute this software for any
+    purpose with or without fee is hereby granted, provided that the above
+    copyright notice and this permission notice appear in all copies.
+
+    THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+    WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+    MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+    ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+    WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+    ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+    OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+FreeType's BDF driver (`src/bdf/README`):
+
+    Copyright (C) 2001-2002 by Francesco Zappa Nardelli
+
+    Permission is hereby granted, free of charge, to any person obtaining
+    a copy of this software and associated documentation files (the
+    "Software"), to deal in the Software without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, sublicense, and/or sell copies of the Software, and to
+    permit persons to whom the Software is furnished to do so, subject to
+    the following conditions:
+
+    The above copyright notice and this permission notice shall be
+    included in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+    IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+    CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+    TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+    SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+    *** Portions of the driver (that is, bdflib.c and bdf.h):
+
+    Copyright 2000 Computing Research Labs, New Mexico State University
+    Copyright 2001-2002, 2011 Francesco Zappa Nardelli
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+    THE COMPUTING RESEARCH LAB OR NEW MEXICO STATE UNIVERSITY BE LIABLE FOR ANY
+    CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT
+    OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+    THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+FreeType's PCF driver (`src/pcf/README`):
+
+    Copyright (C) 2000 by Francesco Zappa Nardelli
+
+    Permission is hereby granted, free of charge, to any person obtaining
+    a copy of this software and associated documentation files (the
+    "Software"), to deal in the Software without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, sublicense, and/or sell copies of the Software, and to
+    permit persons to whom the Software is furnished to do so, subject to
+    the following conditions:
+
+    The above copyright notice and this permission notice shall be
+    included in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+    IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+    CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+    TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+    SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+The two drivers' source files give Francesco Zappa Nardelli's copyright for
+more years than their READMEs: 2001-2014 in the BDF driver's files, 2000-2014 in
+the PCF driver's (`pcfread.c`: "Copyright 2000-2010, 2012-2014 by Francesco
+Zappa Nardelli"), under the notices above.
+
+FreeType's hash table (`src/base/fthash.c`), compiled into its base layer:
+
+    Copyright 2000 Computing Research Labs, New Mexico State University
+    Copyright 2001-2015
+      Francesco Zappa Nardelli
+
+    under the same permission notice and disclaimer as the portions of the
+    BDF driver above.
+
+FreeType's PCF driver compiles in `src/pcf/pcfutil.c`:
+
+    Copyright 1990, 1994, 1998  The Open Group
+
+    Permission to use, copy, modify, distribute, and sell this software and its
+    documentation for any purpose is hereby granted without fee, provided that
+    the above copyright notice appear in all copies and that both that
+    copyright notice and this permission notice appear in supporting
+    documentation.
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+    OPEN GROUP BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+    AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+    Except as contained in this notice, the name of The Open Group shall not be
+    used in advertising or otherwise to promote the sale, use or other dealings
+    in this Software without prior written authorization from The Open Group.
+
+PCRE2's just-in-time compiler, sljit (`deps/sljit/LICENSE`):
+
+    Stack-less Just-In-Time compiler
+
+    Copyright Zoltan Herczeg (hzmester@freemail.hu). All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without modification, are
+    permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright notice, this list of
+      conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright notice, this list
+      of conditions and the following disclaimer in the documentation and/or other materials
+      provided with the distribution.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER(S) AND CONTRIBUTORS ``AS IS'' AND ANY
+    EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+    OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT
+    SHALL THE COPYRIGHT HOLDER(S) OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+    INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+    TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+    BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+    ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+libaom's fastfeat (`third_party/fastfeat/LICENSE`):
+
+    Copyright (c) 2006, 2008 Edward Rosten
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+
+        *Redistributions of source code must retain the above copyright
+         notice, this list of conditions and the following disclaimer.
+
+        *Redistributions in binary form must reproduce the above copyright
+         notice, this list of conditions and the following disclaimer in the
+         documentation and/or other materials provided with the distribution.
+
+        *Neither the name of the University of Cambridge nor the names of
+         its contributors may be used to endorse or promote products derived
+         from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+    CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+    LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+libvmaf's LIBSVM (`libvmaf/src/svm.h`):
+
+    Copyright (c) 2000-2019 Chih-Chung Chang and Chih-Jen Lin
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+
+    1. Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in the
+    documentation and/or other materials provided with the distribution.
+
+    3. Neither name of copyright holders nor the names of its contributors
+    may be used to endorse or promote products derived from this software
+    without specific prior written permission.
+
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR
+    CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+    LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+libvmaf's PSNR-HVS, from Xiph (`libvmaf/src/feature/third_party/xiph/psnr_hvs.c`):
+
+    Copyright 2001-2012 Xiph.Org and contributors.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+
+    - Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+
+    - Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in the
+    documentation and/or other materials provided with the distribution.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+    OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+    PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+    LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+    NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+libvmaf's IQA library, its SSIM and MS-SSIM (`libvmaf/src/feature/iqa/`, whose
+files carry this notice):
+
+    Copyright (c) 2011, Tom Distler (http://tdistler.com)
+    All rights reserved.
+
+    The BSD License
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    - Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+
+    - Redistributions in binary form must reproduce the above copyright notice,
+      this list of conditions and the following disclaimer in the documentation
+      and/or other materials provided with the distribution.
+
+    - Neither the name of the tdistler.com nor the names of its contributors may
+      be used to endorse or promote products derived from this software without
+      specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+    AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+    ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+    LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+    CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+
+LibTIFF's PixarLog codec (`libtiff/tif_pixarlog.c`):
+
+    Copyright (c) 1996-1997 Sam Leffler
+    Copyright (c) 1996 Pixar
+
+    Permission to use, copy, modify, distribute, and sell this software and
+    its documentation for any purpose is hereby granted without fee, provided
+    that (i) the above copyright notices and this permission notice appear in
+    all copies of the software and related documentation, and (ii) the names of
+    Pixar, Sam Leffler and Silicon Graphics may not be used in any advertising or
+    publicity relating to the software without the specific, prior written
+    permission of Pixar, Sam Leffler and Silicon Graphics.
+
+    THE SOFTWARE IS PROVIDED "AS-IS" AND WITHOUT WARRANTY OF ANY KIND,
+    EXPRESS, IMPLIED OR OTHERWISE, INCLUDING WITHOUT LIMITATION, ANY
+    WARRANTY OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+
+    IN NO EVENT SHALL PIXAR, SAM LEFFLER OR SILICON GRAPHICS BE LIABLE FOR
+    ANY SPECIAL, INCIDENTAL, INDIRECT OR CONSEQUENTIAL DAMAGES OF ANY KIND,
+    OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+    WHETHER OR NOT ADVISED OF THE POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF
+    LIABILITY, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE
+    OF THIS SOFTWARE.
+
+LibTIFF's SGI LogLuv codec (`libtiff/tif_luv.c`):
+
+    Copyright (c) 1997 Greg Ward Larson
+    Copyright (c) 1997 Silicon Graphics, Inc.
+
+    Permission to use, copy, modify, distribute, and sell this software and
+    its documentation for any purpose is hereby granted without fee, provided
+    that (i) the above copyright notices and this permission notice appear in
+    all copies of the software and related documentation, and (ii) the names of
+    Sam Leffler, Greg Larson and Silicon Graphics may not be used in any
+    advertising or publicity relating to the software without the specific,
+    prior written permission of Sam Leffler, Greg Larson and Silicon Graphics.
+
+    THE SOFTWARE IS PROVIDED "AS-IS" AND WITHOUT WARRANTY OF ANY KIND,
+    EXPRESS, IMPLIED OR OTHERWISE, INCLUDING WITHOUT LIMITATION, ANY
+    WARRANTY OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+
+    IN NO EVENT SHALL SAM LEFFLER, GREG LARSON OR SILICON GRAPHICS BE LIABLE
+    FOR ANY SPECIAL, INCIDENTAL, INDIRECT OR CONSEQUENTIAL DAMAGES OF ANY KIND,
+    OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+    WHETHER OR NOT ADVISED OF THE POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF
+    LIABILITY, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE
+    OF THIS SOFTWARE.
+
+Zstandard's legacy-format decoders (`lib/legacy/zstd_v01.c` to `zstd_v07.c`), whose 66 sections carry this notice with the
+same text, dated from 2013 to 2016:
+
+    Copyright (C) 2013-2016, Yann Collet.
+
+    BSD 2-Clause License (https://opensource.org/licenses/bsd-license.php)
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are
+    met:
+
+        * Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+        * Redistributions in binary form must reproduce the above
+    copyright notice, this list of conditions and the following disclaimer
+    in the documentation and/or other materials provided with the
+    distribution.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+    OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+    LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+    DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+    THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 ## The application: .NET, Avalonia, Skia and HarfBuzz
 
 The Orion app is C# on .NET 10 with the Avalonia user-interface framework,

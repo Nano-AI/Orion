@@ -211,6 +211,38 @@ done
 GPL7="$(cellar gcc 'share/man/man7/gpl-*.7')"
 [[ -f "$GPL7" ]] || { echo "error: GCC's gpl(7) page not found" >&2; exit 1; }
 mandoc -T utf8 "$GPL7" | col -b > "$RES/licenses/gcc-GPL-3.0.txt"
+# What OpenCV 5.1 brings: its imgproc links HarfBuzz, and its features and video
+# link imgcodecs. ⚠ **A text whose package is not installed is skipped**: an
+# OpenCV that links neither brings none of these, and the per-file check below
+# still stops a bundle that carries one of them without its text.
+for spec in \
+    "harfbuzz-Old-MIT.txt:harfbuzz:COPYING" \
+    "freetype-LICENSE.txt:freetype:LICENSE.TXT" \
+    "graphite2-LICENSE.txt:graphite2:LICENSE" \
+    "LGPL-2.1-or-later.txt:glib:LGPL-2.1-or-later.txt" \
+    "pcre2-BSD-3-Clause.md:pcre2:LICENCE.md" \
+    "libavif-BSD-2-Clause.txt:libavif:LICENSE" \
+    "aom-BSD-2-Clause.txt:aom:LICENSE" \
+    "dav1d-BSD-2-Clause.txt:dav1d:COPYING" \
+    "libvmaf-BSD-2-Clause-Patent.txt:libvmaf:LICENSE" \
+    "libwebp-BSD-3-Clause.txt:webp:COPYING" \
+    "libpng-2.0.txt:libpng:LICENSE" \
+    "libtiff.md:libtiff:LICENSE.md" \
+    "openjpeg-BSD-2-Clause.txt:openjpeg:LICENSE" \
+    "openexr-BSD-3-Clause.md:openexr:LICENSE.md" \
+    "imath-BSD-3-Clause.md:imath:LICENSE.md" \
+    "libdeflate-MIT.txt:libdeflate:COPYING" \
+    "openjph-BSD-2-Clause.txt:openjph:LICENSE" \
+    "xz-0BSD.txt:xz:COPYING.0BSD" \
+    "zstd-BSD-3-Clause.txt:zstd:LICENSE"
+do
+    IFS=: read -r out pkg file <<< "$spec"
+    src="$(cellar "$pkg" "$file")"
+    if [[ -n "$src" ]]; then copy_license "$out" "$src"; fi
+done
+# Homebrew installs no PATENTS for libaom; its patent licence asks to be
+# reproduced with a binary. Upstream's, from libaom v3.15.3.
+cp "$ROOT/licenses/aom-PATENTS-1.0.txt" "$RES/licenses/aom-PATENTS-1.0.txt"
 
 # The .NET runtime, the framework and the assistant terminal's NuGet packages.
 # NOTICE carries the MIT text for each; a package that ships a licence or a
@@ -360,6 +392,26 @@ licence_of() {
         libpugixml*)                echo pugixml-MIT.md ;;
         libgcc_s.*|libgfortran.*)   echo gcc-COPYING.RUNTIME.txt gcc-GPL-3.0.txt ;;
         libquadmath.*)              echo gcc-libquadmath-LGPL-2.1.txt ;;
+        # OpenCV 5.1's. The notices these texts lack are in NOTICE's section on them.
+        libharfbuzz*)               echo harfbuzz-Old-MIT.txt ;;
+        libfreetype.*)              echo freetype-LICENSE.txt ;;
+        libgraphite2.*)             echo graphite2-LICENSE.txt ;;
+        libglib-2.0.*|libintl.*)    echo LGPL-2.1-or-later.txt ;;
+        libpcre2-*)                 echo pcre2-BSD-3-Clause.md ;;
+        libavif.*)                  echo libavif-BSD-2-Clause.txt ;;
+        libaom.*)                   echo aom-BSD-2-Clause.txt aom-PATENTS-1.0.txt ;;
+        libdav1d.*)                 echo dav1d-BSD-2-Clause.txt ;;
+        libvmaf.*)                  echo libvmaf-BSD-2-Clause-Patent.txt ;;
+        libwebp*|libsharpyuv.*)     echo libwebp-BSD-3-Clause.txt ;;
+        libpng*)                    echo libpng-2.0.txt ;;
+        libtiff.*)                  echo libtiff.md ;;
+        libopenjp2.*)               echo openjpeg-BSD-2-Clause.txt ;;
+        libOpenEXR*|libIex-*|libIlmThread-*) echo openexr-BSD-3-Clause.md ;;
+        libImath-*)                 echo imath-BSD-3-Clause.md ;;
+        libdeflate.*)               echo libdeflate-MIT.txt ;;
+        libopenjph.*)               echo openjph-BSD-2-Clause.txt ;;
+        liblzma.*)                  echo xz-0BSD.txt ;;
+        libzstd.*)                  echo zstd-BSD-3-Clause.txt ;;
     esac
 }
 unlicensed=0
