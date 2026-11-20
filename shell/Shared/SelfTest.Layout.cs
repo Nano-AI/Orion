@@ -24,6 +24,7 @@ static partial class SelfTest {
         Rest(engine);   // an earlier check may have left a decode in flight
         SegmentedChecks();
         CaptureChecks();
+        CaptionCheck();
         if (engine.Handle != 0) SettleChecks(engine);
         if (engine.Handle == 0 || engine.Photos.Count < 2) return;
         int start = engine.Current;
@@ -362,6 +363,18 @@ static partial class SelfTest {
 
     /// A cell's title: its words, or the name an icon cell is spoken by.
     static string? Spoken(StateButton b) => Avalonia.Automation.AutomationProperties.GetName(b) is { Length: > 0 } name ? name : b.Label;
+
+    /// Only macOS leaves the toolbar room for its window buttons, so only there may it run under the title bar.
+    static void CaptionCheck() {
+        var window = new MainWindow();
+        bool mac = OperatingSystem.IsMacOS();
+        double left = window.FindControl<Grid>("ToolbarHost")!.Margin.Left;
+        Check(window.ExtendClientAreaToDecorationsHint == mac && (left == 80) == mac
+              && window.ExtendClientAreaTitleBarHeightHint == (mac ? Layout.Toolbar : -1),
+              "the window extends into the title bar only on macOS, and only there leaves the traffic lights 80 px " +
+              $"(extends {window.ExtendClientAreaToDecorationsHint}, title bar {window.ExtendClientAreaTitleBarHeightHint}, toolbar left {left})");
+        window.Close();
+    }
 
     static void ToolbarChecks(Window window) {
         var tips = window.GetVisualDescendants().OfType<ToolbarPanel>().Single().GetVisualDescendants().OfType<StateButton>()
