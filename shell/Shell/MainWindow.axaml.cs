@@ -19,7 +19,8 @@ public partial class MainWindow : Window {
     public MainWindow() : this("Light") { }
 
     /// The tool column's floor: the boards' 322, which every panel is laid out
-    /// for (seven tabs side by side). Its widest is ToolColMax, measured from the
+    /// for (seven tabs side by side), raised only where the tab names' face cannot
+    /// fit them in it. Its widest is ToolColMax, measured from the
     /// tab names' face (MainWindow.ToolColumn.cs, #403): 560 where that face
     /// allows, since past it a slider is longer than any hand needs and the photo pays.
     public const double CanvasMin = 360;
@@ -127,21 +128,20 @@ public partial class MainWindow : Window {
         _ => null,   // sheets open from commands, not from the layout
     };
 
-    /// The tool tabs as one segmented control: the chosen tab a raised pill with
-    /// its icon and name, the rest their icon alone, named by a tooltip with the
-    /// key and to a screen reader. Seven equal cells, the chosen one never
-    /// narrower than its icon and name: at 322 it takes what it needs and the
-    /// icons share the rest; at the widest (ToolColMax) all seven are equal.
+    /// The tool tabs as one segmented control: every tab its icon over its name,
+    /// the chosen one on a raised pill, each named by a tooltip with the key and
+    /// to a screen reader. The cells' floors come from the names (FitToolColumn),
+    /// never from the choice, so choosing a tab moves only the pill.
     void BuildTabBar() {
         for (int i = 0; i < Panels.Tabs.Length; i++) {
             string tab = Panels.Tabs[i];
             TabBar.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
             var button = new StateButton {
-                Kind = ButtonKind.Segment, Height = 24, MinWidth = 0, Padding = new Thickness(TabPadding, 0),   // FitToolColumn may narrow it; SelfTest.Design holds the room at 322 and the widest
+                Kind = ButtonKind.Segment, Height = double.NaN, MinWidth = 0,
                 HorizontalAlignment = HorizontalAlignment.Stretch, CornerRadius = new CornerRadius(Radius.Md),
-                Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Gap, Transitions = [Glide(RenderTransformProperty)], Children = {
+                Content = new StackPanel { Spacing = Space.Xs, Children = {
                     Icons.Create(Panels.TabIcons[i], IconSize.Md, Palette.Text),
-                    new TextBlock { Text = tab, FontSize = Faces.Label, VerticalAlignment = VerticalAlignment.Center, Transitions = [Glide(OpacityProperty)] },
+                    new TextBlock { Text = tab, FontSize = Faces.Mark, HorizontalAlignment = HorizontalAlignment.Center },
                 } },
             };
             ToolTip.SetTip(button, $"{tab} ({Commands.KeyLabel($"tab-{tab.ToLowerInvariant()}")})");
@@ -151,13 +151,9 @@ public partial class MainWindow : Window {
             TabBar.Children.Add(button);
             _tabButtons.Add(button);
         }
-        TabPill.Transitions = [Glide(RenderTransformProperty)];
+        // Ease-out under 200 ms, on a transform only: nothing reflows while it moves.
+        TabPill.Transitions = [new TransformOperationsTransition { Property = RenderTransformProperty, Duration = TimeSpan.FromMilliseconds(180), Easing = Motion.EaseOut }];
     }
-
-    /// Ease-out under 200 ms, on a transform or opacity only: nothing reflows while it moves.
-    static ITransition Glide(AvaloniaProperty property) => property == OpacityProperty
-        ? new DoubleTransition { Property = property, Duration = Motion.Enter, Easing = Motion.EaseOut }
-        : new TransformOperationsTransition { Property = property, Duration = TimeSpan.FromMilliseconds(180), Easing = Motion.EaseOut };
 
     /// The tool tab on show (ToolTab in Swift); commands read and set it.
     public string Tab { get; private set; } = "Light";
@@ -168,39 +164,27 @@ public partial class MainWindow : Window {
         Commands.Key(e);
     }
 
-    /// Shows a tab's panels. The bar is laid out for the new tab at once; on a
-    /// click the pill and the icons then ease there from where they were (a
-    /// FLIP: transforms only) and the name fades in. A key (⌘1–7) or reduced
-    /// motion lands at once.
+    /// Shows a tab's panels. On a click the pill eases from the old tab to the
+    /// new one (a FLIP: transforms only); a key (⌘1–7) or reduced motion lands at once.
     public void Select(string tab, bool animate = false) {
         Tab = tab;
         ToolsHost.Children.Clear();
         ToolsHost.Children.AddRange(_tabs[tab]);
         int to = Array.IndexOf(Panels.Tabs, tab);
-        var was = _tabButtons.Select(Left).ToArray();
         var pill = TabPill.Bounds;
         for (int i = 0; i < _tabButtons.Count; i++) {
-            bool on = i == to;
-            Words(_tabButtons[i]).IsVisible = on;
-            _tabButtons[i].Ink = on ? Palette.Text : null;
-            _tabButtons[i].IsHitTestVisible = !on;   // no hover fill over the pill, and nothing to click there
-            if (on) _tabButtons[i].Measure(Size.Infinity);
-            TabBar.ColumnDefinitions[i].MinWidth = on ? _tabButtons[i].DesiredSize.Width : 0;
+            _tabButtons[i].Ink = i == to ? Palette.Text : null;
+            _tabButtons[i].IsHitTestVisible = i != to;   // no hover fill over the pill, and nothing to click there
         }
         Grid.SetColumn(TabPill, to);
         bool glide = animate && !Motion.Reduced && pill.Width > 0;
         if (glide) TabBar.UpdateLayout();
         Ease(TabPill, RenderTransformProperty, glide ? Shift(pill.X - TabPill.Bounds.X, pill.Width / TabPill.Bounds.Width) : Still, Still);
-        for (int i = 0; i < _tabButtons.Count; i++)
-            Ease((Control)_tabButtons[i].Content!, RenderTransformProperty, glide ? Shift(was[i] - Left(_tabButtons[i]), 1) : Still, Still);
-        Ease(Words(_tabButtons[to]), OpacityProperty, glide ? 0.0 : 1.0, 1.0);
     }
 
     static readonly TransformOperations Still = Shift(0, 1);
     /// Avalonia applies the list left to right (CSS reads it the other way), so the scale goes first and the move is not scaled.
     static TransformOperations Shift(double x, double scaleX) => TransformOperations.Parse(FormattableString.Invariant($"scaleX({scaleX}) translateX({x}px)"));
-    /// Where a tab's icon starts in the bar, by layout alone (a transform in flight is not counted).
-    static double Left(StateButton b) => b.Bounds.X + ((Control)b.Content!).Bounds.X;
     static TextBlock Words(StateButton b) => ((Panel)b.Content!).Children.OfType<TextBlock>().Single();
 
     /// `property` jumps to `from`, then its transition carries it to `to`.
