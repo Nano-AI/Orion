@@ -4,6 +4,8 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
+using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -37,17 +39,90 @@ static partial class SelfTest {
             CanvasState.Viewport.Reset();
             window.Close();
         }
+        FirstRunChecks();
     }
 
-    /// The welcome's entrance with its Open button mid-press: the button animates its own transform
-    /// (a TransformOperations), which the entrance once cast to TranslateTransform and crashed on.
+    /// The welcome in the window, first with no photo ever opened, then after one has: the first run
+    /// says where to start and where to go next, and both ways in are there each time. Settings live
+    /// in a temporary file, as at a window; ORION_SHOTS keeps both at 1440 x 900 and 1000 x 640.
+    static void FirstRunChecks() {
+        var engine = EngineModel.Shared;
+        var list = engine.Photos.ToList();
+        int at = engine.Current;
+        string? settings = ShellSettings.File;
+        var rows = (List<Command>)Commands.All;
+        var real = rows.ToArray();
+        var ran = new List<string>();
+        var window = new MainWindow();
+        string dir = Directory.CreateTempSubdirectory("orion-first-run-").FullName;
+        // The welcome's words on screen, and what its buttons ran.
+        (List<TextBlock> Words, string Ran) Welcome(string shot) {
+            engine.Load([]);
+            var canvas = window.GetVisualDescendants().OfType<CanvasPanel>().Single();
+            window.UpdateLayout();
+            Shot(window, shot);
+            (window.Width, window.Height) = (1000, 640);
+            Shot(window, shot + "-small");
+            (window.Width, window.Height) = (1440, 900);
+            ran.Clear();
+            foreach (var b in canvas.GetVisualDescendants().OfType<StateButton>().Where(b => b.IsEffectivelyVisible))
+                b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            return ([.. canvas.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible)], string.Join(", ", ran));
+        }
+        try {
+            ShellSettings.File = Path.Combine(dir, "settings.json");
+            // The two ways in record that they ran by name, where they would ask for a file dialog the selftest has no window for.
+            for (int i = 0; i < rows.Count; i++)
+                if (rows[i].Name is "open-photo" or "open-folder") { string name = rows[i].Name; rows[i] = rows[i] with { Run = () => ran.Add(name) }; }
+            window.Show();
+            CanvasSlice.Motion.Detach(window);   // the entrance lands at once, as a still shows it
+            var (first, firstRan) = Welcome("welcome-first-run");
+            engine.Load(list);
+            engine.Open(at);
+            Arrived(engine);
+            // The key as the file holds it: renamed, every photographer would see the first run again.
+            bool marked = ShellSettings.Get("photo-opened", 0) == 1;
+            var (later, laterRan) = Welcome("welcome-later");
+            var hint = first.Except(later).ToList();
+            Check(hint.Count == 2 && firstRan == "open-photo, open-folder",
+                  $"a first run's welcome says where to start and where next, which the welcome after a photo has opened does not " +
+                  $"({string.Join(" / ", hint.Select(t => t.Text))}), and its buttons run {firstRan}");
+            Check(hint.Count > 0 && hint.All(t => t.FontSize >= Faces.Mark && Contrast(t.Foreground!, Palette.Surround) >= 4.5),
+                  $"the first-run hint is at least Faces.Mark and 4.5:1 on the surround ({string.Join(", ", hint.Select(t => $"{t.FontSize} pt {Contrast(t.Foreground!, Palette.Surround):0.00}:1"))})");
+            Check(marked && laterRan == "open-photo, open-folder",
+                  $"a photo opening records the first run as over ({marked}), and the welcome after still runs {laterRan}");
+        } finally {
+            for (int i = 0; i < rows.Count; i++) rows[i] = real[i];
+            ShellSettings.File = settings;
+            Directory.Delete(dir, true);
+            window.Close();
+            engine.Load(list);
+            engine.Open(at);
+            Arrived(engine);
+        }
+
+        // WCAG 2's contrast ratio of two solid colours.
+        static double Contrast(IBrush a, IBrush b) {
+            static double Linear(byte v) => v / 255.0 <= 0.04045 ? v / 255.0 / 12.92 : Math.Pow((v / 255.0 + 0.055) / 1.055, 2.4);
+            static double Luminance(IBrush ink) {
+                var c = ((ISolidColorBrush)ink).Color;
+                return 0.2126 * Linear(c.R) + 0.7152 * Linear(c.G) + 0.0722 * Linear(c.B);
+            }
+            double x = Luminance(a), y = Luminance(b);
+            return (Math.Max(x, y) + 0.05) / (Math.Min(x, y) + 0.05);
+        }
+    }
+
+    /// The welcome's entrance with its buttons mid-press: a button animates its own transform (a
+    /// TransformOperations), which the entrance once cast to TranslateTransform on each row and crashed on.
+    /// The buttons sit inside a row now, so every row is pressed too: no row's transform is the entrance's.
     static void WelcomeChecks() {
         var canvas = new CanvasPanel();
         var window = Show(canvas);
         try {
             canvas.Arrive(CanvasState.Scene.Welcome);
-            foreach (var b in canvas.GetVisualDescendants().OfType<StateButton>())
-                b.RenderTransform = Avalonia.Media.Transformation.TransformOperations.Parse("scale(0.97)");
+            foreach (var c in canvas.Children.OfType<StackPanel>().SelectMany(p => p.Children).Concat(canvas.GetVisualDescendants().OfType<StateButton>()))
+                c.RenderTransform = Avalonia.Media.Transformation.TransformOperations.Parse("scale(0.97)");
             string? threw = null;
             try { Frames(); } catch (InvalidCastException e) { threw = e.Message; }
             Check(threw == null, $"the welcome's entrance survives its button's press transform{(threw == null ? "" : $" ({threw})")}");

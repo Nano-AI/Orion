@@ -16,7 +16,9 @@ namespace OrionShell.CanvasSlice;
 /// Order 0, so the overlays (crop, mask, spots, compare) stack over it.
 [Panel("canvas", Region.Canvas, 0)]
 public sealed class CanvasPanel : Panel {
-    readonly StackPanel _welcome = Welcome();
+    readonly TextBlock _start = Hint("Open a photo to start, or a folder to browse a whole shoot.", Faces.Body),
+                       _next = Hint("Then drag a slider on the right. The strip below steps through the folder.", Faces.Label);
+    readonly StackPanel _welcome;
     readonly NodeGarden _garden = new();   // behind the welcome, at near-zero contrast
     readonly TextBlock _note = new() { FontSize = Faces.Label, Foreground = Palette.Dim, TextAlignment = TextAlignment.Center,
                                        TextWrapping = TextWrapping.Wrap, MaxWidth = 360 };
@@ -37,7 +39,26 @@ public sealed class CanvasPanel : Panel {
     readonly List<(ulong T, double V)> _x = [], _y = [];
     Interactive? _host;
 
+    /// Set the first time a photo opens with settings to keep, which is at a window: until then the
+    /// welcome carries the first-run hint. Headless there are no settings, so it always does there.
+    const string OpenedKey = "photo-opened";
+    static bool FirstRun => ShellSettings.Get(OpenedKey, 0) == 0;
+    static bool _marked;
+
+    static CanvasPanel() {
+        EngineModel.Shared.Opened += MarkOpened;
+        if (EngineModel.Shared.Handle != 0) MarkOpened();   // a photo that opened before this class was first used
+    }
+
+    /// Once a launch with settings, not on every photo the arrow keys step through: each look reads the file.
+    static void MarkOpened() {
+        if (_marked || ShellSettings.File == null) return;
+        _marked = true;
+        if (FirstRun) ShellSettings.Set(OpenedKey, 1);
+    }
+
     public CanvasPanel() {
+        _welcome = Welcome(_start, _next);
         Margin = new Thickness(CanvasState.Inset);
         Background = Brushes.Transparent;   // the whole canvas takes a press, as the MTKView does
         _picture = new Drawn(c => {
@@ -106,6 +127,7 @@ public sealed class CanvasPanel : Panel {
             Motion.Run(_loader, dt => { _loader.Advance(dt); return CanvasState.Now == CanvasState.Scene.Loading; });
         }
         if (scene != CanvasState.Scene.Welcome) return;
+        _start.IsVisible = _next.IsVisible = FirstRun;
         Motion.Run(_garden, dt => { _garden.Advance(dt); return CanvasState.Now == CanvasState.Scene.Welcome; });
         // The rows fade in turn; the rise is the column's, whose transform is ours alone. A row's own
         // transform is not: the Open button animates it for its press, and casting it crashed the app.
@@ -468,8 +490,9 @@ public sealed class CanvasPanel : Panel {
     public const double WelcomeMark = 112;
     static readonly Color Alnilam = BrandArt.Load("symbol-animatable.svg").Shapes.Single(s => s.Id == "star-mid").Fill!.Value;
 
-    /// Nothing open yet: the mark, the name, one line, and the way in, the one primary button.
-    static StackPanel Welcome() => new() {
+    /// Nothing open yet: the mark, the name, one line, and the two ways in, a photo (the one primary
+    /// button) or a folder. On a first run `start` says where to begin and `next` where to go after.
+    static StackPanel Welcome(TextBlock start, TextBlock next) => new() {
         HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Spacing = Space.Sm,
         Children = {
             new Artwork("welcome-mark.svg", WelcomeMark) {
@@ -478,12 +501,23 @@ public sealed class CanvasPanel : Panel {
             },
             new TextBlock { Text = "Orion", FontSize = Faces.Display, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center },
             new TextBlock { Text = "A darkroom for raw files.", Foreground = Palette.Dim, HorizontalAlignment = HorizontalAlignment.Center },
-            new StateButton("folder", "Open a raw file", () => Commands.Run("open-photo"), ButtonKind.Primary) {
-                Height = 28, Margin = new Thickness(0, Space.Lg, 0, 0), HorizontalAlignment = HorizontalAlignment.Center,
-            },
+            new StackPanel { Spacing = Space.Md, Margin = new Thickness(0, Space.Lg, 0, 0), Children = {
+                start,
+                new StackPanel { Orientation = Orientation.Horizontal, Spacing = Space.Sm, HorizontalAlignment = HorizontalAlignment.Center, Children = {
+                    new StateButton(null, "Open a photo", () => Commands.Run("open-photo"), ButtonKind.Primary) { Height = 28 },
+                    new StateButton(null, "Open a folder", () => Commands.Run("open-folder")) { Height = 28 },
+                } },
+                next,
+            } },
             new TextBlock { Text = "ARW, DNG, NEF, CR2, CR3, RAF, ORF, RW2. Sony is the tested one.", FontSize = Faces.Mark,
                             Foreground = Palette.Dim, Margin = new Thickness(0, Space.Sm, 0, 0), HorizontalAlignment = HorizontalAlignment.Center },
         },
+    };
+
+    /// Label, not Dim: Dim on the surround is 4.2:1, under the 4.5 words need.
+    static TextBlock Hint(string text, double size) => new() {
+        Text = text, FontSize = size, Foreground = Palette.Label, TextWrapping = TextWrapping.Wrap,
+        TextAlignment = TextAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
     };
 }
 
