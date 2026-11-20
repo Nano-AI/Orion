@@ -135,8 +135,13 @@ static class LibraryUi {
 
     /// The name now; the exposure under it when the tooltip first opens, so
     /// listing a folder never reads every file's metadata.
+    /// Above the cell, never on the pointer: near the screen's foot Avalonia flips a tip placed at the
+    /// pointer up onto it (keeping its 20 px offset) and keeps it open while the pointer is on it, so
+    /// the tip, not the strip or the gallery, takes the wheel.
     public static void Tip(Control cell, LibraryModel.Photo photo) {
         ToolTip.SetTip(cell, photo.Name);
+        ToolTip.SetPlacement(cell, PlacementMode.Top);
+        ToolTip.SetVerticalOffset(cell, 0);
         cell.AddHandler(ToolTip.ToolTipOpeningEvent, (_, _) => ToolTip.SetTip(cell, photo.Tooltip));
     }
 

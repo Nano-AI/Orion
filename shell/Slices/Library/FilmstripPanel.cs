@@ -69,9 +69,11 @@ public sealed class FilmstripPanel : Grid {
         // Apple's reposition spring: damping 1, response 0.4 (Shared/Design/Spring.cs).
         _glide = new Spring(_film, 0.4) { Precision = 0.5 };
         _glide.Moved += () => _film.Offset = _film.Offset.WithX(_glide.Value);
-        // A mouse has only a vertical wheel: here it scrolls along the strip. A trackpad's sideways swipe passes through.
-        _film.AddHandler(PointerWheelChangedEvent, (_, e) => {
-            if (e.Delta.X != 0 || e.Delta.Y == 0) return;
+        // A mouse has only a vertical wheel: here it scrolls along the strip, from anywhere on the strip (the stack
+        // suggestion lies over the film). Mostly vertical is enough: a tilt or free-spinning wheel or a touchpad adds a
+        // little sideways delta, and the ScrollViewer would scroll by that alone. A trackpad's sideways swipe passes through.
+        AddHandler(PointerWheelChangedEvent, (_, e) => {
+            if (Math.Abs(e.Delta.Y) <= Math.Abs(e.Delta.X)) return;
             _glide.Snap(Math.Max(0, _film.Offset.X - e.Delta.Y * WheelStep));   // the hand takes over from a glide
             e.Handled = true;
         }, RoutingStrategies.Tunnel);
@@ -80,13 +82,14 @@ public sealed class FilmstripPanel : Grid {
         var suggestion = new StackSuggestion();   // over the film's right end, when the folder holds a stack
         SetColumn(suggestion, 2);
         Children.Add(suggestion);
-        // A narrower strip can hide the open frame: show it again, at once.
+        // The strip's width changed (a narrower one can hide the open frame): show it again, at once.
         _film.PropertyChanged += (_, e) => {
             if (e.Property == ScrollViewer.ViewportProperty) Reveal(glide: false);
         };
 
         var library = LibraryModel.Shared;
-        library.Changed += () => { Rebuild(); Reveal(glide: false); };
+        library.Changed += Rebuild;   // no Reveal: each batch of marks read would undo a scroll the hand made
+        library.Rearranged += () => Reveal(glide: false);
         library.SelectionChanged += Rebuild;
         EngineModel.Shared.Opened += () => { Ring(); Reveal(glide: true); };
         Rebuild();
@@ -121,7 +124,8 @@ public sealed class FilmstripPanel : Grid {
 
     /// The open frame into view with a frame of room beside it, moving the roll
     /// no further than that and not at all when it already shows: by the spring
-    /// when a photo opens, at once when the strip changed under it.
+    /// when a photo opens, at once when the strip's width changes or a filter
+    /// or an order is chosen.
     void Reveal(bool glide) {
         int at = _ringed == null ? -1 : _frames.Children.IndexOf(_cells[_ringed]);
         // From where the roll is headed, or where a trackpad left it.

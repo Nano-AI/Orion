@@ -3,8 +3,11 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
+using Avalonia.VisualTree;
 using OrionShell.CanvasSlice;
 using OrionShell.Chrome;
 using OrionShell.Develop;
@@ -44,6 +47,97 @@ static partial class SelfTest {
         MaskIdsInHistory(engine);
         GroupCulling(engine);
         MarksOffTheUiThread(engine);
+        StripWheel(engine);
+    }
+
+    /// Issue 55: a wheel over the strip moves the roll, whatever else is going on. Four links to
+    /// the open photo overflow a 420 px strip, which sits at its window's foot, as the app's does.
+    static void StripWheel(EngineModel engine) {
+        var list = engine.Photos.ToList();
+        int current = engine.Current;
+        string dir = Directory.CreateTempSubdirectory("orion-strip-wheel-").FullName;
+        try {
+            var links = Enumerable.Range(1, 4).Select(i => Path.Combine(dir, $"f{i}{Path.GetExtension(list[current])}")).ToList();
+            foreach (var link in links) File.CreateSymbolicLink(link, list[current]);
+            engine.Load(links);
+            var library = LibraryModel.Shared;
+            library.Current = LibraryModel.Filter.All;   // the frames are counted below: all of them, in name order
+            library.Sort(LibraryModel.Order.Name);
+            OpenAndWait(engine, 0);
+            var strip = new FilmstripPanel();
+            ToolTip.SetServiceEnabled(strip, false);   // no hover opens a tooltip before the tooltip's own check
+            var window = Show(new Border { Width = 420, Height = Layout.Filmstrip, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom, Child = strip });
+            var film = strip.GetVisualDescendants().OfType<ScrollViewer>().Single();
+            Point Middle(Visual v) => v.TranslatePoint(new Point(v.Bounds.Width / 2, v.Bounds.Height / 2), window)!.Value;
+            double Wheel(Visual over, Vector delta) {
+                film.Offset = film.Offset.WithX(0);
+                window.MouseWheel(Middle(over), delta);
+                return film.Offset.X;
+            }
+            Border FrameAt(int i) {
+                window.UpdateLayout();
+                return strip.GetVisualDescendants().OfType<Border>().Where(b => b.Focusable && b.Cursor != null).ElementAt(i);
+            }
+            bool Shows(Border frame) => frame.TranslatePoint(default, film)!.Value.X is var x && x >= 0 && x + frame.Bounds.Width <= film.Viewport.Width;
+
+            double scrolled = Wheel(film, new Vector(0, -1));
+            library.SetRating(library.Photos[1], library.Photos[1].Rating);   // a mark lands, as each batch of sidecar reads does
+            window.UpdateLayout();
+            double kept = film.Offset.X;
+            Wheel(film, new Vector(0, -1));
+            library.Sort(LibraryModel.Order.Name);
+            bool bySort = Shows(FrameAt(0));
+            Wheel(film, new Vector(0, -1));
+            library.Current = LibraryModel.Filter.Unrated;   // the links carry no sidecar: all four still show
+            bool byFilter = Shows(FrameAt(0));
+            library.Current = LibraryModel.Filter.All;
+            Check(scrolled > 0 && kept == scrolled && bySort && byFilter,
+                  $"a mark landing keeps the roll where the wheel put it ({scrolled:0} → {kept:0} px), and a sort or a filter chosen by hand brings the open frame back into view (sort {bySort}, filter {byFilter})");
+
+            double notch = Wheel(film, new Vector(0, -1)), tilted = Wheel(film, new Vector(0.05, -1)), swiped = Wheel(film, new Vector(-0.6, 0.05));
+            Check(notch > 0 && tilted == notch && swiped > 0,
+                  $"a wheel notch with a little sideways delta moves the roll as far as a straight one ({tilted:0} of {notch:0} px), and a sideways swipe still scrolls it ({swiped:0} px)");
+
+            var bar = strip.GetVisualDescendants().OfType<StackSuggestion>().Single();
+            bar.IsVisible = true;   // by hand: CI's generated DNG has no exposure to group frames by
+            window.UpdateLayout();
+            double overBar = Wheel(bar, new Vector(0, -1));
+            bar.IsVisible = false;
+            Check(overBar > 0, $"a wheel over the stack suggestion, on the film's right end, moves the roll ({overBar:0} px)");
+
+            // The hover itself, not ToolTip.SetIsOpen: so opened, a tip placed at the pointer landed clear of the frame.
+            ToolTip.SetServiceEnabled(strip, true);
+            film.Offset = film.Offset.WithX(0);
+            var at = Middle(film);
+            window.MouseMove(at);
+            var cell = (window.InputHitTest(at) as Visual)?.GetSelfAndVisualAncestors().OfType<Border>().FirstOrDefault(b => b.Focusable && b.Cursor != null);
+            Frames(() => cell != null && ToolTip.GetIsOpen(cell), 10);   // the hover's 400 ms runs on the main loop's timers
+            bool tip = cell != null && ToolTip.GetIsOpen(cell);
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();   // an overlay popup takes its place on the next frame
+            window.UpdateLayout();
+            Rect? Box(Visual? v) => v?.TranslatePoint(default, window) is { } p ? new Rect(p, v.Bounds.Size) : null;
+            // Headless popups are overlays in the window, so the tip is among its visuals.
+            Rect? tipBox = Box(window.GetVisualDescendants().OfType<ToolTip>().FirstOrDefault(t => t.IsEffectivelyVisible)), cellBox = Box(cell);
+            bool clear = tipBox is { } tipAt && cellBox is { } cellAt && !tipAt.Intersects(cellAt);
+            double underTip = Wheel(film, new Vector(0, -1));
+            Check(tip && clear && underTip > 0,
+                  $"a frame's tooltip, the strip at the window's foot, keeps clear of the frame and the wheel over it moves the roll (open {tip}, at {tipBox} by the frame at {cellBox}, {underTip:0} px)");
+            if (cell != null) ToolTip.SetIsOpen(cell, false);
+
+            // Last: nothing after it waits for the glide to land.
+            film.Offset = film.Offset.WithX(0);
+            var third = FrameAt(2);
+            bool hidden = !Shows(third);
+            OpenAndWait(engine, 2);
+            Frames(() => Shows(third), 10);
+            Check(hidden && Shows(third), $"opening a frame out of view still brings the roll to it (hidden {hidden}, then shown {Shows(third)})");
+            window.Close();
+        } finally {
+            engine.Load(list);
+            // Not waited for, as MarksOffTheUiThread does not: the checks after these have never run with a photo open, and running them is a change of its own.
+            engine.Open(current);
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     /// Each history entry holds its mask rows with their names and matte ids
