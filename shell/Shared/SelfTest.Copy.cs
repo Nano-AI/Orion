@@ -1,5 +1,12 @@
+using System.Reflection;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.LogicalTree;
 using Avalonia.Media.Imaging;
+using Avalonia.VisualTree;
 using OrionShell.CanvasSlice;
+using OrionShell.Chrome;
 
 namespace OrionShell;
 
@@ -85,6 +92,138 @@ static partial class SelfTest {
             shown.OnGpu = onGpu;
             engine.Set("exposure_ev", start);
         }
+        BatchChecks(engine);
     }
 
+    /// Copy, paste and sync settings as commands, and the toolbar's Batch menu that reaches them,
+    /// over two links to the open photo in a temporary folder: Sync writes other photos' sidecars.
+    static void BatchChecks(EngineModel engine) {
+        var list = engine.Photos.ToList();
+        int current = engine.Current;
+        string source = engine.Photos[current], dir = Directory.CreateTempSubdirectory("orion-batch-").FullName;
+        string a = Path.Combine(dir, "a" + Path.GetExtension(source)), b = Path.Combine(dir, "b" + Path.GetExtension(source));
+        var owner = App.Window;
+        try {
+            Uncopy();
+            File.CreateSymbolicLink(a, source);
+            File.CreateSymbolicLink(b, source);
+            SetAside();
+            engine.Load([a, b]);
+            OpenAndWait(engine, 0);
+            var window = Shell();
+            Click(window, TabButton(window, "Presets"));
+            bool Noted() => window.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text?.StartsWith("Settings copied.") == true && t.IsEffectivelyVisible);
+            Check(Commands.CanRun("copy-settings") && Commands.Run("paste-settings").EndsWith("not available now")
+                  && Commands.Run("sync-settings").EndsWith("not available now") && !Noted(),
+                  "copy settings can run on the open photo; paste and sync refuse with nothing copied");
+
+            var bar = window.GetVisualDescendants().OfType<ToolbarPanel>().Single();
+            StateButton? Batch() => bar.GetVisualDescendants().OfType<StateButton>().FirstOrDefault(x => x.Label == "Batch" && x.IsEffectivelyVisible);
+            var batch = Batch();
+            var items = (batch?.Flyout as MenuFlyout)?.Items.OfType<MenuItem>().ToList() ?? [];
+            string[] names = ["copy-settings", "paste-settings", "sync-settings", "select-all", "export-all"];
+            Check(items.Select(i => i.Tag as string).SequenceEqual(names)
+                  && items.All(i => Words(i).FirstOrDefault() == Commands.Find((string)i.Tag!)!.Title
+                                    && Words(i).ElementAtOrDefault(1) == Commands.KeyLabel((string)i.Tag!))
+                  && ToolTip.GetTip(batch!) is string { Length: > 0 },
+                  $"the toolbar's Batch menu lists copy, paste, sync, select all and export all, each with its key ({string.Join(", ", items.Select(i => string.Join(" ", Words(i))))})");
+            // Opened with nothing copied, so paste and sync are the ones to grey; Copy settings from it shows the tab's note at once.
+            var greyed = new List<object?> { "no menu" };
+            bool faint = false;
+            if (batch?.Flyout is MenuFlyout menu) {
+                Click(window, batch);
+                greyed = items.Where(i => i.IsEnabled != Commands.CanRun((string)i.Tag!) || i.IsEnabled == (i.Tag as string is "paste-settings" or "sync-settings"))
+                    .Select(i => i.Tag).ToList();
+                faint = items.Where(i => !i.IsEnabled).SelectMany(i => ((Control)i.Header!).GetLogicalDescendants().OfType<TextBlock>())
+                    .All(t => t.Foreground == Palette.Faint);
+                items[0].RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+                menu.Hide();
+                Settle(window);
+            }
+            Check(greyed.Count == 0 && faint && Labelled(window, "Paste").IsEnabled && Noted(),
+                  $"the menu greys paste and sync until a copy, in a greyed button's ink, and its Copy settings is the Presets tab's copy (out of step: {string.Join(", ", greyed)})");
+
+            // Lightroom's keys, through the window as a hand presses them.
+            var cmd = (OperatingSystem.IsMacOS() ? RawInputModifiers.Meta : RawInputModifiers.Control) | RawInputModifiers.Shift;
+            engine.Set("exposure_ev", 0.7f);
+            Type(window, Key.C, PhysicalKey.C, cmd);
+            engine.Set("exposure_ev", -1.3f);
+            Type(window, Key.V, PhysicalKey.V, cmd);
+            Check(engine.Get("exposure_ev") == 0.7f && Develop.EditHistory.UndoLabel == "Paste",
+                  $"copy settings, a change, then paste settings by their keys puts the copied value back ({engine.Get("exposure_ev")} EV, undo {Develop.EditHistory.UndoLabel})");
+            // Typed into the assistant's terminal, the same key is the terminal's: here one that never started a process.
+            engine.Set("exposure_ev", -1.3f);
+            var typed = new KeyEventArgs { Source = new Iciclecreek.Terminal.TerminalControl(), Key = Key.V,
+                                           KeyModifiers = (OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control) | KeyModifiers.Shift };
+            Commands.Key(typed);
+            Check(!typed.Handled && engine.Get("exposure_ev") == -1.3f,
+                  $"paste settings' key typed into the assistant's terminal is the terminal's, not a paste onto the photo ({engine.Get("exposure_ev")} EV)");
+
+            string synced = Commands.Run("sync-settings");
+            Pump(50);
+            Check(synced == "ran sync-settings" && window.OwnedWindows.Any(w => w.Tag as string == "sync-confirmation") && !File.Exists(Sidecar.PathFor(b)),
+                  $"sync settings asks before it writes another photo's sidecar ({synced})");
+            foreach (var asked in window.OwnedWindows.ToList()) asked.Close();
+
+            // The widest toolbar, Compare on: every word at the window's 1440, and still no overlap at 1100; then the Library face.
+            Commands.Run("compare");
+            Settle(window);
+            string wide = Overflow(bar);
+            bool worded = bar.GetVisualDescendants().OfType<StateButton>().Any(x => x.Label == "Compare");
+            Check(wide == "" && worded, $"at 1440 wide with Compare on the toolbar fits with every word ({wide})");
+            window.Width = 1100;
+            Settle(window);
+            Shot(window, "toolbar-1100-develop-compare");
+            string develop = Overflow(bar);
+            Commands.Run("compare");
+            Commands.Run("gallery");
+            Settle(window);
+            Shot(window, "toolbar-1100-library");
+            string library = Overflow(bar);
+            bool inLibrary = Batch() != null && !Commands.CanRun("copy-settings") && !Commands.CanRun("paste-settings") && Commands.CanRun("sync-settings");
+            Sheets.CopiedSettings.Copy();   // re-reads the tab's buttons while the Library is up: greyed there
+            Commands.Run("gallery");
+            Settle(window);
+            Check(Labelled(window, "Copy").IsEnabled && Labelled(window, "Paste").IsEnabled,
+                  "back from the Library, the Presets tab's Copy and Paste are live again");
+            Check(develop == "" && library == "" && inLibrary,
+                  $"at 1100 wide the toolbar's controls fit side by side, Compare on and in the Library, where Batch syncs but does not copy or paste ({develop} | {library})");
+        } finally {
+            if (App.Window != owner) App.Window?.Close();
+            typeof(App).GetProperty(nameof(App.Window))!.SetValue(null, owner);   // a later check's dialog would sit over a closed window
+            engine.Load(list);
+            OpenAndWait(engine, current);
+            Directory.Delete(dir, recursive: true);
+            Uncopy();
+        }
+    }
+
+    /// Nothing copied, as when Orion starts: the copy is one for the whole app, and a check that
+    /// presses Copy would otherwise arm the next one's Paste and Sync before it presses its own.
+    static void Uncopy() {
+        typeof(Sheets.CopiedSettings).GetProperty(nameof(Sheets.CopiedSettings.Look))!.SetValue(null, null);
+        typeof(Sheets.CopiedSettings).GetField("_state", BindingFlags.NonPublic | BindingFlags.Static)!.SetValue(null, null);
+    }
+
+    /// A menu item's words: its title, then its key.
+    static List<string> Words(MenuItem item) => item.Header switch {
+        string s => [s],
+        Control c => c.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToList(),
+        _ => [],
+    };
+
+    /// Empty when every button and switch in the toolbar has its full width, inside it, overlapping none; else what does not.
+    static string Overflow(ToolbarPanel bar) {
+        var controls = bar.GetVisualDescendants().OfType<Control>()
+            .Where(c => (c is Segmented || c is StateButton && c.FindAncestorOfType<Segmented>() == null) && c.IsEffectivelyVisible)
+            .Select(c => (c, At: new Rect(c.TranslatePoint(default, bar)!.Value, c.Bounds.Size)))
+            .OrderBy(p => p.At.X).ToList();
+        var wrong = controls.Where(p => p.At.X < -0.5 || p.At.Right > bar.Bounds.Width + 0.5
+                                        || p.c.Bounds.Width < p.c.DesiredSize.Width - p.c.Margin.Left - p.c.Margin.Right - 0.5)
+            .Select(p => $"{Name(p.c)} at {p.At.X:0}-{p.At.Right:0} of {bar.Bounds.Width:0}")
+            .Concat(controls.Zip(controls.Skip(1)).Where(p => p.Second.At.X < p.First.At.Right - 0.5)
+                .Select(p => $"{Name(p.First.c)} over {Name(p.Second.c)} ({p.First.At.Right:0} > {p.Second.At.X:0})"));
+        return string.Join("; ", wrong);
+        static string Name(Control c) => c is StateButton s ? s.Label ?? ToolTip.GetTip(s) as string ?? "glyph" : c.GetType().Name;
+    }
 }
