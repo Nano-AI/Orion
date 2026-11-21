@@ -566,6 +566,58 @@ this project is heading toward. Use the upstream models instead.
 
 ---
 
+## 5b. Path masks: a closed outline, filled into a matte
+
+A path is a closed run of cubic Bézier segments placed with a pen. Each point is
+an anchor P and two handles, *in* and *out*; a corner has both on its anchor.
+The segment from point i to the next is the cubic with control points
+Pᵢ, outᵢ, inᵢ₊₁, Pᵢ₊₁, and the last segment returns to the first point:
+
+```
+B(t) = (1−t)³·P₀ + 3(1−t)²t·P₁ + 3(1−t)t²·P₂ + t³·P₃,   t ∈ [0, 1]
+```
+
+A point is inside by the **non-zero winding rule**: count the path's crossings
+of a ray from the point, +1 one way and −1 the other; zero is outside. Where an
+outline crosses itself, a part it winds around twice the same way stays inside
+(even-odd would make it a hole), and a part it winds around once each way sums
+to zero and is outside.
+
+| What | Source |
+|---|---|
+| The cubic segment and the closing segment | W3C, *Scalable Vector Graphics (SVG) 1.1 (Second Edition)*, Recommendation, 16 August 2011: §8.3.6 (cubic Bézier commands), §8.3.3 (closepath). Both go back to PostScript's `curveto` and `closepath`: Adobe Systems, *PostScript Language Reference*, third edition, Addison-Wesley, 1999 |
+| The fill rule | SVG 1.1 §11.3, `fill-rule: nonzero` (the same rule as PostScript's fill and Skia's `SKPathFillType.Winding`) |
+| The feather | A Gaussian of standard deviation σ: SVG 1.1 §15.17 (`feGaussianBlur`, separable, G(x,y) = H(x)I(y)), and Skia's `SKMaskFilter.CreateBlur(Normal, σ)`, whose σ is that standard deviation |
+
+**How it is built: no engine kind.** The points are stored in frame coordinates
+(§3). The shell fills the outline with SkiaSharp (MIT, over Skia, BSD-3; both
+shipped with Avalonia): `SKPath.CubicTo`, the winding fill, antialiased, into an 8-bit coverage raster
+at `orion_engine_max_matte_size`, blurred by the mask filter for the feather.
+That raster goes up as a kind 4 matte under §5's contract, so the guided
+refinement (§4), the fold (§6), export and the headless modes treat it like any
+other matte. It is a cache, not the edit: the points and the feather are in the
+sidecar, and the matte is filled again from them on every open, so no file is
+written beside the photo. The library is used through its documented API; no
+GPL source was read, darktable's path mask included.
+
+**The feather** is a 0 to 1 slider, as the radial's and the brush's are:
+σ = feather × 0.04 × the matte's shorter side. ⚠ The 0.04 is Orion's own, a
+slider range rather than a constant with a meaning: at 1 the visible ramp
+(±2σ) is about a sixth of the frame's short side, softer than anyone outlines
+with. 0 leaves only the antialiased edge.
+
+**Precision.** The matte is at most 1024 px on the frame's long edge. On a 42 MP
+frame (7952 × 5304) that is 1024 × 683, one matte pixel to 7.8 sensor pixels, and
+the kernel samples it bilinearly: an unfeathered edge is a ramp about 8 sensor
+pixels wide, placed to a fraction of that by the antialiasing. Snapping it to
+the photograph's own edges is §4's job, the Refine control.
+
+⚠ **Patents:** the Bézier form, the winding rule and the Gaussian blur are all
+decades older than any patent that could still be in force. That is the
+reasoning, not a clearance (`AGENTS.md`).
+
+---
+
 ## 6. Combining masks
 
 **One combined alpha per adjustment group; apply the adjustment once.** Never
@@ -600,6 +652,7 @@ The plan above is the plan of record; this is the state of it.
 |---|---|
 | 1. Primitives — linear, radial | ✅ draggable on the canvas |
 | 1. Primitives — brush dabs | ✅ paintable on the canvas |
+| 1. Primitives — path | ✅ drawn with a pen on the canvas, filled in the shell into a kind 4 matte (§5b) |
 | 2. Groups and compositing (§6) | ✅ **done** — `mask_component.slang` folds per §6 (add = max, subtract, intersect), one node per component, `kMaxMaskComponents = 4`. Panel rows with a per-row op, sidecar and undo all carry the list; pre-group sidecars migrate to one component |
 | 3. Guided refinement (§4) | ✅ **done** — `mask_guide_prep` / `mask_guide_ab` / `mask_guide_apply`, seven nodes on the *folded group*, disabled at strength 0. The second input binding §4 asked for, and nothing else changed in the filter. Radius and epsilon are Orion's own: `UNSOURCED.md` §20 |
 | 4. Vision subject and person (§5) | ✅ **done** — `SubjectMatte.swift`. Mask kind 4 is the raster component; the matte is read back from the *existing* render with the geometry neutralised, so no second copy of the display transform, and only the EXIF turn is undone. Sky is still unavailable and §5 says why |

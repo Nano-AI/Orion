@@ -115,13 +115,20 @@ static class CommandTable {
               () => Trash.Confirm(Scope)),
         Built("delete-rejected", "Delete rejected photos…", null, "OrionApp+Files.swift", () => LibraryModel.Shared.RejectedCount > 0,
               () => Trash.Confirm(LibraryModel.Shared.Photos.Where(p => p.Rejected).ToList())),
-        Built("apply-crop", "Apply crop", "Enter", "OrionApp+Commands.swift", () => Cropping, () => Shell?.Select("Light")),
+        // Enter also closes the path the pen is drawing (close-path): a key runs one command.
+        Built("apply-crop", "Apply crop", "Enter", "OrionApp+Commands.swift", () => Cropping || Masking && Mask.CanClosePath,
+              () => { if (Cropping) Shell?.Select("Light"); else Mask.ClosePath(); }),
         Built("cancel-crop", "Cancel crop", "Escape", "OrionApp+Commands.swift", () => E.Tool != CanvasTool.None || Cropping || Comparing, Escape),
         // The Mask tab's keys (u4); `[` `]` fold into the rotate rows, which own those keys, and Escape's armed-tool step disarms a draw.
         Built("mask-overlay", "Show mask overlay", "O", "DevelopPanels+Mask.swift", () => Masking, () => Mask.Overlay ^= true),
         Built("mask-feather-less", "Less mask feather", "Shift+OemOpenBrackets", "DevelopPanels+Mask.swift", () => Masking && Mask.Current != null, () => Feather(-0.1f)),
         Built("mask-feather-more", "More mask feather", "Shift+OemCloseBrackets", "DevelopPanels+Mask.swift", () => Masking && Mask.Current != null, () => Feather(0.1f)),
-        Built("delete-mask-shape", "Delete mask shape", "Delete", "DevelopPanels+Mask.swift", () => Masking && Mask.Current != null, () => Mask.Remove(Mask.Selected)),
+        Built("close-path", "Close path", null, "MaskGroup.cs", () => Masking && Mask.CanClosePath, () => Mask.ClosePath()),
+        Built("remove-path-point", "Remove last path point", "Back", "MaskGroup.cs", () => Masking && Mask.PathDraft.Count > 0, Mask.RemovePathPoint),
+        // While the pen is armed, Delete only takes back its last point (remove-path-point), as Backspace does.
+        Built("delete-mask-shape", "Delete mask shape", "Delete", "DevelopPanels+Mask.swift",
+              () => Masking && (Mask.Drawing == MaskGroup.PathTool ? Mask.PathDraft.Count > 0 : Mask.Current != null),
+              () => { if (Mask.Drawing == MaskGroup.PathTool) Mask.RemovePathPoint(); else Mask.Remove(Mask.Selected); }),
 
         // Assistant (AssistantCommands): ⌘⌥A, since ⌘⇧A is Deselect.
         Built("toggle-assistant", "Show assistant", "Cmd+Alt+A", "AssistantPanel.swift", () => true, AssistantPanel.Toggle),

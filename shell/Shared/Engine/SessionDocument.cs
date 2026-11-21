@@ -11,8 +11,8 @@ namespace OrionShell;
 /// real field.
 public sealed partial class Session {
     /// The edit as of the open, kept current by every capture Autosave takes.
-    /// What the shell does not model rides here untouched: a mask's name and
-    /// matte id (#207).
+    /// What the shell does not model rides here untouched: a mask's name,
+    /// matte id and path (#207).
     public JsonObject? Document { get; private set; }
 
     /// Why the sidecar's edit could not be read, or null. Nothing may write to
@@ -143,6 +143,7 @@ public sealed partial class Session {
             if (from?.MatteId is { } id) m["matteId"] = id;
             if (from?.MatteSource is { } source) m["matteSource"] = source;
             if (from?.Name is { } title) m["name"] = title;
+            if (from?.PathPoints is { Count: > 0 } path) m["path"] = new JsonArray(path.Select(v => (JsonNode)v).ToArray());
             masks.Add(m);
         }
         s["maskComponents"] = masks;
@@ -193,6 +194,7 @@ public sealed partial class Session {
         m.BrushStroke.AddRange(DevelopJson.Floats(o["brushStroke"]) ?? []);
         m.BrushErase.AddRange(DevelopJson.Floats(o["brushErase"]) ?? []);
         (m.MatteId, m.MatteSource, m.Name) = (Text(o["matteId"]), Text(o["matteSource"]), Text(o["name"]));
+        m.PathPoints.AddRange(DevelopJson.Floats(o["path"]) ?? []);
         return m;
     }
 

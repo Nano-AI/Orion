@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using OrionShell.Agent;
 using OrionShell.CanvasSlice;
 using OrionShell.Masks;
 using OrionShell.Sheets;
@@ -36,6 +37,7 @@ static partial class SelfTest {
             OpenAndWait(engine, 0);
             if (engine.Session?.Path != a) { Check(false, "the matte checks open their copy"); return; }
             SelectChecks(engine, a);
+            PathSidecarChecks(engine, a);
             PickAndKindChecks(engine);
             SyncChecks(engine, a, b);
         } finally {
@@ -144,6 +146,69 @@ static partial class SelfTest {
               "Person and Sky either fill a row or say why not");
         group.Clear();
         Check(group.Shapes.Count == 0 && engine.Session!.ReadMaskGroup().Count == 0, "clearing the masks clears the mattes' rows");
+    }
+
+    /// A path row (issue 53) keeps its points and feather in the sidecar and no file beside the
+    /// photo: a reopen through OpenEdited, which --batch-export and --agent take too, fills its matte again.
+    static void PathSidecarChecks(EngineModel engine, string photo) {
+        var group = MaskGroup.Shared;
+        group.Clear();
+        var s = engine.Session!;
+        int Mattes() => Directory.EnumerateFiles(Path.GetDirectoryName(photo)!, "*.orion-matte-*.png").Count();
+        int mattes = Mattes();
+        s.Render(preview: false);
+        double plain = MeanLuma(s.Read(Graph.Full));
+        group.Add(4, m => {
+            m.PathPoints.AddRange([0.3f, 0.3f, 0.3f, 0.3f, 0.3f, 0.3f, 0.7f, 0.3f, 0.7f, 0.3f, 0.7f, 0.3f,
+                                   0.7f, 0.7f, 0.7f, 0.7f, 0.7f, 0.7f, 0.3f, 0.7f, 0.3f, 0.7f, 0.3f, 0.7f]);
+            m.Feather = 0.2f;
+        });
+        engine.Set("local_exposure_ev", 2, 0);
+        s.Render(preview: false);
+        double live = MeanLuma(s.Read(Graph.Full));
+        new Sidecar { Develop = DevelopJson.Encode(s.Capture(group.Shapes)) }.Write(photo);
+        SetAside();
+        double reopened = double.NaN;
+        int points = -1;
+        using (var back = Session.OpenEdited(photo)) {
+            if (back is { Unreadable: null } && back.Render(preview: false) == Graph.Full) reopened = MeanLuma(back.Read(Graph.Full));
+            points = back == null ? -1 : Session.Rows(back.Document) is [var row] ? row.PathPoints.Count : -2;
+        }
+        Check(live > plain + 2 && Math.Abs(reopened - live) < 0.5 && points == 24 && Mattes() == mattes,
+              $"a path's points and feather go into the sidecar alone, and a reopen fills the same matte from them " +
+              $"(mean {plain:0.0} → {live:0.0} live, {reopened:0.0} reopened; {points} numbers; {Mattes() - mattes} new matte files)");
+
+        // The agent: a state read back is sent back whole, path and all, and a short path is refused.
+        var saved = Sidecar.Read(photo)!.Develop!;
+        JsonNode Read() => JsonNode.Parse(saved)!["maskComponents"]!.DeepClone();
+        JsonObject? Send(JsonNode rows) {
+            try { return AgentComposite.MergeEdits(saved, Encoding.UTF8.GetBytes(new JsonObject { ["maskComponents"] = rows.DeepClone() }.ToJsonString()), photo).State; }
+            catch (AgentCli.Usage) { return null; }
+        }
+        var merged = Send(Read());
+        var shortened = Read();
+        (shortened[0]?["path"] as JsonArray)?.RemoveAt(0);
+        var radial = Read();
+        radial[0]!["kind"] = 2;
+        bool stray = Send(radial) == null;
+        radial[0]!.AsObject().Remove("path");
+        Check(merged?["maskComponents"]?[0]?["path"] is JsonArray { Count: 24 } && Send(shortened) == null && stray && Send(radial) != null,
+              $"the agent sends a path row back as it read it, and refuses a path short of a point's six numbers or on a row not kind 4 (stray refused {stray})");
+        // Its sync carries the row as it is, frame space needing no re-detection. macOS: AgentSync.Canonical is libc's realpath.
+        if (OperatingSystem.IsMacOS()) {
+            string target = Path.Combine(Path.GetDirectoryName(photo)!, "c" + Path.GetExtension(photo)), targets = target + ".json";
+            File.WriteAllBytes(target, []);   // a commit only writes the target's sidecar
+            File.WriteAllText(targets, new JsonArray(target).ToJsonString());
+            var synced = AgentSync.Run(photo, new() { ["targets"] = targets, ["groups"] = "masks", ["mode"] = "commit" });
+            var carried = Session.Rows(DevelopJson.Decode(Sidecar.Read(target)?.Develop ?? []));
+            Check(DevelopJson.Int(synced["written"]) == 1 && carried is [{ Kind: 4, PathPoints.Count: 24 }],
+                  $"the agent's sync carries a path row onto another photo as it is ({synced["results"]?.ToJsonString()})");
+            foreach (var f in new[] { target, targets, Sidecar.PathFor(target) }) File.Delete(f);
+        }
+
+        File.Delete(Sidecar.PathFor(photo));
+        group.Clear();
+        engine.Render(preview: false);
     }
 
     /// Engine+Mask.swift's pickMaskColor (a click on the canvas with the picker armed) and setMaskKind.

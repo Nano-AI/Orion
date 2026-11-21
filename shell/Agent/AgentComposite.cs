@@ -20,7 +20,7 @@ static class AgentComposite {
 
     static readonly string[] Bands = ["Red", "Orange", "Yellow", "Green", "Aqua", "Blue", "Purple", "Magenta"];
     static readonly string[] SpotKeys = ["destX", "destY", "srcX", "srcY", "radius", "feather", "heal"];
-    static readonly string[] MaskOptional = ["matteId", "matteSource", "name"];
+    static readonly string[] MaskOptional = ["matteId", "matteSource", "name", "path"];
 
     /// Overlays `edits` onto `base` and proves the result still decodes. ⚠ The
     /// base is normalised first (AgentCli.Normal), so every legacy conversion
@@ -155,6 +155,13 @@ static class AgentComposite {
         foreach (var f in new[] { "brushStroke", "brushErase" })
             if (o[f] is not JsonArray a || a.Any(n => n?.GetValueKind() != JsonValueKind.Number))
                 throw Rejected($"{label}.{f} must be an array of numbers");
+        // A path row's matte is filled from its points (research/masking.md §5b): a state read back can be sent back.
+        if (o["path"] is { } outline) {
+            if (kind != 4 || outline is not JsonArray a || a.Count < 3 * PathMatte.Stride || a.Count % PathMatte.Stride != 0
+                || a.Any(n => n?.GetValueKind() != JsonValueKind.Number))
+                throw Rejected($"{label}.path must be on a kind 4 row, {PathMatte.Stride} numbers a point, at least 3 points");
+            return;
+        }
         if (kind != 4) return;
         // A model cannot paint a matte, only name one a producer already saved beside the photo.
         if (o["matteId"] is not JsonValue v || v.GetValueKind() != JsonValueKind.String || v.GetValue<string>() is not { Length: > 0 } id)
@@ -233,7 +240,7 @@ static class AgentComposite {
     /// The per-kind field map, checked against engine/shaders/mask_component.slang's kind branches.
     /// ⚠ Two traps it closes: a linear gradient ignores `feather` (its length is the feather), and a radial reads `angle`.
     const string MaskNote =
-        "Every element needs every MaskComponentState field except the optional matteId/matteSource/name. ALL coordinates, radii and "
+        "Every element needs every MaskComponentState field except the optional matteId/matteSource/name/path. ALL coordinates, radii and "
         + "lengths are in FRAME space - the sensor's un-turned frame, x and y each 0…1 from the top-left, before crop, straighten, "
         + "rotation and perspective (maskSpace 1, decision #112) - NOT the display-space fractions get_proxy and get_stats' region use. "
         + "detect_faces returns both. kind is 1…6 and decides which fields are read: "
@@ -251,7 +258,8 @@ static class AgentComposite {
         + "3 brush - brushStroke (interleaved x,y dabs), brushErase, brushRadius, brushFlow, brushHardness. A model cannot paint one: "
         + "send no dabs and it covers nothing, so use 2, 5 or 6 instead. "
         + "4 raster matte - matteId, which must name a PNG already saved beside the photograph by a producer (Subject, Sky); a model "
-        + "cannot make one. "
+        + "cannot make one. Or, in place of matteId, a closed path: path, six numbers a point (x, y, then the handle in, then the handle "
+        + "out, frame space; a corner has both handles on its point), at least 3 points, its edge softened by feather 0…1. "
         + "5 luminance range - rangeLo, rangeHi (the band's edges in EV relative to middle grey, as displayed, so they follow the "
         + "exposure slider) and rangeSoft (how many EV each edge takes to ramp). "
         + "6 colour range - colorR, colorG, colorB (the target shade in scene-linear Rec.2020), colorTol and colorSoft, measured in "

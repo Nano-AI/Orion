@@ -80,7 +80,7 @@ static partial class AgentSync {
         string? unmatchable = null;
         if (groups.Contains("masks") && sourceObject["maskComponents"] is JsonArray rows)
             for (int i = 0; i < rows.Count; i++) {
-                if (DevelopJson.Int(rows[i]?["kind"]) != 4) continue;
+                if (DevelopJson.Int(rows[i]?["kind"]) != 4 || rows[i]?["path"] is JsonArray) continue;   // a path is frame space, carried as is
                 string? label = rows[i]?["matteSource"]?.GetValue<string>();
                 if (label?.ToLowerInvariant() is { } lower && AgentCli.MatteKinds.Contains(lower)) mattes.Add((i, KindOf(lower)));
                 else unmatchable ??= $"mask row {i} is a matte with matteSource '{label ?? "none"}', and only Subject, Person or Sky can be "

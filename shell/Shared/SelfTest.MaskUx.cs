@@ -130,12 +130,102 @@ static partial class SelfTest {
               $"(kind {group.Current.Kind}, radius {r0:0.000} → {r1:0.000} → {group.Current.BrushRadius:0.000}, turn {turn} → {turned}, " +
               $"overlay {overlay0} → flipped {flipped} → {group.Overlay}, drawing {group.Drawing}, tab {CanvasState.Tab}; {string.Join(", ", ran)})");
 
+        PathChecks(window, At, (a, b) => Drag(a, b));
         group.Clear();
         for (int l = 0; l < MaskGroup.Max; l++) engine.Session!.Set("local_exposure_ev", 0, l);
         group.Overlay = true;
         engine.Render(false);
         window.Close();
         CanvasState.SetTab(null);
+    }
+
+    /// The pen (issue 53), through the same pointer path: its clicks, its keys, and the
+    /// closed path's matte read off the rendered picture, lifted 1.5 EV.
+    static void PathChecks(Window window, Func<double, double, Point> at, Action<Point, Point> drag) {
+        var engine = EngineModel.Shared;
+        var group = MaskGroup.Shared;
+        group.Clear();
+        group.Overlay = false;
+        void Click(double x, double y) {
+            window.MouseDown(at(x, y), MouseButton.Left);
+            window.MouseUp(at(x, y), MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+        }
+        // Inside the square, left of it, left of it where a bulge reaches, below right of it, either side of its right edge.
+        (double X, double Y)[] spots = [(0.5, 0.5), (0.15, 0.5), (0.27, 0.5), (0.75, 0.75), (0.68, 0.5), (0.72, 0.5)];
+        engine.Render(false);
+        var plain = spots.Select(s => Luma(engine.Picture, s.X, s.Y)).ToArray();
+        double Lift(int i) => Luma(engine.Picture, spots[i].X, spots[i].Y) - plain[i];
+        double[] square = [0.3, 0.3, 0.7, 0.3, 0.7, 0.7, 0.3, 0.7];
+
+        group.Drawing = MaskGroup.PathTool;
+        Click(0.3, 0.3); Click(0.7, 0.3);
+        string early = Commands.Run("close-path");
+        Click(0.7, 0.7); Click(0.9, 0.9);
+        string delete = Commands.Run("delete-mask-shape");
+        int afterDelete = group.PathDraft.Count;
+        string back = Commands.Run("remove-path-point");
+        int afterBack = group.PathDraft.Count;
+        Commands.Run("cancel-crop");
+        bool dropped = group.Drawing == 0 && group.PathDraft.Count == 0 && group.Shapes.Count == 0;
+        group.Add(2, null);
+        group.Drawing = MaskGroup.PathTool;
+        string idle = Commands.Run("delete-mask-shape");
+        int kept = group.Shapes.Count;
+        Commands.Run("cancel-crop");
+        group.Clear();
+        Check(early == "close-path: not available now" && delete == "ran delete-mask-shape" && afterDelete == 18 && back == "ran remove-path-point"
+              && afterBack == 12 && dropped && idle == "delete-mask-shape: not available now" && kept == 1,
+              $"the pen: two points do not close, Delete and Backspace each take the last point back, Escape drops the draft, " +
+              $"and Delete with no point to take back leaves the masks alone ({early}; {delete} → {afterDelete}; {back} → {afterBack}; " +
+              $"dropped {dropped}; {idle} → {kept} rows)");
+
+        group.Drawing = MaskGroup.PathTool;
+        for (int i = 0; i <= 8; i += 2) Click(square[i % 8], square[i % 8 + 1]);
+        var path = group.Current;
+        engine.Set("local_exposure_ev", 1.5f, 0);
+        Check(group.Shapes.Count == 1 && path is { Kind: 4, PathPoints.Count: 24 } && group.Drawing == 0 && group.DisplayName(0) == "Path 1",
+              $"a click on the first point closes four corners into a kind-4 row named Path ({group.Shapes.Count} rows, " +
+              $"kind {path?.Kind}, {path?.PathPoints.Count} numbers, '{group.DisplayName(0)}', drawing {group.Drawing})");
+        Check(Lift(0) > 10 && Math.Abs(Lift(1)) < 1 && Math.Abs(Lift(2)) < 1,
+              $"a square path's matte lifts its inside and not its outside ({Lift(0):0.0} inside, {Lift(1):0.0} and {Lift(2):0.0} outside)");
+
+        double far = Lift(3);
+        drag(at(0.7, 0.7), at(0.8, 0.8));
+        var moved = group.Current?.PathPoints.Skip(12).Take(2).ToArray() ?? [];
+        double carried = Lift(3);
+        string? step = EditHistory.UndoLabel;
+        EditHistory.Undo();
+        var undone = group.Current?.PathPoints.Skip(12).Take(2).ToArray() ?? [];
+        Check(moved is [var mx, var my] && Math.Abs(mx - 0.8) < 0.01 && Math.Abs(my - 0.8) < 0.01 && carried > far + 10 && step == "Move path point"
+              && undone is [var ux, var uy] && Math.Abs(ux - 0.7) < 1e-4 && Math.Abs(uy - 0.7) < 1e-4 && Math.Abs(Lift(3) - far) < 1
+              && engine.Get("local_exposure_ev", 0) == 1.5f,
+              $"dragging a path's corner carries the matte with it, and undo of that one step puts the point back " +
+              $"(point {string.Join(", ", moved.Select(v => v.ToString("0.000")))} → {string.Join(", ", undone.Select(v => v.ToString("0.000")))}; " +
+              $"lift below it {far:0.0} → {carried:0.0} → {Lift(3):0.0}; undid '{step}', exposure {engine.Get("local_exposure_ev", 0)})");
+
+        // The last corner dragged left: its handle out points left, so the edge to the first point bulges left.
+        group.Clear();
+        group.Drawing = MaskGroup.PathTool;
+        Click(0.3, 0.3); Click(0.7, 0.3); Click(0.7, 0.7);
+        drag(at(0.3, 0.7), at(0.15, 0.7));
+        string closed = Commands.Run("close-path");
+        var smooth = group.Current;
+        engine.Set("local_exposure_ev", 1.5f, 0);
+        Check(closed == "ran close-path" && smooth?.PathPoints.Skip(18).ToArray() is [var px, _, var ix, _, var ox, _]
+              && Math.Abs(px - 0.3) < 0.01 && Math.Abs(ix - 0.45) < 0.01 && Math.Abs(ox - 0.15) < 0.01 && Lift(2) > 10,
+              $"a dragged point is smooth, its handles pulled either way, and the edge bulges the way the drag went " +
+              $"({closed}; point {string.Join(", ", smooth?.PathPoints.Skip(18).Select(v => v.ToString("0.000")) ?? [])}; lift at the bulge {Lift(2):0.0})");
+
+        var gaps = new List<double>();
+        foreach (float f in smooth == null ? [] : new[] { 0f, 0.5f, 1f }) {
+            smooth!.Feather = f;
+            group.Push("Mask feather");
+            gaps.Add(Lift(4) - Lift(5));
+        }
+        Check(gaps is [var g0, var g1, var g2] && g0 > 10 && g1 < g0 - 1 && g2 < g1 - 1,
+              $"feather softens a path's edge monotonically (lift inside minus outside at feather 0, 0.5, 1: {string.Join(", ", gaps.Select(g => g.ToString("0.0")))})");
+        group.Clear();
     }
 
     /// The pure part: which old mask's adjustments each new mask keeps.

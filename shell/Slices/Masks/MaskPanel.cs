@@ -42,7 +42,7 @@ public sealed class MaskPanel : Border {
         yield return Switch("Show overlay", _group.Overlay, on => _group.Overlay = on);
         if (_message != null) yield return Caption(_message);
         if (_group.Current is not { } m) yield break;
-        if (m.Kind == 4) yield return Caption(MatteCaption(m));
+        if (m.Kind == 4 && m.PathPoints.Count == 0) yield return Caption(MatteCaption(m));
 
         int layer = _group.SelectedLayer;
         yield return Engraved.Label(_group.LayerCount > 1 ? $"{_group.DisplayName(layer)}, mask {layer + 1} of {_group.LayerCount}"
@@ -50,7 +50,7 @@ public sealed class MaskPanel : Border {
         foreach (var slider in AdjustmentGroup.Local(layer)) yield return slider;
         yield return new AdjustmentSlider("Refine", "mask_refine", 0, 1, "", 2, baseValue: 0);
 
-        yield return Engraved.Label($"{MaskGroup.KindName(m.Kind)} shape");
+        yield return Engraved.Label($"{MaskGroup.KindName(MaskGroup.ShownKind(m))} shape");
         foreach (var row in KindControls(m)) yield return row;
         yield return Check("Invert", m.Invert, on => { m.Invert = on; _group.Push("Invert shape"); });
     }
@@ -80,6 +80,8 @@ public sealed class MaskPanel : Border {
                 Tool(2, KindGlyph(2, IconSize.Md), "Radial", "Drag on the photo to draw a radial mask"),
                 Tool(1, KindGlyph(1, IconSize.Md), "Linear", "Drag on the photo from full effect to none"),
                 Tool(3, KindGlyph(3, IconSize.Md), "Brush", "Paint a mask on the photo"),
+                Tool(MaskGroup.PathTool, KindGlyph(MaskGroup.PathTool, IconSize.Md), "Path",
+                     "Click points on the photo to outline a mask; drag to curve, Enter to close"),
                 more,
             },
         };
@@ -88,8 +90,14 @@ public sealed class MaskPanel : Border {
     /// The placement controls each kind reads, and only those: a slider the
     /// shader ignores is worse than no slider (the Swift comments say which).
     /// First, what the row is (Engine+Mask.swift's setMaskKind): the Add menu makes rows, this changes one.
+    /// A path is not offered, either way: no other kind's numbers make one, and it makes none.
     IEnumerable<Control> KindControls(MaskShape m) {
         int row = _group.Selected;
+        if (MaskGroup.ShownKind(m) == MaskGroup.PathTool) {
+            yield return Shape("Feather", 0, 1, "", 2, s => s.Feather, (s, v) => s.Feather = v, reset: 0);
+            yield return Caption($"{m.PathPoints.Count / PathMatte.Stride} points. Drag a point or a handle on the photo.");
+            yield break;
+        }
         yield return new StackPanel {
             Orientation = Orientation.Horizontal, Spacing = Space.Sm,
             Children = {
@@ -164,13 +172,13 @@ public sealed class MaskPanel : Border {
     /// One of the selected shape's numbers; it resets to MaskComponentState's default.
     /// A brush number also shows the nib on the photo while it moves (size feedback).
     Control Shape(string name, float min, float max, string unit, int decimals,
-                  Func<MaskShape, float> get, Action<MaskShape, float> set, bool brush = false) {
+                  Func<MaskShape, float> get, Action<MaskShape, float> set, bool brush = false, float? reset = null) {
         var m = _group.Current!;
         return new MaskSlider(name, () => get(m), v => {
             set(m, v);
             if (brush) _group.BrushPreview = true;
             _group.Push($"Mask {name.ToLowerInvariant()}");
-        }, min, max, unit, decimals, get(MaskGroup.Defaults));
+        }, min, max, unit, decimals, reset ?? get(MaskGroup.Defaults));
     }
 
     /// The row and the model in one act (SubjectMatte.Select). The row is made

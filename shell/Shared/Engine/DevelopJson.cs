@@ -149,6 +149,8 @@ public static class DevelopJson {
         }
         foreach (var key in MaskStrings)
             if (from[key] is JsonValue v && v.GetValueKind() == JsonValueKind.String) m[key] = v.GetValue<string>();
+        // A path row's points (research/masking.md §5b), omitted when there are none, as the strings are.
+        if (Floats(from["path"]) is { Count: > 0 } path) m["path"] = Array(path);
         return m;
     }
 

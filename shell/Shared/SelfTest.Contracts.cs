@@ -64,7 +64,7 @@ static partial class SelfTest {
             "open-photo", "open-folder", "export", "export-all", "hdr-merge", "stack", "stop-batch",
             "reveal-session-log", "undo", "redo", "reset-adjustments", "rotate-left", "rotate-right", "reject", "pick", "flag-reject", "unflag", "rate-0", "rate-1", "rate-2",
             "rate-3", "rate-4", "rate-5", "next-photo", "previous-photo", "select-all", "deselect", "trash", "delete-rejected", "apply-crop",
-            "cancel-crop", "mask-overlay", "mask-feather-less", "mask-feather-more", "delete-mask-shape", "toggle-assistant",
+            "cancel-crop", "mask-overlay", "mask-feather-less", "mask-feather-more", "close-path", "remove-path-point", "delete-mask-shape", "toggle-assistant",
             "copy-mcp-setup", "approve-proposal", "reject-proposal", "check-for-updates", "restart-to-update", "feedback",
             "white-balance-selector", "white-balance-as-shot", "white-balance-auto", "white-balance-daylight", "white-balance-cloudy",
             "white-balance-shade", "white-balance-tungsten", "white-balance-fluorescent", "white-balance-flash"];

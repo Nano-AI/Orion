@@ -4,7 +4,7 @@ namespace OrionShell.Develop;
 
 /// The mask rows in each history entry, as Swift's entries hold
 /// MaskComponentState: every number and dab the engine has, plus the name,
-/// matte id and matte source it never holds (#207). Put back by position
+/// matte id, matte source and path it never holds (#207). Put back by position
 /// after an undo, the ids slid onto the wrong rows when a row came or went,
 /// and a matte's raster followed the wrong id; carried in the entry, each
 /// row comes back with its own.
@@ -13,8 +13,7 @@ static partial class EditHistory {
     static MaskShape[] MaskRows() {
         var rows = E.Session?.ReadMaskGroup() ?? [];
         var named = MaskGroup.Shared.Shapes;
-        for (int i = 0; i < rows.Count && i < named.Count; i++)
-            (rows[i].Name, rows[i].MatteId, rows[i].MatteSource) = (named[i].Name, named[i].MatteId, named[i].MatteSource);
+        for (int i = 0; i < rows.Count && i < named.Count; i++) rows[i].CarryFrom(named[i]);
         return [.. rows];
     }
 
@@ -22,7 +21,8 @@ static partial class EditHistory {
         a.Length == b.Length && a.Zip(b).All(p =>
             Session.MaskFields.All(f => f.Value(p.First) == f.Value(p.Second))
             && p.First.BrushStroke.SequenceEqual(p.Second.BrushStroke) && p.First.BrushErase.SequenceEqual(p.Second.BrushErase)
-            && p.First.Name == p.Second.Name && p.First.MatteId == p.Second.MatteId && p.First.MatteSource == p.Second.MatteSource);
+            && p.First.Name == p.Second.Name && p.First.MatteId == p.Second.MatteId && p.First.MatteSource == p.Second.MatteSource
+            && p.First.PathPoints.SequenceEqual(p.Second.PathPoints));
 
     /// Fresh copies of an entry's rows into the group, before the render, so the
     /// autosave that render triggers and the panel's reread both find the entry's
@@ -36,7 +36,8 @@ static partial class EditHistory {
     }
 
     static MaskShape Copy(MaskShape m) {
-        var c = new MaskShape { Name = m.Name, MatteId = m.MatteId, MatteSource = m.MatteSource };
+        var c = new MaskShape();
+        c.CarryFrom(m);
         foreach (var (_, value, put) in Session.MaskFields) put(c, value(m));
         c.BrushStroke.AddRange(m.BrushStroke);
         c.BrushErase.AddRange(m.BrushErase);

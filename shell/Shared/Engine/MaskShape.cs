@@ -3,7 +3,7 @@ namespace OrionShell;
 /// One row of the mask group: MaskComponentState (EditHistory.swift), same
 /// defaults. A plain bag of numbers the panel's shape sliders write directly.
 /// In Shared because Session.SetMaskGroup takes it (OrionMaskComponent in
-/// orion.h, plus the brush dabs and the names the struct does not carry).
+/// orion.h, plus the brush dabs, and the names and paths the struct does not carry).
 public sealed class MaskShape {
     public int Kind, Compose;              // kind: 1 linear, 2 radial, 3 brush, 4 matte, 5 range, 6 color
     public bool Invert, Hidden, StartsLayer;
@@ -14,4 +14,13 @@ public sealed class MaskShape {
     public float BrushRadius = 0.08f, BrushFlow = 0.5f, BrushHardness = 0.5f;
     public List<float> BrushStroke { get; } = [];   // interleaved x, y
     public string? MatteId, MatteSource, Name;
+    /// A path row (kind 4, research/masking.md §5b), PathMatte.Stride numbers a point, frame units. Empty otherwise.
+    public List<float> PathPoints { get; } = [];
+
+    /// What the shell holds for a row and the engine never does (#207): its name, its matte and its path.
+    public void CarryFrom(MaskShape from) {
+        (Name, MatteId, MatteSource) = (from.Name, from.MatteId, from.MatteSource);
+        PathPoints.Clear();
+        PathPoints.AddRange(from.PathPoints);
+    }
 }
