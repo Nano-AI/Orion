@@ -112,7 +112,7 @@ Algorithm picks come from `RESEARCH.md`; stack from `ARCHITECTURE.md`.
 |---|---|---|
 | User presets | M4 | ✅ **Built 2026-07-30**. A **patch** over DevelopState, not a state: only the groups it carries are applied. Crop, dust spots and masks are excluded from every group — they belong to one photograph. Four built-in looks, not written to the user file so improving one reaches everybody |
 | Built-in looks | M4 | Sells the "stunning" promise |
-| Copy/paste settings, sync across selection | M4 | ✅ **Built 2026-07-30**. Sync patches sidecars at the JSON-key level without decoding them, so an unedited photo keeps its as-shot white balance. Confirmed, with the group names in the question. ⚠ Applies to every photo in view — no multi-selection yet. Selection scoping queued **M6, S6.10** (#212) |
+| Copy/paste settings, sync across selection | M4 | ✅ **Built 2026-07-30**. Sync patches sidecars at the JSON-key level without decoding them, so an unedited photo keeps its as-shot white balance. Confirmed, with the group names in the question. ⚠ Applies to every photo in view — no multi-selection yet. Selection scoping queued **M6, S6.10** (#212). Reached from the toolbar's Batch menu as well as the Presets tab, and as the commands `copy-settings` (⇧⌘C on macOS, Ctrl+Shift+C elsewhere), `paste-settings` (⇧⌘V, Ctrl+Shift+V) and `sync-settings` (no key) |
 | Batch export | M4 | ✅ **Built 2026-07-30**. One reused engine, ~466 ms a photo with flat memory. ⚠ Each photo's sidecar is restored before export — without that the second frame exports with the first frame's grade, which looks plausible. Numbered suffixes rather than overwriting |
 
 ## 12. Edit Model

@@ -82,6 +82,10 @@ static class CommandTable {
         Built("undo", "Undo", "Cmd+Z", "EditHistory.swift", () => ChromeStubs.CanUndo && Develop && !Locked, EditHistory.Undo),
         Built("redo", "Redo", "Cmd+Shift+Z", "EditHistory.swift", () => ChromeStubs.CanRedo && Develop && !Locked, EditHistory.Redo),
         Built("reset-adjustments", "Reset adjustments", "Cmd+R", "Engine+Document.swift", () => Editable, EditHistory.ResetEdits),
+        // Lightroom's keys. Copy and paste act on the open photo, which in the Library is not the gallery's focus: Develop only.
+        Built("copy-settings", "Copy settings", "Cmd+Shift+C", "SyncSettings.cs", () => Develop && CopiedSettings.CanCopy, CopiedSettings.Copy),
+        Built("paste-settings", "Paste settings", "Cmd+Shift+V", "SyncSettings.cs", () => Editable && CopiedSettings.CanPaste, CopiedSettings.Paste),
+        Built("sync-settings", "Sync settings to every photo in view…", null, "SyncSettings.cs", () => CopiedSettings.CanSync, CopiedSettings.Sync),
         Built("rotate-left", "Rotate left", "OemOpenBrackets", "Engine+Geometry.swift", () => Editable, () => Bracket(-1)),
         Built("rotate-right", "Rotate right", "OemCloseBrackets", "Engine+Geometry.swift", () => Editable, () => Bracket(1)),
         // Lightroom's white balance selector (W) and menu, one command a row but Custom.

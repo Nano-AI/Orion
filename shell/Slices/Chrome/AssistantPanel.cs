@@ -143,11 +143,13 @@ public sealed class AssistantPanel : DockPanel {
     }
 
     /// True when a key comes from inside the terminal and is the terminal's:
-    /// every bare key (Swift's AssistantKeyRoute). A ⌘ key still reaches
+    /// every bare key (Swift's AssistantKeyRoute), and C and V with ⌘ held (Ctrl
+    /// elsewhere), whatever else is held: its copy and paste, never copy or paste
+    /// settings, even once its process has exited. Any other ⌘ key still reaches
     /// Orion's commands, as AppKit's menu equivalents do from SwiftTerm.
     public static bool Owns(KeyEventArgs e) =>
         e.Source is Visual v && v.FindAncestorOfType<TerminalControl>(includeSelf: true) != null
-        && !e.KeyModifiers.HasFlag(OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control);
+        && (!e.KeyModifiers.HasFlag(OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control) || e.Key is Key.C or Key.V);
 
     Control Header() {
         var close = Glyph("xmark", "Close", Model.Close);

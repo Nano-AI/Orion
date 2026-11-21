@@ -6,6 +6,35 @@ using Avalonia.Media;
 
 namespace OrionShell.Sheets;
 
+/// What Copy took, and the three things done with it: the Presets tab's Copy, Paste and
+/// Sync all… buttons and the copy-settings, paste-settings and sync-settings commands all call these.
+static class CopiedSettings {
+    /// The open photo's look, every group, as Swift's `copiedState`.
+    public static Preset? Look { get; private set; }
+    /// The same look as the sidecar holds it: what Sync patches into the other photos' sidecars.
+    static JsonObject? _state;
+    /// Which groups a saved preset, a paste and a sync carry: the Presets tab's ticks.
+    public static HashSet<int> Groups { get; } = PresetStore.DefaultSelection();
+    public static event Action? Changed;
+
+    static EngineModel E => EngineModel.Shared;
+    public static bool CanCopy => E.Handle != 0;
+    public static bool CanPaste => CanCopy && Look != null && Groups.Count > 0;
+    public static bool CanSync => Look != null && Groups.Count > 0 && E.Photos.Count >= 2;
+
+    public static void Copy() {
+        Look = PresetStore.Capture("Copied", [.. Enumerable.Range(0, PresetStore.Groups.Length)]);
+        _state = E.Session?.Capture(Masks.MaskGroup.Shared.Shapes);
+        Changed?.Invoke();
+    }
+
+    /// A paste is a preset made of the copied look and the ticked groups.
+    public static void Paste() { if (Look != null) PresetStore.Apply(Look with { Name = "Paste", Groups = [.. Groups] }); }
+
+    /// Confirmed, counted, and it names the groups: it writes sidecars with no undo across photos.
+    public static void Sync() { if (Look != null && _state != null) SyncSettings.Confirm(Look, _state, Groups); }
+}
+
 /// Copy's look onto every other photo in view: a port of the Swift app's SyncSettings.swift
 /// and OrionApp+Files.swift's `runSync`, behind OrionApp.swift's counted alert.
 ///

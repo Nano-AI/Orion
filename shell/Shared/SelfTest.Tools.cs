@@ -179,6 +179,7 @@ static partial class SelfTest {
         Check(held && ended, "a crop drag that loses its pointer capture still ends with a full render");
 
         // Sync all… is built (SelfTest.Matte.cs presses its alert): it waits for a copy and a second photo.
+        Uncopy();   // PresetChecks copied: the tab reads the copy as it opens
         Click(window, TabButton(window, "Presets"));
         Click(window, Labelled(window, "Copy"));
         Check(Labelled(window, "Sync all…").IsEnabled == engine.Photos.Count >= 2,

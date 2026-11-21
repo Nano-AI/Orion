@@ -153,33 +153,20 @@ static class PresetStore {
 /// then presets, copy, paste, sync and batch export, on a tab of their own.
 [Panel("presets", Region.Tools, 10, Tab = "Presets")]
 public sealed class PresetsPanel : StackPanel {
-    readonly HashSet<int> _groups = PresetStore.DefaultSelection();
     readonly SectionPlate _plate = new("Presets");
     readonly StackPanel _list = new() { Spacing = Space.Xs };
     readonly TextBox _name = SheetKit.Field("New preset");
     readonly Button _save, _copy, _paste, _sync, _export;
     readonly TextBlock _copiedNote = SheetKit.Note("Settings copied. Paste puts them on this photo; Sync writes them to every photo in view.");
     readonly TextBlock _failure = SheetKit.Note("", Palette.Warn);
-    /// What Copy took: the open photo's look, every group, as Swift's `copiedState`.
-    Preset? _copied;
-    /// The same look as the sidecar holds it: what Sync patches into the other photos' sidecars.
-    System.Text.Json.Nodes.JsonObject? _copiedState;
-
-    static int PhotosInView => EngineModel.Shared.Photos.Count;
 
     public PresetsPanel() {
         Spacing = SectionPlate.Gap;
         SheetKit.Restyle(this);
         _save = SheetKit.Button("Save", Save);
-        _copy = SheetKit.Button("Copy", () => {
-            _copied = PresetStore.Capture("Copied", [.. Enumerable.Range(0, PresetStore.Groups.Length)]);
-            _copiedState = EngineModel.Shared.Session?.Capture(Masks.MaskGroup.Shared.Shapes);
-            Enable();
-        });
-        // A paste is a preset made of the copied look and the groups ticked below.
-        _paste = SheetKit.Button("Paste", () => { if (_copied != null) PresetStore.Apply(_copied with { Name = "Paste", Groups = [.. _groups] }); });
-        // Confirmed, counted, and it names the groups: it writes sidecars with no undo across photos.
-        _sync = SheetKit.Button("Sync all…", () => { if (_copied != null && _copiedState != null) SyncSettings.Confirm(_copied, _copiedState, _groups); });
+        _copy = SheetKit.Button("Copy", CopiedSettings.Copy);
+        _paste = SheetKit.Button("Paste", CopiedSettings.Paste);
+        _sync = SheetKit.Button("Sync all…", CopiedSettings.Sync);
         _export = SheetKit.Button("Export all…", () => Commands.Run("export-all"));
         _name.TextChanged += (_, _) => Enable();
         Children.Add(new VersionsSection().Plate);
@@ -189,6 +176,10 @@ public sealed class PresetsPanel : StackPanel {
         engine.Opened += Enable;
         engine.Rendered += ShowChosen;
         ExportRun.Changed += Enable;
+        CopiedSettings.Changed += Enable;   // a copy from the toolbar's Batch menu shows the note here too
+        // Copy and Paste follow their commands' CanRun: Develop only, and Paste not while a proposal locks edits.
+        Library.GalleryMode.Changed += Enable;
+        Chrome.ProposalWatcher.Shared.Changed += Enable;
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e) {
@@ -199,11 +190,11 @@ public sealed class PresetsPanel : StackPanel {
 
     /// Each control's guard from the Swift, re-read whenever its inputs change.
     void Enable() {
-        _save.IsEnabled = IsLoadedPhoto && (_name.Text ?? "").Trim().Length > 0 && _groups.Count > 0;
-        _copy.IsEnabled = IsLoadedPhoto;
-        _paste.IsEnabled = IsLoadedPhoto && _copied != null && _groups.Count > 0;
-        _sync.IsEnabled = _copied != null && _groups.Count > 0 && PhotosInView >= 2;
-        _copiedNote.IsVisible = _copied != null;
+        _save.IsEnabled = IsLoadedPhoto && (_name.Text ?? "").Trim().Length > 0 && CopiedSettings.Groups.Count > 0;
+        _copy.IsEnabled = Commands.CanRun("copy-settings");
+        _paste.IsEnabled = Commands.CanRun("paste-settings");
+        _sync.IsEnabled = Commands.CanRun("sync-settings");
+        _copiedNote.IsVisible = CopiedSettings.Look != null;
         // The command's own guard: export targets, no batch already running.
         _export.IsEnabled = Commands.CanRun("export-all");
         _failure.Text = PresetStore.LastFailure;
@@ -257,7 +248,7 @@ public sealed class PresetsPanel : StackPanel {
 
     void Save() {
         string name = (_name.Text ?? "").Trim();
-        if (PresetStore.Capture(name, _groups) is not { } p) return;
+        if (PresetStore.Capture(name, CopiedSettings.Groups) is not { } p) return;
         if (PresetStore.Save(p)) _name.Text = "";
         ShowList();
         Enable();
@@ -294,7 +285,7 @@ public sealed class PresetsPanel : StackPanel {
     Control GroupToggle(int i) {
         var (title, covers, _) = PresetStore.Groups[i];
         var box = new CheckBox {
-            IsChecked = _groups.Contains(i), VerticalContentAlignment = VerticalAlignment.Center,
+            IsChecked = CopiedSettings.Groups.Contains(i), VerticalContentAlignment = VerticalAlignment.Center,
             // A DockPanel, not a horizontal StackPanel: that measures its children unbounded, so the
             // ellipsis never came and a long list was cut mid-word at the column's edge.
             Content = new DockPanel {
@@ -306,7 +297,7 @@ public sealed class PresetsPanel : StackPanel {
             },
         };
         box.IsCheckedChanged += (_, _) => {
-            if (box.IsChecked == true) _groups.Add(i); else _groups.Remove(i);
+            if (box.IsChecked == true) CopiedSettings.Groups.Add(i); else CopiedSettings.Groups.Remove(i);
             Enable();
         };
         return box;
