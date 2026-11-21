@@ -122,13 +122,13 @@ Nothing in `shell/` sets a colour, spacing, radius, font size, shadow or icon si
 
 | Axis | Scale | Rule |
 |---|---|---|
-| Space | 2 · 4 · 6 · 10 · 14 · 18 · 26 (`xs gap sm md pad lg xl`) | Tight inside a group (xs–sm), generous between groups (pad–xl). A control's side padding is `md`, a primary button's `pad` (14); icon to word is `sm`; a label to its control is `gap`; sheets and canvas pills sit `lg` in |
+| Space | 2 · 4 · 6 · 10 · 14 · 18 · 26 (`xs gap sm md pad lg xl`) | Tight inside a group (xs–sm), generous between groups (pad–xl). A control's side padding is `md`, a primary button's `pad` (14); icon to word is `sm` (`xs` where the word sits under its icon, in a tool tab); a label to its control is `gap`; sheets and canvas pills sit `lg` in |
 | Type | 11 · 12 · 13, then 17 · 28 (`Faces.Mark Label Body`, `Title`, `Display`) | 1 px steps for the working text; about 1.3× for the two large words |
 | Radius | 3 · 5 · 7 | `lg` = `md` + 2: a well holding `md` controls 2 px in, so corners are concentric. A pill is half its height |
 | Shadow | one: black .7, y 1, blur 3 | Only under what a hand grabs (thumb, puck, compare handle); hover and press move it from there |
 | Icons | 24-unit grid kept, one 1.6 stroke, `sm` 12 / `md` 16 | Never stretched to a glyph's bounds; `sm` in a row of text, `md` on a button, tab or nameplate |
 | Colour roles | `warn` apart from `star`; `faint` not for words | A warning is not a rating; faint is 2.5:1 |
-| Exempt | 1 px hairlines, ring offsets and the 2 px focus ring, the 80 px traffic lights, pills, the tab cells' 8 px | The tab padding is pinned by `SelfTest.Design` (7.75 spare each side at 322 and at the widest, equal cells at the widest; #403) |
+| Exempt | 1 px hairlines, ring offsets and the 2 px focus ring, the 80 px traffic lights, pills, the tab cells' room (8 at most, never under 4) | `SelfTest.Design` holds every tab name whole inside its cell at 322 and at the widest, with the room the names' face leaves at 322 each side, and the cells equal at the widest (#403) |
 | Exempt, ink | White and black at an opacity, and their stroke widths, wherever they draw over a photograph or a colour wheel (`Ink.White`/`Ink.Black`, the crop, mask, spot and loupe overlays, the navigator, the wheel's cross and puck outline) | They must read on any picture; a UI grey is tuned for the panels and vanishes on a mid-grey sky |
 | Exempt, data | The loupe's sampled colour, a colour mask's swatch, the histogram's channels, the watermark raster (it draws into the exported file) | They show the photograph's values, not the interface's |
 | Exempt, derived | `AccentLift` (accent toward text), `AnalogTrack.Shade` (the shadow token's alpha), the colour wheel's panel fade | Computed from tokens, so they follow them |
@@ -138,9 +138,9 @@ Nothing in `shell/` sets a colour, spacing, radius, font size, shadow or icon si
 
 | Area | Decision |
 |---|---|
-| Layout | Tool column 322 px to its widest (560, or up to 600 where the tab names' face needs it, #403), resizable by a splitter on the hairline (canvas keeps 360); canvas never wraps under it (a wrapping row made the photo 1506 px tall); single column under 760 px |
+| Layout | Tool column 322 px (more only where a face's seven tab names cannot fit it) to its widest (560, or up to 600 where the longest tab name needs it, #403), resizable by a splitter on the hairline (canvas keeps 360); canvas never wraps under it (a wrapping row made the photo 1506 px tall); single column under 760 px |
 | Overlays | Zoom and rating float over the photo as translucent pills; solid under reduced transparency |
-| Tabs | Selected tab changes color only, never weight; a sliding indicator moves under it |
+| Tabs | Every tool tab shows its icon over its name (`Faces.Mark`, 11); the selected one changes color only, never weight, and a pill slides under it |
 | States | Every control drawn at rest, hover, pressed (scale .97, 100 ms), focus, disabled, edited; canvas has loading, not-cached and couldn't-open states |
 | Errors | Say what failed and offer Try again / Skip; arrows keep browsing |
 | Focus | Two-ring box-shadow (ground, then accent) on buttons; outline on range thumbs |

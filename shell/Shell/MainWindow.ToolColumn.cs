@@ -5,20 +5,21 @@ using Avalonia.Media.TextFormatting;
 
 namespace OrionShell;
 
-/// The tool column's widest, from the face the tab names are drawn in (#403).
-/// At its widest the seven tabs are equal cells, and the chosen one shows its
-/// icon and name with `TabRoom` spare each side. 560 holds that in SF Pro and
-/// Segoe UI; fontconfig's default on Linux (DejaVu Sans here) draws "Presets"
-/// wider, so the column may widen to `ToolColCap`. Past that the room shrinks,
-/// evenly, never under `TabRoomMin`.
+/// The tab cells and the tool column's widest, from the face the tab names are
+/// drawn in (#403). Every tab shows its icon over its name. At 322 each cell is
+/// at least its name wide, and the names share what is left of the bar evenly
+/// as room each side: `TabPadding` at most, never under `TabRoomMin`; a face
+/// whose names need more than 322 at that raises the column's floor. At the
+/// widest the seven cells are equal, with `TabRoom` each side of the widest
+/// name: 560 where that holds, else wider, up to `ToolColCap`.
 public partial class MainWindow {
     public const double ToolColBase = 560, ToolColCap = 600, TabRoom = 7.75, TabRoomMin = 4;
-    /// The cells' padding at 560, off the scale on purpose: 8 each side holds TabRoom with a quarter to spare.
+    /// A cell's room each side of its name at most, off the scale on purpose.
     const double TabPadding = 8;
 
-    /// The column's widest for the face on screen now, and the room each side of the widest tab at it.
+    /// The column's widest for the face on screen now, and the room each side of a name at 322.
     public double ToolColMax { get; private set; } = ToolColBase;
-    public double TabRoomNow { get; private set; } = TabRoom;
+    public double TabRoomNow { get; private set; } = TabPadding;
     /// Which case the measurement hit, in words, for the selftest to report.
     public string ToolColFit { get; private set; } = "not measured";
 
@@ -34,41 +35,32 @@ public partial class MainWindow {
     }
 
     /// From the real TextLayout of each name, never an estimate. Every width is whole
-    /// points, so layout rounding cannot make one cell a fraction wider than the rest.
+    /// points, so layout rounding cannot make a cell a fraction narrower than its floor.
     void FitToolColumn() {
         var first = Words(_tabButtons[0]);
         var face = new Typeface(first.FontFamily, first.FontStyle, first.FontWeight, first.FontStretch);
-        double name = _tabButtons.Max(b => new TextLayout(Words(b).Text, face, first.FontSize, null).WidthIncludingTrailingWhitespace);
-        var content = (StackPanel)_tabButtons[0].Content!;
-        var icon = content.Children[0];
+        var icon = ((Panel)_tabButtons[0].Content!).Children[0];
         icon.Measure(Size.Infinity);
-        double widest = Math.Ceiling(icon.DesiredSize.Width + content.Spacing + name);
+        var content = _tabButtons.Select(b => Math.Ceiling(Math.Max(icon.DesiredSize.Width,
+            new TextLayout(Words(b).Text, face, first.FontSize, null).WidthIncludingTrailingWhitespace))).ToArray();
         double chrome = TabWell.Margin.Left + TabWell.Margin.Right + TabWell.Padding.Left + TabWell.Padding.Right;
-        int cells = _tabButtons.Count;
-        double need = cells * Math.Ceiling(widest + 2 * TabRoom) + chrome;
+        int cells = content.Length;
 
-        double room = TabRoom, padding = TabPadding;
-        if (need <= ToolColBase) {
-            ToolColMax = ToolColBase;
-            ToolColFit = $"fits {ToolColBase}";
-        } else if (need <= ToolColCap) {
-            ToolColMax = need;
-            padding = TabRoom;
-            ToolColFit = $"widened to {need} for a {widest} pt tab";
-        } else {
-            ToolColMax = ToolColCap;
-            // Against the narrowest cell: seven cells of 600 are not whole points, and layout rounding makes some a point narrower.
-            double spare = Math.Floor((Math.Floor((ToolColCap - chrome) / cells) - widest) / 2 * 4) / 4;   // quarter points
-            room = padding = Math.Max(TabRoomMin, spare);
-            ToolColFit = spare >= TabRoomMin ? $"{ToolColCap} with room shrunk to {room} for a {widest} pt tab"
-                                              : $"does not fit {ToolColCap} even at {TabRoomMin} for a {widest} pt tab";
+        double spare = Math.Floor((Layout.ToolCol - chrome - content.Sum()) / (2 * cells));
+        double padding = Math.Clamp(spare, TabRoomMin, TabPadding);
+        double floor = Math.Max(Layout.ToolCol, content.Sum() + 2 * cells * TabRoomMin + chrome);
+        double need = cells * Math.Ceiling(content.Max() + 2 * TabRoom) + chrome;
+        ToolColMax = Math.Clamp(need, ToolColBase, ToolColCap);
+        ToolColFit = (spare < TabRoomMin ? $"the names do not fit {Layout.ToolCol} even at {TabRoomMin} each side: the floor widened to {floor}"
+                                         : $"{padding} pt each side of a name at {Layout.ToolCol}")
+                   + (need <= ToolColBase ? $", fits {ToolColBase}" : need <= ToolColCap ? $", widened to {need}" : $", does not fit {ToolColCap}")
+                   + $"; {content.Sum()} pt of names, the widest {content.Max()}";
+        TabRoomNow = padding;
+        for (int i = 0; i < cells; i++) {
+            _tabButtons[i].Padding = new Thickness(padding, Space.Gap);
+            TabBar.ColumnDefinitions[i].MinWidth = content[i] + 2 * padding;
         }
-        TabRoomNow = room;
-        foreach (var b in _tabButtons) b.Padding = new Thickness(padding, 0);
+        Body.ColumnDefinitions[2].MinWidth = floor;
         Body.ColumnDefinitions[2].MaxWidth = ToolColMax;
-        int on = Array.IndexOf(Panels.Tabs, Tab);   // the chosen cell's minimum follows its padding
-        _tabButtons[on].InvalidateMeasure();
-        _tabButtons[on].Measure(Size.Infinity);
-        TabBar.ColumnDefinitions[on].MinWidth = _tabButtons[on].DesiredSize.Width;
     }
 }

@@ -21,8 +21,8 @@ public static class Faces {
     public static readonly FontFeatureCollection Tabular = FontFeatureCollection.Parse("+tnum");
 
     /// Roles over tokens.json's sizes. Nothing anywhere is under `Mark`.
-    public const double Mark = TypeSize.Sm;      // 11: scale numerals, keycaps, the smallest word
-    public const double Label = TypeSize.Base;   // 12: a control's name, tab names
+    public const double Mark = TypeSize.Sm;      // 11: scale numerals, keycaps, tool tab names, the smallest word
+    public const double Label = TypeSize.Base;   // 12: a control's name
     public const double Body = TypeSize.Md;      // 13: body text, section titles
     public const double Readout = TypeSize.Md;   // 13: a slider's value
     public const double Title = TypeSize.Title;  // 17: a sheet's title

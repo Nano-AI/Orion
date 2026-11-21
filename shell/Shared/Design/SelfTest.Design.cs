@@ -77,68 +77,96 @@ static partial class SelfTest {
         Check(found.Count == 0, "every tab: no Fluent button, numbers in the numeral face, no caps, no middle dots"
                                 + (found.Count > 0 ? ": " + string.Join("; ", found.Distinct().Take(8)) : ""));
 
-        // Tabs: one segmented well. The chosen tab alone shows its name, in text colour and never heavier, on the
-        // pill; the rest are icons of one size, named by a tooltip with the key and to a screen reader.
+        // Tabs: one segmented well. Every tab shows its name, at least Faces.Mark, the same weight; an unchosen one
+        // reads at 4.5:1 on the well, the chosen one is in text colour on the pill. Each is one target at least 24
+        // high, named by a tooltip with the key and to a screen reader.
         window.Select("Detail");
         window.UpdateLayout();
         var tabs = window.FindControl<Grid>("TabBar")!.Children.OfType<StateButton>().ToList();
         var names = tabs.Select(b => b.GetVisualDescendants().OfType<TextBlock>().Single()).ToList();
         var pill = window.FindControl<Border>("TabPill")!;
         static string Spoken(Control c) => Avalonia.Automation.AutomationProperties.GetName(c) ?? "";
-        Check(names.Select(n => n.FontWeight).Distinct().Count() == 1 && names[2].Foreground == Palette.Text
-              && names.Select((n, i) => n.IsVisible == (i == 2)).All(b => b) && pill.Bounds == tabs[2].Bounds
-              && tabs.All(b => b.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single().Width == IconSize.Md)
+        static double Luminance(IBrush b) {
+            var c = ((ISolidColorBrush)b).Color;
+            static double Linear(byte v) => v / 255.0 <= 0.04045 ? v / 255.0 / 12.92 : Math.Pow((v / 255.0 + 0.055) / 1.055, 2.4);
+            return 0.2126 * Linear(c.R) + 0.7152 * Linear(c.G) + 0.0722 * Linear(c.B);
+        }
+        double well = Luminance(window.FindControl<Border>("TabWell")!.Background!);
+        double faintest = names.Where((_, i) => i != 2).Min(n => (Luminance(n.Foreground!) + 0.05) / (well + 0.05));
+        Check(names.All(n => n.IsEffectivelyVisible && n.Opacity == 1 && n.FontSize >= Faces.Mark) && faintest >= 4.5
+              && names.Select(n => n.FontWeight).Distinct().Count() == 1 && names[2].Foreground == Palette.Text && pill.Bounds == tabs[2].Bounds
+              && tabs.All(b => b.Bounds.Height >= 24 && b.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single().Width == IconSize.Md)
               && tabs.Select((b, i) => ToolTip.GetTip(b) as string == $"{Panels.Tabs[i]} ({(OperatingSystem.IsMacOS() ? "⌘" : "Ctrl+")}{i + 1})" && Spoken(b) == Panels.Tabs[i]).All(b => b),
-              $"the chosen tab alone shows its name, on the pill ({pill.Bounds} under {tabs[2].Bounds}); the rest are IconSize.Md icons named by tooltip and screen reader");
+              $"every tab shows its name at {names[0].FontSize} pt, unchosen at {faintest:0.0}:1 on the well, the chosen one on the pill " +
+              $"({pill.Bounds} under {tabs[2].Bounds}); IconSize.Md icons, {tabs[0].Bounds.Height} high, tooltips with the key and spoken names");
 
-        // At the column's narrowest and widest, whichever tab is chosen, every cell holds its content with the room
-        // to spare each side (7.75, shrunk toward 4 only past 600); at the widest the seven cells are equal, as a
-        // segmented control's are. The widest is measured from the names' face (#403): 560 in SF Pro and Segoe UI.
+        // At the column's narrowest and widest, whichever tab is chosen, every name is shown and lies inside its cell, whole, with
+        // the room the names' face leaves at 322 (TabRoomNow each side), and no cell moves when the choice does; at
+        // the widest the seven cells are equal, as a segmented control's are.
         var column = window.FindControl<Grid>("Body")!.ColumnDefinitions[2];
         var cramped = new List<string>();
-        double narrowest = double.MaxValue, bar = 2 * window.TabRoomNow;
-        if (window.ToolColFit.StartsWith("does not fit")) cramped.Add(window.ToolColFit);
+        double tightest = double.MaxValue, bar = 2 * window.TabRoomNow;
+        if (window.ToolColFit.Contains("not fit")) cramped.Add(window.ToolColFit);
         foreach (double width in new[] { Layout.ToolCol, window.ToolColMax }) {
             column.Width = new GridLength(width);
+            Rect[]? cells = null;
             foreach (var tab in Panels.Tabs) {
                 window.Select(tab);
                 window.UpdateLayout();
-                if (width == Layout.ToolCol)   // the icon-only cells: the chosen one sizes itself to its name
-                    narrowest = Math.Min(narrowest, tabs.Where((b, i) => Panels.Tabs[i] != tab)
-                                                        .Min(b => b.Bounds.Width - ((Control)b.Content!).DesiredSize.Width));
-                cramped.AddRange(tabs.Where(b => b.Bounds.Width - ((Control)b.Content!).DesiredSize.Width < bar)
-                                     .Select(b => $"{Spoken(b)} at {width} with {tab} chosen ({b.Bounds.Width:0.#} pt)"));
+                for (int i = 0; i < tabs.Count; i++) {
+                    var at = names[i].TranslatePoint(default, tabs[i]) ?? new Point(-1, -1);
+                    var typeface = new Typeface(names[i].FontFamily, names[i].FontStyle, names[i].FontWeight);
+                    double whole = new Avalonia.Media.TextFormatting.TextLayout(names[i].Text, typeface, names[i].FontSize, null).WidthIncludingTrailingWhitespace;
+                    double spare = tabs[i].Bounds.Width - whole;
+                    if (width == Layout.ToolCol) tightest = Math.Min(tightest, spare / 2);
+                    if (spare < bar || at.X < 0 || at.X + whole > tabs[i].Bounds.Width || at.Y < 0 || at.Y + names[i].Bounds.Height > tabs[i].Bounds.Height
+                        || names[i].Bounds.Width < whole || !names[i].IsEffectivelyVisible || names[i].Opacity < 1)
+                        cramped.Add($"{Panels.Tabs[i]} at {width} with {tab} chosen ({whole:0.#} pt of name at {at} in {tabs[i].Bounds.Size})");
+                }
+                cells ??= tabs.Select(b => b.Bounds).ToArray();
+                if (!tabs.Select(b => b.Bounds).SequenceEqual(cells)) cramped.Add($"the cells move at {width} when {tab} is chosen");
                 if (width == window.ToolColMax && tabs.Max(b => b.Bounds.Width) - tabs.Min(b => b.Bounds.Width) > 1)
                     cramped.Add($"unequal cells at {width} with {tab} chosen");
             }
         }
         column.Width = new GridLength(Layout.ToolCol);
         // The measurement itself, so a reviewer can see how close 322 is without a failure to read it from.
-        Console.WriteLine($"selftest: tab fit at {Layout.ToolCol}: narrowest icon-only cell has {narrowest:0.0} pt beside its icon (bar {bar})");
+        Console.WriteLine($"selftest: tab fit at {Layout.ToolCol}: tightest name has {tightest:0.0} pt each side (bar {bar / 2})");
         Console.WriteLine($"selftest: tool column widest {window.ToolColMax} ({window.ToolColFit})");
-        Check(cramped.Count == 0, $"the tabs fit {Layout.ToolCol} and the widest with room in every cell, and are equal at the widest ({window.ToolColFit})"
+        Check(cramped.Count == 0, $"every tab's name fits its cell at {Layout.ToolCol} and the widest with room, the cells stay put, and are equal at the widest ({window.ToolColFit})"
                                   + (cramped.Count > 0 ? ": " + string.Join("; ", cramped.Take(4)) : ""));
 
+        // A face whose names cannot fit 322 even at TabRoomMin (a larger size stands in for one, through the face watch):
+        // the column's floor rises to hold them and ToolColFit says so; back at Faces.Mark the floor is 322 again.
+        names[0].FontSize = 16;
+        window.UpdateLayout();
+        double raised = column.MinWidth, shown = column.ActualWidth;
+        string said = window.ToolColFit;
+        names[0].FontSize = Faces.Mark;
+        window.UpdateLayout();
+        Check(raised > Layout.ToolCol && shown == raised && said.Contains($"floor widened to {raised}") && column.MinWidth == Layout.ToolCol,
+              $"names too wide for {Layout.ToolCol} raise the column's floor to hold them ({raised}, the column {shown}: {said}), and it returns to {column.MinWidth}");
+
         // A click: the pill's first frame is exactly where the old tab's was, it lands under the new one, and it gets
-        // there by transform, easing out under 200 ms, as the name fades in. Under reduced motion it is there at once.
+        // there by transform, easing out under 200 ms, while every name stays shown. Under reduced motion it is there at once.
         // (The headless clock does not carry a transition on, so the first frame and the base value stand for the ends.)
         window.Select("Detail");
         window.UpdateLayout();
         double from = tabs[2].Bounds.X - tabs[0].Bounds.X;
         window.Select("Light", animate: true);
         AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-        double start = pill.RenderTransform?.Value.M31 ?? 0, fade = names[0].Opacity;
+        double start = pill.RenderTransform?.Value.M31 ?? 0, dimmest = names.Min(n => n.Opacity);
         double lands = pill.GetBaseValue(Control.RenderTransformProperty).GetValueOrDefault()?.Value.M31 ?? double.NaN;
         var slide = pill.Transitions?.OfType<TransformOperationsTransition>().SingleOrDefault();
         Motion.Forced = true;
         window.Select("Detail", animate: true);
         AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-        bool jumped = !pill.IsAnimating(Control.RenderTransformProperty) && pill.RenderTransform?.Value.M31 == 0 && names[2].Opacity == 1;
+        bool jumped = !pill.IsAnimating(Control.RenderTransformProperty) && pill.RenderTransform?.Value.M31 == 0;
         Motion.Forced = false;
-        Check(Math.Abs(start - from) < 0.5 && lands == 0 && fade < 0.1 && jumped
+        Check(Math.Abs(start - from) < 0.5 && lands == 0 && dimmest == 1 && jumped
               && slide is { Duration.TotalMilliseconds: < 200, Easing: SplineEasing },
               $"a click eases the pill from the old tab ({start:0.#} pt over at the first frame, the tab {from:0.#} away; lands at {lands:0.#}) " +
-              $"in {slide?.Duration.TotalMilliseconds} ms as the name fades in (from {fade:0.##}); reduced motion jumps ({jumped})");
+              $"in {slide?.Duration.TotalMilliseconds} ms, every name shown throughout (dimmest {dimmest:0.##}); reduced motion jumps ({jumped})");
         Check(Commands.All.All(c => !Regex.IsMatch(c.Title, @" (?!Finder|Trash|HDR)\p{Lu}")), "command titles are sentence case (an acronym stays one)");
         window.Close();
 

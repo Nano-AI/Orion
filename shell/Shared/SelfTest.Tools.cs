@@ -381,7 +381,7 @@ static partial class SelfTest {
         return window;
     }
 
-    /// A tool tab by its spoken name: the unchosen ones show only their icon.
+    /// A tool tab by its spoken name.
     static StateButton TabButton(MainWindow window, string tab) =>
         window.FindControl<Grid>("TabBar")!.Children.OfType<StateButton>().First(b => Avalonia.Automation.AutomationProperties.GetName(b) == tab);
 
