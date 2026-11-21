@@ -120,6 +120,10 @@ public sealed class LibraryModel {
     /// Something a view shows changed: a mark, the filter, the folder.
     public event Action? Changed;
 
+    /// The filter or the order was chosen, raised after Changed: the strip shows the open photo again.
+    /// A mark, a batch of sidecar reads or a folder raises Changed alone, so a scroll the hand made stays.
+    public event Action? Rearranged;
+
     /// Every photograph in the folder, in EngineModel.Photos order.
     public IReadOnlyList<Photo> Photos {
         get {
@@ -146,7 +150,7 @@ public sealed class LibraryModel {
     public Filter Current {
         get => _filter;
         // The one moment a selection can come to hold photos nobody can see.
-        set { if (_filter != value) { _filter = value; Selection.Confine(VisiblePaths); Changed?.Invoke(); } }
+        set { if (_filter != value) { _filter = value; Selection.Confine(VisiblePaths); Changed?.Invoke(); Rearranged?.Invoke(); } }
     }
 
     /// The photograph on the canvas, if any.
@@ -178,6 +182,7 @@ public sealed class LibraryModel {
             : Photos.OrderBy(p => p.Path, byName);
         EngineModel.Shared.Reorder(sorted.Select(p => p.Path).ToList());
         Changed?.Invoke();
+        Rearranged?.Invoke();
     }
 
     // ── Marks (Library.swift's Ratings), in the sidecar ─────────────────────
