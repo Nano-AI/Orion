@@ -3,7 +3,7 @@
 Where the project stands and what comes next.
 Keep it to this page: history is `git log`, work is [GitHub issues](https://github.com/Nano-AI/Orion/issues).
 
-**Updated:** 2026-11-07
+**Updated:** 2026-11-20
 
 ## Where it stands
 
@@ -15,6 +15,11 @@ Shipped on `main`: export off macOS in sRGB, Display P3 and Adobe RGB with the c
 White balance has Lightroom's selector (W, a click on a neutral) and menu (As shot, Auto as grey world, six presets on the CIE daylight locus and illuminant A), S6.1, `research/white-balance.md`.
 
 `main` passes every gate on a real Mac, on a Linux machine with an RTX 3070 (`tools/open-pr.sh` runs there too) and in CI on all three systems (issues 37 and 41 closed, #47, #48).
+
+**v0.6.0-alpha.3 is out** (2026-11-20, tag on `1a3c944`): seven changes from alpha 2 testers, PRs 75 to 81, and the licence map PR 82.
+Tool tabs show their names; secondary text is 7:1 on the panel and the selftest holds an 11 floor; a first-run hint and an Open-a-folder button on the welcome; a Batch menu (copy, paste, sync, select all, export all) and a toolbar that fits from 1100 wide; Windows keeps the system title bar; four causes of the strip's dead wheel fixed; a Path mask, filled by Skia into the kind 4 matte (`research/masking.md`).
+Not tried on real Windows or Linux hardware: the title bar and strip fixes above all.
+The release carries Velopack's feed, so alpha 2 installs are offered it, and GLib's and gettext's source for the two LGPL libraries the Mac bundle now ships.
 
 This session (PRs 57 to 60), measured with `tools/bench.py --ab` on the RTX 3070 at 42 MP:
 
@@ -49,6 +54,11 @@ A rest render that fails past fit (a lost device, shaders older than the engine)
 
 ## Hazards worth knowing
 
+- Homebrew's OpenCV 5.1 brought 27 more dylibs into the Mac bundle (PR 82, `planning/LICENSE-AUDIT.md`): GLib and libintl are LGPL-2.1+, so every release that ships them carries their source; the same duty is unmet for libquadmath; `opencv@4` or a GLib-free HarfBuzz would drop them.
+- A path-masked photo opened in alpha 2 shows the mask as empty, and an edit there drops the path.
+- Two wall-clock checks each failed once on GitHub's macOS runners on release day and passed on a re-run: the selftest's "four renders each 200 ms long" (`SelfTest.Layout.cs`) and orion-tests' "node times sum to within a factor of 3" on Dawn.
+- `ParityChecks`' photo half (31 checks) never runs: `SelfTest.Parity.cs:27` returns while the photo `MarksOffTheUiThread` reopened is still decoding.
+- `shell/bin-native/present_test` cannot open a RAW by a relative path, which is what `open-pr.sh` passes by default: set `ORION_SAMPLES` to an absolute folder.
 - `samples/_PIC8095.ARW` has people in the plaza at its base: fine as a test frame, never for a published render.
 - The mask selftest checks need a lit sample: on a near-black frame their +10 of 255 never arrives, though the masks work.
 - On the Linux machine another process holds 2 GB of the 8 GB card for good; two Orion GPU runs at once run each other out of memory, so every gate and bench there goes under one lock (`flock`).
