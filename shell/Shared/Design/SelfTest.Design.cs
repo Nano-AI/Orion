@@ -5,6 +5,7 @@ using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -56,11 +57,23 @@ static partial class SelfTest {
               $"words are the platform's face, not Inter (got {face?.FamilyName ?? "nothing"})");
 
         var found = new List<string>();
+        var illegible = new List<string>();
+        int glyphs = 0;
         foreach (var tab in Panels.Tabs) {
             window.Select(tab);
             window.UpdateLayout();
             Dispatcher.UIThread.RunJobs();
             var visuals = window.GetVisualDescendants().Where(v => v.IsEffectivelyVisible).ToList();
+            // The logical tree as well, hidden words included: a word shown only when it applies (Detail's LUT
+            // Remove) is held while it is still hidden.
+            foreach (var t in visuals.OfType<TextBlock>().Concat(window.GetLogicalDescendants().OfType<TextBlock>()).Distinct())
+                illegible.AddRange(Illegible(t).Select(w => $"{tab}: {w}"));
+            // A meter's numerals are drawn in Render, not by a TextBlock: record what it draws.
+            foreach (var (size, ink, opacity) in visuals.OfType<AnalogTrack>().SelectMany(v => Glyphs(v))) {
+                glyphs++;
+                if (size < Faces.Mark) illegible.Add($"{tab}: a track numeral at {size} pt");
+                if (Unreadable(ink, opacity) is { } why) illegible.Add($"{tab}: a track numeral {why}");
+            }
             // A raw Button is Fluent's look; RepeatButton and ToggleButton belong to sliders, scrollbars and switches.
             found.AddRange(visuals.Where(v => v.GetType() == typeof(Button)).Select(v => $"{tab}: Fluent button"));
             foreach (var t in visuals.OfType<TextBlock>()) {
@@ -76,6 +89,36 @@ static partial class SelfTest {
         }
         Check(found.Count == 0, "every tab: no Fluent button, numbers in the numeral face, no caps, no middle dots"
                                 + (found.Count > 0 ? ": " + string.Join("; ", found.Distinct().Take(8)) : ""));
+        // Each sheet in a window of its own, as it opens: the theme gives its words their ink and Fluent its fields.
+        foreach (var sheet in Panels.All.Where(e => e.Name.StartsWith("sheet-"))) {
+            var host = new Window { Width = 900, Height = 900, Content = Panels.Create(sheet.Type) };
+            host.Show();
+            host.UpdateLayout();
+            var visibleWords = host.GetVisualDescendants().Where(v => v.IsEffectivelyVisible).OfType<TextBlock>();
+            illegible.AddRange(visibleWords.Concat(host.GetLogicalDescendants().OfType<TextBlock>()).Distinct().SelectMany(Illegible).Select(w => $"{sheet.Name}: {w}"));
+            host.Close();
+        }
+        Check(glyphs > 0 && illegible.Count == 0, $"every tab and sheet: no word under {Faces.Mark} pt, none under 4.5:1 on panel while its control works " +
+                                                  $"(exempt: a disabled control, words on the accent, the separators {string.Join(" ", Separators.Select(x => $"'{x}'"))}; " +
+                                                  $"{glyphs} track numerals drawn)" + (illegible.Count > 0 ? ": " + string.Join("; ", illegible.Distinct().Take(8)) : ""));
+        // A disabled field's hint is faint, as a disabled button's words are: Fluent draws it as an enabled one.
+        var tray = (Panel)window.FindControl<Grid>("ToolbarHost")!;
+        var field = new TextBox { PlaceholderText = "Find a lens…", IsEnabled = false };
+        tray.Children.Add(field);
+        window.UpdateLayout();
+        var hint = field.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(x => x.Name == "PART_Placeholder");
+        var drawn = Drawn(hint?.Foreground, hint?.Opacity ?? 0) as ISolidColorBrush;
+        Check(drawn?.Color == ((ISolidColorBrush)Palette.Faint).Color, $"a disabled field's hint draws in faint (got {drawn?.Color.ToString() ?? "no hint"})");
+        tray.Children.Remove(field);
+        // WCAG 2.x contrast; each step 1.3:1 or more and lighter than the one below, so text, label and dim read as three levels.
+        string Ratios(IBrush ink, params IBrush[] grounds) => string.Join(", ", grounds.Select(g => $"{Contrast(ink, g):0.00}"));
+        Check(Contrast(Palette.Dim, Palette.Panel) >= 7 && new[] { Palette.Ground, Palette.Raised, Palette.Hover, Palette.Surround }.All(g => Contrast(Palette.Dim, g) >= 4.5)
+              && Luminance(Palette.Label) > Luminance(Palette.Dim) && Luminance(Palette.Text) > Luminance(Palette.Label)
+              && Contrast(Palette.Label, Palette.Dim) >= 1.3 && Contrast(Palette.Text, Palette.Label) >= 1.3,
+              $"dim is 7:1 on panel and 4.5:1 on what words sit on (panel, ground, raised, hover, surround: " +
+              $"{Ratios(Palette.Dim, Palette.Panel, Palette.Ground, Palette.Raised, Palette.Hover, Palette.Surround)}); " +
+              $"label is lighter than dim by {Contrast(Palette.Label, Palette.Dim):0.00} ({Luminance(Palette.Label):0.000} over {Luminance(Palette.Dim):0.000}) " +
+              $"and darker than text by {Contrast(Palette.Text, Palette.Label):0.00} ({Luminance(Palette.Text):0.000} over {Luminance(Palette.Label):0.000}), each 1.3 or more");
 
         // Tabs: one segmented well. Every tab shows its name, at least Faces.Mark, the same weight; an unchosen one
         // reads at 4.5:1 on the well, the chosen one is in text colour on the pill. Each is one target at least 24
@@ -178,6 +221,69 @@ static partial class SelfTest {
               "the canvas shows this photo's picture, a calm blank while it decodes, or what failed");
 
         BrandChecks();
+    }
+
+    /// The only words that may be faint while their control works: the crumb's " / " between folder and photo.
+    static readonly string[] Separators = ["/"];
+
+    /// A word under the type floor, or one too pale to read while its control works: faint (tokens.json: not for
+    /// words) or a theme's own grey. A disabled control's words may be faint, and so may the Separators. Enabled
+    /// is read up the logical tree as well as the visual one. Its opacity and its visual ancestors' count (Fluent's
+    /// hint is 0.5); at 0 the word is not drawn (a pill faded out), so its ink is not judged.
+    static IEnumerable<string> Illegible(TextBlock t) {
+        bool works = t.IsEffectivelyEnabled && t.GetSelfAndLogicalAncestors().OfType<Avalonia.Input.InputElement>().All(e => e.IsEnabled);
+        double opacity = t.GetSelfAndVisualAncestors().Aggregate(1.0, (o, v) => o * v.Opacity);
+        var pieces = t.Inlines is { Count: > 0 } runs
+            ? runs.OfType<Avalonia.Controls.Documents.Run>().Select(r => (Text: r.Text ?? "", r.FontSize, Ink: r.Foreground ?? t.Foreground))
+            : [(Text: t.Text ?? "", t.FontSize, Ink: t.Foreground)];
+        foreach (var (text, size, ink) in pieces) {
+            if (size < Faces.Mark) yield return $"'{text}' at {size} pt";
+            if (works && opacity > 0 && !Separators.Contains(text.Trim()) && text.Trim().Length > 0 && Unreadable(ink, opacity) is { } why)
+                yield return $"'{text}' {why}";
+        }
+    }
+
+    /// The size, ink and opacity of each run of glyphs a control draws itself, recorded rather than rasterised.
+    static IEnumerable<(double Size, IBrush? Ink, double Opacity)> Glyphs(Drawing? d, double opacity = 1) => d switch {
+        GlyphRunDrawing { GlyphRun: { } run } g => [(run.FontRenderingEmSize, g.Foreground, opacity)],
+        DrawingGroup g => g.Children.SelectMany(c => Glyphs(c, opacity * g.Opacity)),
+        _ => [],
+    };
+
+    static IEnumerable<(double Size, IBrush? Ink, double Opacity)> Glyphs(Visual v) {
+        var drawing = new DrawingGroup();
+        using (var c = drawing.Open()) v.Render(c);
+        return Glyphs(drawing);
+    }
+
+    /// Why an ink cannot be read on panel, or null: the colour it draws, its alpha and opacity flattened onto panel,
+    /// is under 4.5:1, or it is no single colour (a gradient, or none) and so cannot be measured. Words on the
+    /// accent's fill are exempt: build-tokens.py holds onAccent on the accent.
+    static string? Unreadable(IBrush? ink, double opacity = 1) {
+        if (ink is ISolidColorBrush { Color: var c } && c == ((ISolidColorBrush)Palette.OnAccent).Color) return null;
+        if (Drawn(ink, opacity) is not { } drawn) return $"in {ink?.GetType().Name ?? "no ink"}, which the check cannot measure";
+        double ratio = Contrast(drawn, Palette.Panel);
+        return ratio < 4.5 ? $"at {ratio:0.00}:1" : null;
+    }
+
+    static IBrush? Drawn(IBrush? ink, double opacity) {
+        if (ink is not ISolidColorBrush b) return null;
+        double a = b.Color.A / 255.0 * b.Opacity * opacity;
+        var under = ((ISolidColorBrush)Palette.Panel).Color;
+        byte Mix(byte over, byte below) => (byte)Math.Round(over * a + below * (1 - a));
+        return new Avalonia.Media.Immutable.ImmutableSolidColorBrush(Color.FromRgb(Mix(b.Color.R, under.R), Mix(b.Color.G, under.G), Mix(b.Color.B, under.B)));
+    }
+
+    /// WCAG 2.x relative luminance.
+    static double Luminance(IBrush brush) {
+        var c = ((ISolidColorBrush)brush).Color;
+        static double Linear(byte v) => v / 255.0 <= 0.04045 ? v / 255.0 / 12.92 : Math.Pow((v / 255.0 + 0.055) / 1.055, 2.4);
+        return 0.2126 * Linear(c.R) + 0.7152 * Linear(c.G) + 0.0722 * Linear(c.B);
+    }
+
+    static double Contrast(IBrush a, IBrush b) {
+        double x = Luminance(a), y = Luminance(b);
+        return (Math.Max(x, y) + 0.05) / (Math.Min(x, y) + 0.05);
     }
 
     /// The brand's files load as the brand drew them, and keep its rules (#407).

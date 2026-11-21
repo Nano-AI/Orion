@@ -16,6 +16,9 @@ a failure exits 1 having written nothing:
 
   - each role pair in check() meets its WCAG 2.x contrast bar, against the
     app's greys and against the site's
+  - the app's secondary words can be read: dim 7:1 on panel and 4.5:1 on
+    every surface words sit on, label lighter than dim and darker than text,
+    1.3:1 from each
   - status stands apart from text and dim (OKLab distance >= 0.08): a status
     mark that reads as a grey word is no signal
   - no palette puts a red or pink (OKLCH hue >= 320 or <= 45, chroma > 0.08)
@@ -81,10 +84,14 @@ def linear(hex_):
     return [x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
 
 
+def luminance(hex_):
+    """WCAG 2.x relative luminance."""
+    return sum(w * c for w, c in zip((0.2126, 0.7152, 0.0722), linear(hex_)))
+
+
 def contrast(a, b):
     """WCAG 2.x contrast ratio."""
-    y = lambda h: sum(w * c for w, c in zip((0.2126, 0.7152, 0.0722), linear(h)))
-    hi, lo = sorted((y(a), y(b)), reverse=True)
+    hi, lo = sorted((luminance(a), luminance(b)), reverse=True)
     return (hi + 0.05) / (lo + 0.05)
 
 
@@ -123,6 +130,14 @@ def check(t):
                     bad.append(f"{name} ({where}): status is {d:.3f} from {k} in OKLab, needs 0.08 to read as a signal")
             if where == "web":
                 pairs.append(("accentInk on the research paper", r["accentInk"], PAPER, 4.5))
+            else:   # the site's greys are its own (web/css/base.css): no hover, surround or label there
+                pairs += [("dim on panel", greys["dim"], greys["panel"], 7)]
+                pairs += [(f"dim on {k}", greys["dim"], greys[k], 4.5) for k in ("ground", "raised", "hover", "surround")]
+                # each step 1.3:1 or more and lighter than the one below, so text, label and dim read as three levels
+                pairs += [("label against dim", greys["label"], greys["dim"], 1.3),
+                          ("text against label", greys["text"], greys["label"], 1.3)]
+                bad += [f"{name} ({where}): {hi} is not lighter than {lo}" for lo, hi in (("dim", "label"), ("label", "text"))
+                        if luminance(greys[hi]) <= luminance(greys[lo])]
             bad += [f"{name} ({where}): {what} is {contrast(fg, bg):.2f}:1, needs {bar}"
                     for what, fg, bg, bar in pairs if contrast(fg, bg) < bar]
         hues = [oklch(h) for h in strip_comments(t["palettes"][name]["slots"]).values()]

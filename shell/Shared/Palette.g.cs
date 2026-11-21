@@ -26,11 +26,11 @@ public static class Palette {
     public static readonly IBrush Rail = new ImmutableSolidColorBrush(Color.FromRgb(58, 58, 62));
     /// Primary text, slider thumbs
     public static readonly IBrush Text = new ImmutableSolidColorBrush(Color.FromRgb(232, 232, 234));
-    /// Labels, secondary text
-    public static readonly IBrush Dim = new ImmutableSolidColorBrush(Color.FromRgb(138, 138, 144));
-    /// A control's name (slider and field labels): a step above dim notes
-    public static readonly IBrush Label = new ImmutableSolidColorBrush(Color.FromRgb(160, 160, 166));
-    /// Inactive icons, detents, separators. Not for words a person must read: 2.5:1 on panel, under AA (dim is 5.0:1)
+    /// Labels, secondary text: at least 7:1 on panel and 4.5:1 on every surface words sit on (build-tokens.py holds both)
+    public static readonly IBrush Dim = new ImmutableSolidColorBrush(Color.FromRgb(166, 166, 172));
+    /// A control's name (slider and field labels): a step above dim notes and below text, 1.3:1 or more from each
+    public static readonly IBrush Label = new ImmutableSolidColorBrush(Color.FromRgb(192, 192, 198));
+    /// Inactive icons, detents, separators. Not for words a person must read: 2.5:1 on panel, under AA (dim is at least 7:1)
     public static readonly IBrush Faint = new ImmutableSolidColorBrush(Color.FromRgb(90, 90, 96));
     /// The Orion mark in the toolbar (brand/app/toolbar-mark.svg draws in currentColor), the brand's ink for it on the near-black toolbar (#407). The mark only: never words, never the accent
     public static readonly IBrush MarkInk = new ImmutableSolidColorBrush(Color.FromRgb(201, 202, 204));

@@ -20,5 +20,9 @@ public partial class Theme : Styles {
         var accent = ((ISolidColorBrush)Palette.Accent).Color;
         foreach (var shade in new[] { "", "Light1", "Light2", "Light3", "Dark1", "Dark2", "Dark3" })
             Resources["SystemAccentColor" + shade] = accent;
+        // A field's hint is words to read: dim, not Fluent's 60% white at half opacity (2.7:1 on panel).
+        foreach (var state in new[] { "", "PointerOver", "Focused" })
+            Resources["TextControlPlaceholderForeground" + state] = Palette.Dim;
+        Resources["TextControlPlaceholderOpacity"] = 1.0;
     }
 }

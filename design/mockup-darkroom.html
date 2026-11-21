@@ -12,9 +12,9 @@
     --line: #313135;  /* Hairlines, borders, dividers */
     --rail: #3A3A3E;  /* Scrollbar thumbs, and the lit lower lip of a slider's groove (AnalogTrack); tinted tracks draw their own label gradient (TrackTint) */
     --text: #E8E8EA;  /* Primary text, slider thumbs */
-    --dim: #8A8A90;  /* Labels, secondary text */
-    --label: #A0A0A6;  /* A control's name (slider and field labels): a step above dim notes */
-    --faint: #5A5A60;  /* Inactive icons, detents, separators. Not for words a person must read: 2.5:1 on panel, under AA (dim is 5.0:1) */
+    --dim: #A6A6AC;  /* Labels, secondary text: at least 7:1 on panel and 4.5:1 on every surface words sit on (build-tokens.py holds both) */
+    --label: #C0C0C6;  /* A control's name (slider and field labels): a step above dim notes and below text, 1.3:1 or more from each */
+    --faint: #5A5A60;  /* Inactive icons, detents, separators. Not for words a person must read: 2.5:1 on panel, under AA (dim is at least 7:1) */
     --markInk: #C9CACC;  /* The Orion mark in the toolbar (brand/app/toolbar-mark.svg draws in currentColor), the brand's ink for it on the near-black toolbar (#407). The mark only: never words, never the accent */
     --accent: #8F9BC4;  /* Interaction ONLY: an edited value, a slider's fill, the focus ring, the primary button, and the current selection (you are here). Never decorative, never status. */
     --reject: #C4574D;  /* Reject flag */
