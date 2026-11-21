@@ -3,9 +3,7 @@
         xmlns:local="clr-namespace:OrionShell"
         x:Class="OrionShell.MainWindow"
         Title="Orion" Width="1440" Height="900"
-        Background="{x:Static local:Palette.Ground}"
-        ExtendClientAreaToDecorationsHint="True"
-        ExtendClientAreaTitleBarHeightHint="44">
+        Background="{x:Static local:Palette.Ground}">
   <!-- Regions only. What goes in them is whatever Slices/ registers with [Panel]. -->
   <DockPanel>
     <Border DockPanel.Dock="Top" Height="{x:Static local:Layout.Toolbar}"

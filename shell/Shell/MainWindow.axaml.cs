@@ -37,7 +37,13 @@ public partial class MainWindow : Window {
 
     public MainWindow(string tab) {
         InitializeComponent();
-        if (OperatingSystem.IsMacOS()) ToolbarHost.Margin = new Thickness(80, 0, Space.Pad, 0); // traffic lights
+        // The toolbar runs under the title bar on macOS alone, the one system it leaves room for:
+        // extended on Windows, Avalonia draws the caption buttons over the toolbar's right end.
+        if (OperatingSystem.IsMacOS()) {
+            ExtendClientAreaToDecorationsHint = true;
+            ExtendClientAreaTitleBarHeightHint = Layout.Toolbar;
+            ToolbarHost.Margin = new Thickness(80, 0, Space.Pad, 0); // traffic lights
+        }
         Icon = WindowIconFor();
         AboveTabsHost.Margin = new Thickness(Space.Pad, 0);
         TabWell.Margin = new Thickness(Space.Pad, Space.Md);
