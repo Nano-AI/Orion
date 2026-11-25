@@ -101,12 +101,12 @@ html:not(.js) .stage__grab, html:not(.js) .stage__ctl { display: none; }
 .range:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--accent); }
 .range:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(--accent); }
 
-/* ---------- four real numbers ---------- */
-.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-5); margin-top: clamp(var(--s-6), 5vw, var(--s-8)); list-style: none; padding: 0; }
+/* ---------- three real numbers ---------- */
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-5); margin-top: clamp(var(--s-6), 5vw, var(--s-8)); list-style: none; padding: 0; }
 .facts li { padding-top: var(--s-4); border-top: 1px solid var(--line); }
 .facts b { display: block; color: var(--accent); font-family: var(--mono); font-weight: 300; font-size: clamp(1.5rem, 2.4vw, 2.25rem); line-height: 1.1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
 .facts span { display: block; margin-top: var(--s-2); font-size: var(--fs-sm); color: var(--dim); }
-@media (max-width: 760px) { .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .facts { grid-template-columns: 1fr; } }
 
 /* ---------- one idea per section, centred ---------- */
 .section__head { text-align: center; }
