@@ -156,6 +156,16 @@ static partial class SelfTest {
         engine.Render(false);
         var plain = spots.Select(s => Luma(engine.Picture, s.X, s.Y)).ToArray();
         double Lift(int i) => Luma(engine.Picture, spots[i].X, spots[i].Y) - plain[i];
+        // The same +1.5 EV with no mask: what a matte that covers a spot lifts it by, on whatever photo
+        // the selftest opened (a dark subject lifts by under 10 levels, a lit one by far more).
+        float ev = engine.Get("exposure_ev");
+        engine.Set("exposure_ev", ev + 1.5f);
+        var full = spots.Select((s, i) => Luma(engine.Picture, s.X, s.Y) - plain[i]).ToArray();
+        engine.Set("exposure_ev", ev);
+        // One level is the least a probe can show: the renders are deterministic, and a covered spot lifts exactly as far.
+        bool Shows(int i) => full[i] >= 1;
+        bool Covered(int i, double lift) => Shows(i) && lift > 0.8 * full[i];
+        string Unmasked(params int[] at) => "unmasked " + string.Join(", ", at.Select(i => full[i].ToString("0.0")));
         double[] square = [0.3, 0.3, 0.7, 0.3, 0.7, 0.7, 0.3, 0.7];
 
         group.Drawing = MaskGroup.PathTool;
@@ -187,8 +197,9 @@ static partial class SelfTest {
         Check(group.Shapes.Count == 1 && path is { Kind: 4, PathPoints.Count: 24 } && group.Drawing == 0 && group.DisplayName(0) == "Path 1",
               $"a click on the first point closes four corners into a kind-4 row named Path ({group.Shapes.Count} rows, " +
               $"kind {path?.Kind}, {path?.PathPoints.Count} numbers, '{group.DisplayName(0)}', drawing {group.Drawing})");
-        Check(Lift(0) > 10 && Math.Abs(Lift(1)) < 1 && Math.Abs(Lift(2)) < 1,
-              $"a square path's matte lifts its inside and not its outside ({Lift(0):0.0} inside, {Lift(1):0.0} and {Lift(2):0.0} outside)");
+        Check(Covered(0, Lift(0)) && Shows(1) && Shows(2) && Math.Abs(Lift(1)) < 1 && Math.Abs(Lift(2)) < 1,
+              $"a square path's matte lifts its inside as far as an unmasked +1.5 EV and not its outside " +
+              $"({Lift(0):0.0} inside, {Lift(1):0.0} and {Lift(2):0.0} outside; {Unmasked(0, 1, 2)})");
 
         double far = Lift(3);
         drag(at(0.7, 0.7), at(0.8, 0.8));
@@ -197,12 +208,12 @@ static partial class SelfTest {
         string? step = EditHistory.UndoLabel;
         EditHistory.Undo();
         var undone = group.Current?.PathPoints.Skip(12).Take(2).ToArray() ?? [];
-        Check(moved is [var mx, var my] && Math.Abs(mx - 0.8) < 0.01 && Math.Abs(my - 0.8) < 0.01 && carried > far + 10 && step == "Move path point"
+        Check(moved is [var mx, var my] && Math.Abs(mx - 0.8) < 0.01 && Math.Abs(my - 0.8) < 0.01 && Covered(3, carried - far) && step == "Move path point"
               && undone is [var ux, var uy] && Math.Abs(ux - 0.7) < 1e-4 && Math.Abs(uy - 0.7) < 1e-4 && Math.Abs(Lift(3) - far) < 1
               && engine.Get("local_exposure_ev", 0) == 1.5f,
               $"dragging a path's corner carries the matte with it, and undo of that one step puts the point back " +
               $"(point {string.Join(", ", moved.Select(v => v.ToString("0.000")))} → {string.Join(", ", undone.Select(v => v.ToString("0.000")))}; " +
-              $"lift below it {far:0.0} → {carried:0.0} → {Lift(3):0.0}; undid '{step}', exposure {engine.Get("local_exposure_ev", 0)})");
+              $"lift below it {far:0.0} → {carried:0.0} → {Lift(3):0.0}, {Unmasked(3)}; undid '{step}', exposure {engine.Get("local_exposure_ev", 0)})");
 
         // The last corner dragged left: its handle out points left, so the edge to the first point bulges left.
         group.Clear();
