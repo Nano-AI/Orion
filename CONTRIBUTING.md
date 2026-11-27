@@ -1,7 +1,7 @@
 # Contributing to Orion
 
-Thanks for helping. Orion is source-available, not open source, so read the
-licence part first. The rest is how the project works.
+Thanks for helping. Orion is open source under Apache-2.0. This is how the
+project works.
 
 New here? Issues labelled
 [good first issue](https://github.com/Nano-AI/Orion/labels/good%20first%20issue)
@@ -9,18 +9,10 @@ are small, name the files to touch and say how to check the result.
 
 ## The licence for contributions
 
-[`LICENSE`](LICENSE) is the PolyForm Internal Use License 1.0.0 with two added
-permissions (decision #359).
-
-| You may | You may not |
-|---|---|
-| Use Orion and change it for your own work or your company's internal work, paid or unpaid | Distribute Orion to anyone, in source or binary form, changed or not, free or paid |
-| Fork this repository on GitHub to send pull requests back | Keep a fork for any other purpose, or publish your own version |
-
-**By submitting a contribution you grant the licensor a perpetual, worldwide,
-irrevocable, royalty-free licence to use, change, relicense and distribute it as
-part of Orion** (additional permission 2). If you can't agree to that, please
-don't open a pull request.
+[`LICENSE`](LICENSE) is the Apache License 2.0. Under its section 5, a
+contribution you submit is licensed to the project, and to everyone who receives
+Orion, under those same terms, patent grant included. If you can't agree to
+that, please don't open a pull request.
 
 ## Rules every change follows
 

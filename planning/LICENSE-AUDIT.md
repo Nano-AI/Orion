@@ -9,6 +9,12 @@ paths are as of the audit. What the shipping bundle carries is now enumerated
 by `tools/package-app.sh`, which fails on any file with no licence mapped, and
 listed in `NOTICE`.
 
+⚠ **2026-11-27: Orion is Apache-2.0 again, every revision (`NOTICE`).** This
+audit asked whether each dependency could ship inside a proprietary Orion. Each
+keeps its own terms, and every one this audit lists can ship beside Apache-2.0
+code. GPL code stays out for a different reason: with it, Orion could not be
+distributed under Apache-2.0.
+
 ---
 
 ## What relicensing does NOT do
@@ -205,7 +211,7 @@ No library here is GPL-only. No GPL text is copied: FreeType's, Graphite2's and 
 
 **Open: libintl's `alloca.h`.** gettext 1.0 ships its own `gnulib-local/lib/alloca.in.h`, licensed GPL-3.0-or-later; libintl's `gnulib-lib/alloca.in.h` is the same file. On macOS `intl/gnulib-m4/alloca.m4` (lines 17-39) finds a working `<alloca.h>` and a compiler with `__GNUC__`, so the build generates `alloca.h` from it, and `-Ignulib-lib` puts it first on the include path. `gnulib-lib/vasnprintf.c` includes it unconditionally, and `printf.c` compiles `vasnprintf.c` into itself (`#define vasnprintf _libintl_vasnprintf`, then `#include "vasnprintf.c"`); Homebrew's libintl has `__libintl_vasnprintf` and `__libintl_printf_parse`. `dcigettext.c`, `localealias.c`, `printf.c` and `plural.c` include `<alloca.h>` directly only without `__GNUC__`, which clang defines. Under clang the header reduces to `#define alloca __builtin_alloca`.
 - For "no GPL obligation": the header is a macro naming a compiler built-in, and no function or data from the file reaches the binary. gnulib's own `lib/alloca.in.h` is LGPL-2.1-or-later (module `alloca-opt`, "LGPLv2+", at gnulib's current master), so the GPL-3.0 on gettext's copy is gettext's packaging, not gnulib's terms. gettext states libintl is under the LGPL (`gettext-runtime/COPYING`, `intl/COPYING.LIB`).
-- Against: the file compiled into libintl says GPL-3.0-or-later and nothing else. Read strictly, libintl contains GPL-3.0 material, and Orion cannot carry GPL code, linked dynamically or not (#359; rule 3 of `tools/package-gates.py`).
+- Against: the file compiled into libintl says GPL-3.0-or-later and nothing else. Read strictly, libintl contains GPL-3.0 material, and Orion cannot carry GPL code, linked dynamically or not (rule 3 of `tools/package-gates.py`).
 Not decided here; it is the developer's call, and it goes away with GLib.
 
 **Unicode data.** HarfBuzz, GLib and PCRE2 carry tables generated from Unicode's data files (HarfBuzz's USE and vowel-constraint tables also from Microsoft's `ms-use` files). Only HarfBuzz's emoji table names Unicode's terms (in NOTICE). The Unicode License v3 text travels only in the Linux package, as ICU's `icu.txt`. Whether it or Unicode's terms of use is owed for these tables on macOS: not decided here.
@@ -219,7 +225,7 @@ What distributing them requires, under LGPL-2.1:
 | 6 | prominent notice that the library is used and is under the LGPL, with a copy of the licence | met: NOTICE, and `LGPL-2.1-or-later.txt` from GLib's package |
 | 6 | "If the work during execution displays copyright notices", the library's among them, with a reference to the licence | **unverified**: `git grep` finds no copyright display in `shell/`, `shell/` sets no `NativeMenu`, and `Info.plist` sets no `NSHumanReadableCopyright`. But Avalonia.Native 12.1.4 carries an "About Avalonia" menu string and an `AboutAvaloniaDialog`, and whether Orion's macOS app menu shows it, and what it displays, was not checked by running the app |
 | 4 | the library's complete corresponding source with the binary, or equivalent access from the same place | **not met**: the GLib and gettext the runner has when it packages (2.90.1 and 1.0 on 2026-11-20, not observed in the log), with Homebrew's `hardcoded-paths.diff` for GLib and both formulae; nothing in the tree offers them (nor libquadmath's) |
-| 6 | the terms "permit modification of the work for the customer's own use and reverse engineering for debugging such modifications" | open: Orion's `LICENSE` permits changes for permitted purposes and is silent on reverse engineering |
+| 6 | the terms "permit modification of the work for the customer's own use and reverse engineering for debugging such modifications" | met since 2026-11-27: Apache-2.0 permits modification and has no term against reverse engineering |
 
 Not decided here: whether to ship them, and how to meet section 4.
 
@@ -237,7 +243,7 @@ LibRaw's `cam_xyz` colour matrices may be Adobe-derived (documented in planning/
 2. **License files in bundle.** Already done by `package-app.sh`: copies to `Contents/Resources/licenses/`.
 3. **No changes needed for LibRaw.** CDDL-1.0 choice enables static or dynamic linking in proprietary code. Current dynamic linking is compliant.
 4. **Lensfun fixes must stay CC BY-SA.** If any lens calibration is improved, contribute it back to lensfun project.
-5. **Mark the transition clearly.** Current NOTICE states "Orion is proprietary… Revisions up to commit abf3a51 remain available under Apache License, Version 2.0." This is correct and should stay.
+5. **Mark the transition clearly.** Superseded 2026-11-27: `NOTICE` now says Orion is Apache-2.0, every revision.
 
 ---
 

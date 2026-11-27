@@ -22,7 +22,7 @@ Controls and states boards). Committed 2026-10-27.
 | Neutrals | `tokens.json` greys, near-perfectly neutral | A tinted grey is a color cast in a raw editor (tokens.json's own rule) |
 | Accent | `accent` role, Periwinkle #8F9BC4 in `dusk` (cyan #4DB6C4 in `hubble` and `belt`), **interaction only**: edited value, slider fill, focus ring, pressed toggle, primary action, and the current selection (you are here). Words on it are Dusk ground #111B26. The edited dot is `status` | The brand identity's UI colour (#407), never in the mark. Low chroma (OKLCH C 0.062), so it reads as a quiet signal, not a brand flood. ⚠ It sits in the indigo band the cyan was chosen to avoid, and its lightness is the dim grey's: see Brand identity |
 | Words | System face (SF Pro on macOS, Segoe UI on Windows) | Native controls read as native; Apple HIG. Deliberate override of the deslop skill's ban on system type |
-| Numbers | Barlow Semi Condensed 500, tabular | Every figure looks read off a dial; condensed fits five-digit Kelvin in a 54 px readout. SIL OFL 1.1, fine to bundle in a proprietary app |
+| Numbers | Barlow Semi Condensed 500, tabular | Every figure looks read off a dial; condensed fits five-digit Kelvin in a 54 px readout. SIL OFL 1.1, fine to bundle |
 | Case | Sentence case everywhere; no tracked all-caps labels | Removes the most common generated-UI tell |
 | Signature move | **Light-meter scale sliders**: tracks marked in real units (stops, Kelvin, degrees), the edit fills from the default rather than from the left end | Says what a slider does in the photographer's units, and shows at a glance what has been edited |
 

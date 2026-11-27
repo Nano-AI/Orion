@@ -3,7 +3,7 @@
 Where the project stands and what comes next.
 Keep it to this page: history is `git log`, work is [GitHub issues](https://github.com/Nano-AI/Orion/issues).
 
-**Updated:** 2026-11-26
+**Updated:** 2026-11-27
 
 ## Where it stands
 
@@ -15,6 +15,8 @@ Shipped on `main`: export off macOS in sRGB, Display P3 and Adobe RGB with the c
 White balance has Lightroom's selector (W, a click on a neutral) and menu (As shot, Auto as grey world, six presets on the CIE daylight locus and illuminant A), S6.1, `research/white-balance.md`.
 
 `main` passes every gate on a real Mac, on a Linux machine with an RTX 3070 (`tools/open-pr.sh` runs there too) and in CI on all three systems (issues 37 and 41 closed, #47, #48).
+
+Orion is Apache-2.0 again since 2026-11-27, every revision; `NOTICE` credits the creator and goes with every redistributed copy.
 
 **v0.6.0-alpha.3 is out** (2026-11-20, tag on `1a3c944`): seven changes from alpha 2 testers, PRs 75 to 81, and the licence map PR 82.
 Tool tabs show their names; secondary text is 7:1 on the panel and the selftest holds an 11 floor; a first-run hint and an Open-a-folder button on the welcome; a Batch menu (copy, paste, sync, select all, export all) and a toolbar that fits from 1100 wide; Windows keeps the system title bar; four causes of the strip's dead wheel fixed; a Path mask, filled by Skia into the kind 4 matte (`research/masking.md`).

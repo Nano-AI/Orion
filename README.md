@@ -343,9 +343,8 @@ Issues labelled
 are a place to start. The hard constraints in [`AGENTS.md`](AGENTS.md) (no GPL
 code, every non-trivial filter cited in `research/`) apply to every change.
 
-Forks exist to send pull requests back; [`LICENSE`](LICENSE) forbids
-distributing your own version. By contributing you grant the project the rights
-its additional permission 2 describes.
+A fork or a rebuild you redistribute keeps [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE) with it.
+By contributing you license your change under Apache-2.0 (its section 5).
 
 ### Top contributors
 
@@ -357,20 +356,14 @@ its additional permission 2 describes.
 
 ## License
 
-**Orion is source-available, not open source.** The code is public to read,
-build and improve through pull requests, under
-[PolyForm Internal Use 1.0.0](https://polyformproject.org/licenses/internal-use/1.0.0)
-with two added permissions. That is not an OSI-approved
-open-source licence. The full text is in [`LICENSE`](LICENSE).
+**Apache License 2.0. See [`LICENSE`](LICENSE).**
 
-| You may | You may not |
-|---|---|
-| Use Orion for your own photographs or your company's internal work, paid or unpaid | Redistribute Orion, in source or binary form, changed or not |
-| Change it for your own use | Sell it, or publish your own version of it |
-| Fork it on GitHub to send pull requests back | Keep a fork for any other purpose |
-
-Revisions through commit abf3a51, and commits 82ec298 and 4005930, were
-published under Apache-2.0 and remain available under it.
+Use, change and redistribute Orion, commercially or not. Whoever redistributes
+it, changed or not, keeps the licence and the notices in [`NOTICE`](NOTICE),
+which credit Orion's creator and the third parties whose work it carries.
+Apache-2.0 also carries a patent licence from each contributor for their
+contribution (section 3). It grants no trademark rights: the Orion name and icon
+may be used only to say where a copy came from (section 6).
 
 ⚠ **[`NOTICE`](NOTICE) carries third-party licenses and obligations**:
 
@@ -409,7 +402,7 @@ Project: [github.com/Nano-AI/Orion](https://github.com/Nano-AI/Orion)
 
 [release-shield]: https://img.shields.io/github/v/release/Nano-AI/Orion?include_prereleases&style=for-the-badge
 [release-url]: https://github.com/Nano-AI/Orion/releases
-[license-shield]: https://img.shields.io/badge/license-PolyForm%20Internal%20Use-blue?style=for-the-badge
+[license-shield]: https://img.shields.io/badge/license-Apache%202.0-blue?style=for-the-badge
 [license-url]: https://github.com/Nano-AI/Orion/blob/main/LICENSE
 [stars-shield]: https://img.shields.io/github/stars/Nano-AI/Orion?style=for-the-badge
 [stars-url]: https://github.com/Nano-AI/Orion/stargazers

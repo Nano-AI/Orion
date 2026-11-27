@@ -2,7 +2,7 @@
 
 Orion is a fast, subscription-free desktop RAW photo editor: one Avalonia app for macOS, Windows and Linux, built by a solo developer.
 It ships as alpha pre-releases on GitHub; Windows and Linux are not yet supported releases.
-It is source-available, never redistributed.
+It is open source under Apache-2.0.
 
 **Stack:** C++20 engine; Metal compute on macOS, Dawn (WebGPU in C++) on Windows (D3D12) and Linux (Vulkan); Slang shaders; LibRaw decode; OpenColorIO and lcms2 colour; XMP sidecars as the source of truth; the app in `shell/` on Avalonia 12 and .NET 10; Velopack installers and updates from GitHub Releases, packaged by `tools/package-app.sh` (DMG), `tools/package-windows.sh` (Setup.exe and zip) and `tools/package-linux.sh` (AppImage).
 A release must carry the update feed Velopack writes beside the packages.
@@ -26,7 +26,7 @@ A release must carry the update feed Velopack writes beside the packages.
 - **Maintainability is a hard requirement.** One node is one small shader (50 to 150 lines). Adding a feature is a repeatable 3-file change. No file reaches 1000 lines. The developer must be able to hand-edit any file.
 - **Prefer mature libraries** over hand-rolled code, even at some performance cost.
 - **No GPL code or libraries** (notably exiv2). LGPL (LibRaw) only when dynamically linked or relinkable.
-- **Licence.** Orion is under PolyForm Internal Use plus permission for personal use and pull requests: never redistribute or sell it, and never publish any revision under an open licence.
+- **Licence.** Orion is Apache-2.0. Whoever redistributes it keeps the licence text and `NOTICE`, and `NOTICE` credits the creator: never drop that line. GPL code stays out: with it, Orion could not be distributed under Apache-2.0.
 - **Algorithm sourcing.** Every technically non-trivial filter cites a published, dated, established source in `research/`. A filter without one is listed in `research/UNSOURCED.md` until it is sourced or defended.
   - Implementing a published algorithm from its description is fine; say so in the entry. Copying GPL code (darktable, RawTherapee) is not.
   - A module inside a GPL program is not a published algorithm: where the only description is its source code, it cannot be implemented here.
