@@ -45,6 +45,7 @@ struct Kernel::Impl {
     std::uint32_t execWidth    = 32;
     std::uint32_t maxThreads   = 1024;
     std::uint32_t textureSlots = 0;
+    std::uint32_t paramBytes   = 0;   // buffer(0)'s size, as the compiled shader declares it
 };
 
 struct CommandBuffer::Impl {

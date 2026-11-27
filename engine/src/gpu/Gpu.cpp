@@ -213,6 +213,16 @@ void* Kernel::raw() const noexcept { return impl_->raw(); }
 std::uint32_t Kernel::threadExecutionWidth() const noexcept { return impl_->execWidth; }
 std::uint32_t Kernel::maxThreadsPerGroup() const noexcept { return impl_->maxThreads; }
 std::uint32_t Kernel::textureSlotsUsed() const noexcept { return impl_->textureSlots; }
+std::uint32_t Kernel::paramBytes() const noexcept { return impl_->paramBytes; }
+
+void Kernel::checkParams(std::size_t given, const std::string& node) const {
+    const std::uint32_t expected = impl_->paramBytes;
+    if (expected == 0 || given == expected) return;
+    throw std::runtime_error("kernel '" + name_ + "'" + (node.empty() ? "" : " (node '" + node + "')") +
+                             " takes a " + std::to_string(expected) +
+                             "-byte parameter block but was given " + std::to_string(given) +
+                             " - the shader and the binary disagree; rebuild both");
+}
 
 // ── CommandBuffer ──────────────────────────────────────────────────────────
 
@@ -224,6 +234,7 @@ void CommandBuffer::dispatch(const Kernel& kernel,
                              const std::vector<const Texture*>& textures,
                              const void* params, std::size_t paramBytes,
                              std::uint32_t width, std::uint32_t height) {
+    kernel.checkParams(params ? paramBytes : 0);
     impl_->dispatch(kernel, textures, params, paramBytes, width, height);
 }
 

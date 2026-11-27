@@ -43,6 +43,9 @@ On a GPU slower than 160 ms a render, a burst of typed values or held keys read 
 The clipping overlay's pixel checks wait for the canvas to hold the newest render's copy: on WARP that settle read had been landing it for them, and a copy stand-in that lands 200 ms late now shows it on any GPU; the histogram drag check also waits for the photo it reopens.
 A rest render that fails past fit (a lost device, shaders older than the engine) is asked once per view: the failure redrew the canvas, which asked for the landing view again, and that Render-priority chain froze the UI thread under a gliding spring (the Linux selftest spun 2 h 47 min on a tree with stale shaders beside the app).
 
+A binary and a kernel that disagree on a parameter block's size now fail the render by name on Metal too ("kernel 'geometry' (node 'geometry') takes a 112-byte parameter block but was given 128"), from Metal's reflected `bufferDataSize`; it had rendered one flat black frame when a stale binary loaded today's metallibs.
+A Metal command buffer dropped before its commit now ends its encoder, where Metal had aborted the process.
+
 ## Next, in order
 
 1. Zero-copy present off macOS: Windows (D3D11 keyed mutex into ANGLE, opt-in) and Linux (the one Vulkan allocator, not yet built). Issue 24.
@@ -62,7 +65,8 @@ A rest render that fails past fit (a lost device, shaders older than the engine)
 - `ParityChecks`' photo half (31 checks) never runs: `SelfTest.Parity.cs:27` returns while the photo `MarksOffTheUiThread` reopened is still decoding.
 - `shell/bin-native/present_test` cannot open a RAW by a relative path, which is what `open-pr.sh` passes by default: set `ORION_SAMPLES` to an absolute folder.
 - `samples/_PIC8095.ARW` has people in the plaza at its base: fine as a test frame, never for a published render.
-- The mask selftest checks need a lit sample: on a near-black frame their +10 of 255 never arrives, though the masks work.
+- Most mask selftest checks need a lit sample: the radial, brush, path bulge and path feather checks want +10 of 255 at fixed points, which a dark subject never gives though the masks work (the bulge reads 9.6 on `underexposedsubject.ARW`).
+  The path's inside and corner-drag checks compare with the same +1.5 EV unmasked, so they hold on any photo that is not black or blown at their points.
 - On the Linux machine another process holds 2 GB of the 8 GB card for good; two Orion GPU runs at once run each other out of memory, so every gate and bench there goes under one lock (`flock`).
 - On Linux the shim builds only when CMake is configured with `-DORION_SHELL_DIR=shell`, and `dotnet build` does not copy it next to the app (`open-pr.sh` does).
 - 42 MP with clarity, denoise and texture on: a Luminance tick of the full graph is 155 ms in the engine and 161 ms in the app, against 69 ms of GPU work; the slowest node is `denoise:blur 0` at 5.1 ms (RTX 3070, `tools/bench.py --scenarios drag-heavy,engine-heavy`, GPU timestamps).

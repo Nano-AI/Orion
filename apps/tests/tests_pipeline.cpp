@@ -128,6 +128,70 @@ void testBindingCount() {
     }
 }
 
+// A binary built before `params::Geometry` grew from 112 to 128 bytes, loading
+// today's metallib, bound the short block and Metal rendered a flat black frame.
+void testParamBlockSizeGpu() {
+    section("Kernel parameter block sizes (GPU)");
+    using orion::gpu::PixelFormat;
+    namespace pipe = orion::pipe;
+    try {
+        auto device = orion::gpu::Device::create();
+        constexpr std::uint32_t n = 16;
+        orion::pipe::params::Geometry g{};
+        g.outSize[0] = g.outSize[1] = g.inSize[0] = g.inSize[1] = n;
+        g.cropSize[0] = g.cropSize[1] = 1.0f;
+        g.pivot[0] = g.pivot[1] = 0.5f;
+        const std::size_t shortBytes = sizeof g - 16;
+
+        pipe::Pipeline p(*device, ORION_SHADER_DIR);
+        p.setSourceFormat(PixelFormat::RGBA8Unorm);
+        const int node = p.add({.name = "stale", .kernel = "geometry", .inputs = {pipe::kSource},
+                                .format = PixelFormat::RGBA8Unorm, .params = {}, .aux = {}});
+        p.compile(n, n);
+        const std::vector<std::uint8_t> grey(std::size_t(n) * n * 4, 200);
+        p.setSource(grey.data(), n * 4);
+
+        p.setParams(node, &g, shortBytes);
+        std::string why;
+        try {
+            p.render();
+        } catch (const std::exception& e) {
+            why = e.what();
+        }
+        const auto names = [&](const std::string& s) { return why.find(s) != std::string::npos; };
+        report(!why.empty(), "a parameter block 16 bytes short is refused at render");
+        report(names("'geometry'") && names("'stale'") && names("128") &&
+                   names(std::to_string(shortBytes)) && names("rebuild"),
+               "and the refusal names the kernel, the node, both sizes and the remedy", why);
+
+        p.setParams(node, &g, sizeof g);
+        std::vector<std::uint8_t> out(grey.size());
+        try {
+            p.render();
+            p.output().download(out.data(), n * 4);
+        } catch (const std::exception& e) {
+            report(false, "the right size renders on the same graph afterwards", e.what());
+        }
+        report(out == grey, "the right size renders the source on the same graph afterwards");
+
+        // A dispatch outside a graph (DisplayCopy, the histogram) is held to it too.
+        auto lib = orion::gpu::Library::createFromFile(*device, std::string(ORION_SHADER_DIR) + "/geometry.metallib");
+        auto k = orion::gpu::Kernel::create(*device, *lib, "geometry");
+        auto src = orion::gpu::Texture::create(*device, n, n, PixelFormat::RGBA8Unorm);
+        auto dst = orion::gpu::Texture::create(*device, n, n, PixelFormat::RGBA8Unorm);
+        bool threw = false;
+        try {
+            orion::gpu::CommandBuffer cb(*device);
+            cb.dispatch(*k, {src.get(), dst.get()}, &g, shortBytes, n, n);
+        } catch (const std::exception&) {
+            threw = true;
+        }
+        report(threw, "a direct dispatch with a short block is refused");
+    } catch (const std::exception& e) {
+        report(false, "parameter block fixture completes", e.what());
+    }
+}
+
 // Catches retaining disabled filter outputs, dropping active drag caches, and
 // recycling a mask/pinned texture into pixels another reader still needs.
 void testDisabledCacheReleaseGpu() {

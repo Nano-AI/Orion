@@ -118,6 +118,7 @@ std::vector<std::uint8_t> pixels(const orion::pipe::DevelopPipeline&);
 // does not link; a test declared and not called is one that never runs, which is
 // why `main.cpp` is now short enough to read its call list at a glance.
 void testBindingCount();
+void testParamBlockSizeGpu();
 void testDisabledCacheReleaseGpu();
 void testDawnParityGpu();
 void testEveryKernelCompilesOnDawnGpu();

@@ -154,8 +154,8 @@ std::unique_ptr<Kernel::Impl> makeMetalKernel(void* device, Library& library,
     if (fn == nil) throw std::runtime_error("no kernel named '" + entryPoint + "' in library");
 
     NSError* err = nil;
-    // ⚠ Reflection, not the plain overload, so `textureSlotsUsed` can be
-    // answered — see the note on that accessor for what it prevents.
+    // ⚠ Reflection, not the plain overload, so `textureSlotsUsed` and
+    // `paramBytes` can be answered - see the notes on them for what they prevent.
     MTLComputePipelineReflection* refl = nil;
     k->pso = [(__bridge id<MTLDevice>)device newComputePipelineStateWithFunction:fn
                                                              options:MTLPipelineOptionBindingInfo
@@ -175,6 +175,8 @@ std::unique_ptr<Kernel::Impl> makeMetalKernel(void* device, Library& library,
         if (b.type == MTLBindingTypeTexture) {
             k->textureSlots = std::max(k->textureSlots,
                                         static_cast<std::uint32_t>(b.index) + 1u);
+        } else if (b.type == MTLBindingTypeBuffer && b.index == 0 && b.used) {
+            k->paramBytes = static_cast<std::uint32_t>(((id<MTLBufferBinding>)b).bufferDataSize);
         }
     }
 
@@ -190,7 +192,11 @@ namespace {
 
 struct MetalCommandBuffer final : CommandBuffer::Impl {
     id<MTLCommandBuffer>         cb  = nil;
-    id<MTLComputeCommandEncoder> enc = nil;
+    id<MTLComputeCommandEncoder> enc = nil;   // nil once ended
+
+    // ⚠ Metal aborts the process when an encoder is released unended, which a
+    // render that throws before its commit would otherwise do.
+    ~MetalCommandBuffer() override { [enc endEncoding]; }
 
     void dispatch(const Kernel& kernel, const std::vector<const Texture*>& textures,
                   const void* params, std::size_t paramBytes,
@@ -214,6 +220,7 @@ struct MetalCommandBuffer final : CommandBuffer::Impl {
     void commitAndWait() override {
         const auto start = std::chrono::steady_clock::now();
         [enc endEncoding];
+        enc = nil;
         [cb commit];
         [cb waitUntilCompleted];
         wallMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
