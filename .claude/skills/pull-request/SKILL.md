@@ -66,7 +66,7 @@ The three-line test report from the testing skill.
 
 What a reader might expect here that is deliberately absent, and the follow-ups, each with its issue.
 
-- [ ] I agree my contribution is licensed to the project under additional permission 2 of [`LICENSE`](../LICENSE)
+- [ ] I agree my contribution is licensed under Apache-2.0, as section 5 of [`LICENSE`](../LICENSE) says
 ```
 
 `tools/open-pr.sh` appends a `### Gates` section with each gate's last line; do not write one by hand.

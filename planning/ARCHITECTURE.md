@@ -68,7 +68,7 @@ decode → white balance → demosaic → camera matrix → linear working space
 | Index/cache | none since #380: the SQLite index was the Swift app's | — |
 | ML inference | **Core ML** (ANE) now; ONNX Runtime when porting | — |
 
-⚠️ **Avoid exiv2** — GPL-2.0, which a source-available, never-redistributed work (#359, `LICENSE`) cannot carry. Apple's ImageIO covers metadata reads on macOS; revisit when porting.
+⚠️ **Avoid exiv2**: GPL-2.0, which Orion cannot carry and stay Apache-2.0 (`LICENSE`). Apple's ImageIO covers metadata reads on macOS; revisit when porting.
 
 ## Library, not catalog — answering "why a DB at all?"
 
@@ -116,7 +116,7 @@ The engine ships as a standalone C++ library with a narrow C API. The UI is a *c
 
 ## Licence
 
-Source-available under PolyForm Internal Use 1.0.0 with added permissions for personal use and pull requests (#359): never redistributed or sold. A work under it cannot carry GPL code; LGPL only dynamically linked. Revisions up to `abf3a51` remain Apache-2.0 (`NOTICE`).
+Apache-2.0, every revision (`LICENSE`, `NOTICE`). `NOTICE` credits the creator and goes with every redistributed copy. GPL code stays out: with it, Orion could not be distributed under Apache-2.0. LGPL only dynamically linked.
 
 ## Open decisions
 

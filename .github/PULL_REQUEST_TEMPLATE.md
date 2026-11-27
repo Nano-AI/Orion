@@ -14,4 +14,4 @@
 
 <!-- What a reader might expect that is deliberately absent, and the follow-ups with their issues. -->
 
-- [ ] I agree my contribution is licensed to the project under additional permission 2 of [`LICENSE`](../LICENSE)
+- [ ] I agree my contribution is licensed under Apache-2.0, as section 5 of [`LICENSE`](../LICENSE) says
