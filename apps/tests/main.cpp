@@ -60,6 +60,7 @@ int main(int argc, char** argv) {
     // First, because it is the one that catches a shader and a binary that
     // disagree — a state in which every other GPU test's result is a guess.
     gpu(testBindingCount);
+    gpu(testParamBlockSizeGpu);
     gpu(testDisabledCacheReleaseGpu);
     gpu(testReleaseEveryRenderGpu);
     gpu(testProfileGpuClockGpu);

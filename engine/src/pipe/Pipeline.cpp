@@ -415,6 +415,8 @@ void Pipeline::ensure(int id) {
 void Pipeline::computeOne(int id) {
     const std::size_t idx = static_cast<std::size_t>(id);
     const Node& node = nodes_[idx];
+    // Before the output is acquired, so a refusal holds nothing.
+    kernels_[idx]->checkParams(node.params.size(), node.name);
 
     // Whatever this node held will never be read again: every consumer of a
     // node about to change is dirty too (`markDownstreamDirty`), so nothing

@@ -158,6 +158,20 @@ public:
     /// declares, and an auto layout refuses a short bind group outright.
     [[nodiscard]] std::uint32_t textureSlotsUsed() const noexcept;
 
+    /// The parameter block's size, as the compiled shader declares it at
+    /// buffer(0); 0 for a kernel that reads none.
+    ///
+    /// ⚠ The other half of the guard above. Metal binds whatever length it is
+    /// given: a binary built before `params::Geometry` grew from 112 to 128
+    /// bytes, loading today's metallib, rendered one flat black frame.
+    /// `checkParams` refuses that, from `CommandBuffer::dispatch` for every
+    /// dispatch and from the graph first, where the node's name is known.
+    [[nodiscard]] std::uint32_t paramBytes() const noexcept;
+
+    /// Throws when `given` bytes are not this kernel's parameter block.
+    /// `node` names the graph node in the message, when there is one.
+    void checkParams(std::size_t given, const std::string& node = {}) const;
+
     struct Impl;   // backend-private
     [[nodiscard]] Impl& impl() const noexcept { return *impl_; }
 

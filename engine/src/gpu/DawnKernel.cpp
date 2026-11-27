@@ -133,6 +133,7 @@ std::unique_ptr<Kernel::Impl> makeKernel(Library& library, const std::string& en
     k->execWidth  = 32;
     k->maxThreads = 256;   // [numthreads(16,16,1)]; WebGPU's default ceiling
     for (const auto& b : s.textures) k->textureSlots = std::max(k->textureSlots, b.slot + 1);
+    k->paramBytes = s.hasParams ? s.hostBytes : 0;
 
     // Compiled now for the likeliest formats, so a shader Tint rejects fails
     // at graph compile, as a Metal one does. Slang's guess is 32-bit; the

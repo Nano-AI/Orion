@@ -41,6 +41,9 @@ On a GPU slower than 160 ms a render, a burst of typed values or held keys read 
 The clipping overlay's pixel checks wait for the canvas to hold the newest render's copy: on WARP that settle read had been landing it for them, and a copy stand-in that lands 200 ms late now shows it on any GPU; the histogram drag check also waits for the photo it reopens.
 A rest render that fails past fit (a lost device, shaders older than the engine) is asked once per view: the failure redrew the canvas, which asked for the landing view again, and that Render-priority chain froze the UI thread under a gliding spring (the Linux selftest spun 2 h 47 min on a tree with stale shaders beside the app).
 
+A binary and a kernel that disagree on a parameter block's size now fail the render by name on Metal too ("kernel 'geometry' (node 'geometry') takes a 112-byte parameter block but was given 128"), from Metal's reflected `bufferDataSize`; it had rendered one flat black frame when a stale binary loaded today's metallibs.
+A Metal command buffer dropped before its commit now ends its encoder, where Metal had aborted the process.
+
 ## Next, in order
 
 1. Zero-copy present off macOS: Windows (D3D11 keyed mutex into ANGLE, opt-in) and Linux (the one Vulkan allocator, not yet built). Issue 24.

@@ -71,8 +71,8 @@ struct DawnCommandBuffer final : CommandBuffer::Impl {
         if (s.hasParams) {
             // ⚠ The host's struct must be the shader's, byte for byte: a short
             // block would otherwise be zero-filled and a long one truncated,
-            // and either renders a plausible wrong picture. Metal's setBytes
-            // never checked this; the facade catches the throw.
+            // and either renders a plausible wrong picture. The facade
+            // catches the throw.
             if (data == nullptr || dataBytes != s.hostBytes) {
                 throw std::runtime_error("kernel '" + s.entry + "' takes a " +
                                          std::to_string(s.hostBytes) + "-byte parameter block, given " +
