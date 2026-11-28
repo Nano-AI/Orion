@@ -69,7 +69,7 @@ public sealed class CanvasPanel : Panel {
         // Try again reopens this photo; Skip moves on. Neither takes the arrow keys, which keep browsing.
         _choices.Children.AddRange([
             new StateButton(null, "Try again", () => { var e = EngineModel.Shared; if (e.Current >= 0) e.Open(e.Current); }) { Focusable = false },
-            new StateButton(null, "Skip", () => Commands.Run(EngineModel.Shared.Current < EngineModel.Shared.Photos.Count - 1
+            new StateButton(null, "Skip", () => Commands.Run(Library.LibraryModel.Shared.Neighbour(EngineModel.Shared.Current, 1) != null
                                                              ? "next-photo" : "previous-photo")) { Focusable = false },
         ]);
         _state = new StackPanel { Spacing = Space.Md, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,

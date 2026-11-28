@@ -288,22 +288,21 @@ public sealed class EngineModel : INotifyPropertyChanged {
         if (!CanLeave()) return false;
         int from = Current;
         _list.Go(index);
-        return Show(from);
+        return Show(from >= 0 && Math.Abs(index - from) == 1 ? index - from : 0);   // a jump has no direction
     }
 
-    /// The arrow keys (Library.neighbor): false at either end, where nothing reopens.
-    /// A held key coalesces: each press shows the kept picture, and only the
-    /// photo it stops on waits for a session (ISessionSource.Request).
-    public bool Next() { int from = Current; return CanLeave() && _list.Next() && Show(from); }
-    public bool Previous() { int from = Current; return CanLeave() && _list.Previous() && Show(from); }
+    /// A step to `index`, however far: it travels toward it, where Open jumps. False
+    /// outside the list. A held key coalesces: each press shows the kept picture, and
+    /// only the photo it stops on waits for a session (ISessionSource.Request).
+    public bool Step(int index) { int from = Current; return CanLeave() && _list.Go(index) && Show(Math.Sign(index - from)); }
 
     /// Preview-first: the kept picture now, the session when it is ready,
     /// which for a kept session is before this returns. False when the photo
     /// will not open, as far as is known by then.
-    bool Show(int from) {
+    bool Show(int direction) {
         Close();
-        int index = Current, step = index - from;
-        _source.Hint(index, from >= 0 && Math.Abs(step) == 1 ? step : 0);   // a jump has no direction
+        int index = Current;
+        _source.Hint(index, direction);
         Status = "";
         if (_source.Picture(index) is { } picture) Shown.Show(picture, Graph.Preview);
         else Shown.Clear();

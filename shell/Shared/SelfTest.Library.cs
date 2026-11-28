@@ -48,6 +48,37 @@ static partial class SelfTest {
         GroupCulling(engine);
         MarksOffTheUiThread(engine);
         StripWheel(engine);
+        FilteredSteps(engine);
+    }
+
+    /// The arrow keys walk the photos the strip's filter shows, and stop at its ends.
+    static void FilteredSteps(EngineModel engine) {
+        var library = LibraryModel.Shared;
+        var list = engine.Photos.ToList();
+        int current = engine.Current;
+        string dir = Directory.CreateTempSubdirectory("orion-steps-").FullName;
+        try {
+            var links = Enumerable.Range(0, 4).Select(i => Path.Combine(dir, $"f{i}{Path.GetExtension(list[current])}")).ToList();
+            foreach (var link in links) File.CreateSymbolicLink(link, list[current]);
+            engine.Load(links);
+            library.SetRating([library.Photos[0], library.Photos[3]], 2);
+            library.Current = LibraryModel.Filter.Rated;
+            bool fromNone = library.Neighbour(-1, 1) == library.Photos[0] && library.Neighbour(-1, -1) == library.Photos[0];
+            OpenAndWait(engine, 0);
+            int After(string command) { Commands.Run(command); return engine.Current; }
+            int first = After("previous-photo"), next = After("next-photo"), end = After("next-photo");
+            library.SetRating(library.Photos[3], 0);   // the open photo leaves the filter
+            int back = After("previous-photo");
+            library.Current = LibraryModel.Filter.Rejected;   // shows none
+            Check(fromNone && first == 0 && next == 3 && end == 3 && back == 0 && After("next-photo") == 0,
+                  $"next and previous walk only the photos the filter shows (from none, the first {fromNone}; previous at the first {first}; " +
+                  $"0 to {next}, then {end} at the end; filtered out, back to {back}; none shown, {engine.Current})");
+        } finally {
+            library.Current = LibraryModel.Filter.All;
+            engine.Load(list);
+            OpenAndWait(engine, current);
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     /// Issue 55: a wheel over the strip moves the roll, whatever else is going on. Four links to

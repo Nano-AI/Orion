@@ -105,12 +105,8 @@ static class CommandTable {
         .. Enumerable.Range(0, 6).Select(n => Built($"rate-{n}", n == 0 ? "No rating" : $"{n} star{(n == 1 ? "" : "s")}",
                                                     n == 0 ? "OemTilde" : $"D{n}", "Library.swift",
                                                     () => Focused != null, () => LibraryModel.Shared.SetRating(Scope, n))),
-        // In the gallery a step moves the focus ring, never the canvas: two hundred
-        // frames must not be two hundred decodes (cullActions.step).
-        Built("next-photo", "Next photo", "Cmd+Right, Right", "Library.swift", () => E.Photos.Count > 0,
-              () => { if (GalleryMode.On) GalleryMode.Move(GalleryMode.Direction.Right); else if (Comparing) SideBySide.Step(1); else E.Next(); }),
-        Built("previous-photo", "Previous photo", "Cmd+Left, Left", "Library.swift", () => E.Photos.Count > 0,
-              () => { if (GalleryMode.On) GalleryMode.Move(GalleryMode.Direction.Left); else if (Comparing) SideBySide.Step(-1); else E.Previous(); }),
+        Built("next-photo", "Next photo", "Cmd+Right, Right", "Library.swift", () => E.Photos.Count > 0, () => Step(1)),
+        Built("previous-photo", "Previous photo", "Cmd+Left, Left", "Library.swift", () => E.Photos.Count > 0, () => Step(-1)),
         Built("select-all", "Select all photos", "Cmd+A", "PhotoSelection.swift", () => Focused != null, LibraryModel.Shared.SelectAll),
         Built("deselect", "Deselect", "Cmd+Shift+A", "PhotoSelection.swift", () => LibraryModel.Shared.HasExplicitSelection,
               LibraryModel.Shared.CollapseSelection),   // needs a selection of two
@@ -159,6 +155,14 @@ static class CommandTable {
 
     /// A preset as Lightroom names it: 1:4 under 1, 2:1 over.
     static string Ratio(double r) => r < 1 ? $"1:{Math.Round(1 / r)}" : $"{Math.Round(r)}:1";
+
+    /// In the gallery a step moves the focus ring, never the canvas: two hundred
+    /// frames must not be two hundred decodes (cullActions.step).
+    static void Step(int direction) {
+        if (GalleryMode.On) GalleryMode.Move(direction > 0 ? GalleryMode.Direction.Right : GalleryMode.Direction.Left);
+        else if (Comparing) SideBySide.Step(direction);
+        else if (LibraryModel.Shared.Neighbour(E.Current, direction) is { } to) E.Step(to.Index);
+    }
 
     /// handleKey's Escape: an armed tool first, from any tab; then the crop,
     /// reset to the whole frame, and back to Light.

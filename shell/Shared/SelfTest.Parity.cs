@@ -407,10 +407,10 @@ static partial class SelfTest {
         // A switch away puts the committed edit back on the photo left; coming back, it appears again against it.
         Propose(committed - 1);
         Pump(() => w.IsLive);
-        engine.Next();
+        Commands.Run("next-photo");
         Arrived(engine);
         bool away = !w.IsLive;
-        engine.Previous();
+        Commands.Run("previous-photo");
         Arrived(engine);
         Pump(() => w.IsLive);
         Check(away && w.IsLive && w.Keys.SequenceEqual(["exposureEv"]), "leaving a photo mid-proposal puts its edit back; returning shows the proposal again");

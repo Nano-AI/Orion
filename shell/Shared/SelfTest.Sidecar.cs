@@ -266,7 +266,7 @@ static partial class SelfTest {
                 Autosave.Shared.Note(State(1));
                 Autosave.Shared.Flush();
                 int at = engine.Current;
-                bool left = engine.Open(at) || engine.Next() || engine.Previous() || engine.Load(engine.Photos.ToList());
+                bool left = engine.Open(at) || engine.Step(at + 1) || engine.Step(at - 1) || engine.Load(engine.Photos.ToList());
                 Check(!left && engine.Current == at && Autosave.Shared.LastFailure != null && engine.Status == Autosave.Shared.LastFailure,
                       $"a photo whose edit will not save cannot be left, and the status line says why ('{engine.Status}')");
                 // The drawn line, not the model: deleting the footer's failure branch was green everywhere (#125).

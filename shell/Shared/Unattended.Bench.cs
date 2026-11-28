@@ -216,7 +216,7 @@ sealed partial class App {
         }
         Rest(beat);
         var neighbour = new List<double>();
-        for (int i = 0; i < Math.Min(5, n - 1); i++) { neighbour.Add(Swap(engine.Next)); Rest(beat); }
+        for (int i = 0; i < Math.Min(5, n - 1); i++) { neighbour.Add(Swap(() => engine.Step(engine.Current + 1))); Rest(beat); }
         var jump = new List<double>();
         for (int i = 0; i < 2 && n > 2; i++) {
             int target = (engine.Current + n / 2) % n;

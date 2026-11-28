@@ -81,19 +81,12 @@ static partial class SelfTest {
         Check(Commands.Run("no-such-command").StartsWith("no command"), "an unknown command is refused by name");
     }
 
-    /// Library.neighbor: clamps at both ends, and starts at the first photo when none is current.
     static void PhotoListNavigation() {
         var list = new PhotoList();
         list.Load(["a.arw", "b.arw", "c.arw"]);
-        Check(list.Current == -1 && list.Next() && list.Current == 0, "Next from nothing opens the first photo");
-        Check(list.Go(2) && !list.Next() && list.Current == 2, "Next at the last photo stays put (clamps, no wrap)");
-        Check(list.Previous() && list.Current == 1 && list.Go(0) && !list.Previous() && list.Current == 0,
-              "Previous at the first photo stays put");
-        Check(!list.Go(3) && !list.Go(-1) && list.Current == 0, "Go past either end is refused");
+        Check(list.Current == -1 && list.Go(0) && !list.Go(3) && !list.Go(-1) && list.Current == 0, "Go past either end is refused");
         list.Load(["d.arw"]);
         Check(list.Current == -1, "a new list has nothing current");
-        var empty = new PhotoList();
-        Check(!empty.Next() && !empty.Previous() && empty.Current == -1, "an empty list goes nowhere");
     }
 
     static void SessionContracts(EngineModel engine) {
@@ -151,7 +144,7 @@ static partial class SelfTest {
         // One photo: there is nowhere to step, and stepping does not reopen it.
         if (engine.Photos.Count == 1) {
             nint handle = engine.Handle;
-            Check(!engine.Next() && !engine.Previous() && engine.Handle == handle, "Next/Previous clamp on a one-photo list");
+            Check(!engine.Step(1) && !engine.Step(-1) && engine.Handle == handle, "a step past either end of a one-photo list goes nowhere");
         }
     }
 
