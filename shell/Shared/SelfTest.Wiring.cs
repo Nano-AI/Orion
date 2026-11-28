@@ -37,6 +37,7 @@ static partial class SelfTest {
         UndoChecks(engine);
         UndoPerPhoto(engine);
         CompareChecks(engine);
+        CompareSwitch(engine);
         DragPictureChecks(engine);
         GalleryChecks(engine);
         TrashChecks(engine);
@@ -133,6 +134,37 @@ static partial class SelfTest {
         CompareState.Clear();
         window.Close();
         engine.Set("exposure_ev", ev);
+    }
+
+    /// Switching photos while comparing: the split is gone the moment the next photo's picture is up,
+    /// not once its session has decoded. The canvas draws the split only while Showing (CanvasPanel.Draw).
+    static void CompareSwitch(EngineModel engine) {
+        var list = engine.Photos.ToList();
+        int current = engine.Current;
+        string dir = Directory.CreateTempSubdirectory("orion-compare-switch-").FullName;
+        try {
+            var links = Enumerable.Range(0, 6).Select(i => Path.Combine(dir, $"f{i}{Path.GetExtension(list[current])}")).ToList();
+            foreach (var link in links) File.CreateSymbolicLink(link, list[current]);
+            engine.Load(links);
+            OpenAndWait(engine, 0);
+            OpenAndWait(engine, 5);
+            // Six photos are more than the cache decodes beside the one on screen (CachePlan.SessionSlots, up to 4):
+            // photo 0 keeps its picture and loses its session. A change to that size is what "decoding False" means.
+            Pump(() => !engine.Cache.Busy, 30);
+            Commands.Run("compare");
+            Pump(() => CompareState.Original?.PixelSize.Width >= CanvasNative.ImageSize.Width, 60);   // the sharp one: its worker is done with the links
+            bool showing = CompareState.Showing;
+            LibraryModel.Shared.ClickStrip(LibraryModel.Shared.Photos[0], PhotoSelection.Modifiers.None);
+            bool decoding = engine.Opening && engine.Shown.Bitmap != null;
+            Check(showing && decoding && !CompareState.Showing && !CompareState.Comparing,
+                  $"a switch while comparing drops the split as the next photo's picture goes up (showing before {showing}, decoding {decoding}, " +
+                  $"showing after {CompareState.Showing}, comparing {CompareState.Comparing})");
+        } finally {
+            CompareState.Clear();
+            engine.Load(list);
+            OpenAndWait(engine, current);
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     /// The drag picture: the quarter-size preview lands on exactly the full
