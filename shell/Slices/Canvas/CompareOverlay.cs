@@ -80,6 +80,7 @@ static class CompareState {
         // photo already open is still as shot: its picture is the as-shot look.
         if (e.Handle != 0 && Seen.Add(e.Photos[e.Current]) && e.Shown.Bitmap is WriteableBitmap shown)
             Keep(e.Photos[e.Current], GeometryKey(), Duplicate(shown));
+        e.Leaving += Clear;   // before EngineModel.Show puts the next photo's picture up: no frame draws it beside this photo's original
         e.Opened += () => {
             Clear();
             if (Seen.Add(e.Photos[e.Current])) _capture = e.Photos[e.Current];
