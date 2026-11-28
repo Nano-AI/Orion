@@ -22,8 +22,8 @@ more. The statistics are in tools/bench_stats.py, and why they are those.
 
 The baseline is per machine and card, `<baseline dir>/<host>-<gpu>.json`,
 outside the repository (one machine's milliseconds mean nothing on another).
-Exit 0: nothing slower. 1: something slower, outside the noise. 2: refused,
-or a scenario never produced a number.
+Exit 0: nothing slower. 1: something slower, outside the noise, or a metric the
+baseline has that this run lacks. 2: refused, or a scenario never produced a number.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SCENARIOS = {
     "open-cold": ("open", "folder", True, "a folder opened with its files out of the page cache: the window up, the first picture, the worst stall"),
     "open-warm": ("open", "folder", False, "the same folder again, its files cached"),
-    "swap": ("swap", "photos", False, "an arrow to the neighbour (cached) and a jump past the cache"),
+    "swap": ("swap", "photos", False, "an arrow to the neighbour (cached), to its full picture, and a jump past the cache"),
     "drag": ("drag", "first", False, "60 ticks of the exposure slider: the preview drag and the full one"),
     "drag-heavy": ("drag-heavy", "first", False, "the drag with clarity 1, denoise luminance 2 and texture 1 on, Luminance moved"),
     "pan": ("pan", "first", False, "a hand dragging the photo at 100%, region and whole-graph edits (`--bench --pan`, Unattended.Pan.cs)"),
@@ -73,7 +73,7 @@ def main() -> int:
         rows = compare(old, new, "this", "this", c.confidence, c.min_effect)
         print(table(rows))
         print(node_table(old, new, "this", "this", c.confidence, c.min_effect))
-        return 1 if any(r["verdict"] == "SLOWER" for r in rows) else 0
+        return 1 if any(r["verdict"] in FAILS for r in rows) else 0
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("photos", nargs="*", type=Path, help="raw files or folders (default: ORION_SAMPLES)")
@@ -149,7 +149,8 @@ def main() -> int:
     print(table(rows))
     print(node_table(against, results, against_build, "this", args.confidence, args.min_effect))
     print(f"\nresults: {out}")
-    never = [s for s in chosen for b in builds if not any(r.get("metrics") for r in results["scenarios"][s]["runs"][b])]
+    never = [s for s in chosen for b in builds
+             if not any(r.get("ok") is not False and r.get("metrics") for r in results["scenarios"][s]["runs"][b])]
     if never:
         print(f"bench: no numbers from {', '.join(sorted(set(never)))}; nothing saved as a baseline")
         return 2
@@ -161,7 +162,12 @@ def main() -> int:
         print(f"baseline: {baseline_file}")
     if any(r["verdict"] == "slower?" for r in rows):
         print("bench: 'slower?' is a shift the interval cannot confirm: measure again with more --repeats, or --ab")
-    return 1 if any(r["verdict"] == "SLOWER" for r in rows) else 0
+    if any(r["verdict"] == "MISSING" for r in rows):
+        print("bench: MISSING is a metric the baseline has and no run of this build reported")
+    return 1 if any(r["verdict"] in FAILS for r in rows) else 0
+
+
+FAILS = {"SLOWER", "MISSING"}
 
 
 def gather(given: list[Path]) -> list[Path]:
@@ -290,6 +296,7 @@ def compare(old: dict, new: dict, old_build: str | None, new_build: str,
             else:
                 row["verdict"] = note or ("info" if not stats.unit(metric) else "no baseline")
             rows.append(row)
+        rows += [{"scenario": name, "metric": metric, **stats.summarise([]), "verdict": "MISSING"} for metric in sorted(set(theirs) - set(mine))]
     return rows
 
 

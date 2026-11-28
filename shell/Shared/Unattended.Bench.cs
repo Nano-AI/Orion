@@ -190,23 +190,31 @@ sealed partial class App {
         return s[Math.Clamp((int)Math.Ceiling(q * s.Count) - 1, 0, s.Count - 1)];
     }
 
+    static bool PicturedFull() => Pictured() && EngineModel.Shared.Shown.Graph == Graph.Full;
+
     /// Waits out the background (decodes, the rest render) so the next step starts from rest.
+    /// The rest render is a delay EngineModel.Arrive posts, which neither Opening nor Busy covers;
+    /// one that failed (EngineModel.Present's Timing) is as done as it will get.
     static void Rest(Heartbeat beat) {
         var still = Stopwatch.StartNew();
-        beat.Until(() => {
-            if (EngineModel.Shared.Opening || Busy) still.Restart();
+        bool rested = beat.Until(() => {
+            bool full = PicturedFull() || EngineModel.Shared.Timing.StartsWith("render failed");
+            if (EngineModel.Shared.Opening || Busy || !full) still.Restart();
             return still.ElapsedMilliseconds > 400;
         }, 60);
+        if (!rested) Console.Error.WriteLine($"bench rest: not at rest in 60 s ({Describe()})");
     }
 
     /// A neighbour at reading speed (the cache has had time to fill) and two
     /// jumps of half the list, each until its own picture is drawn. tools/bench.py
     /// passes 24 or more photos, so half the list is past both tiers (#318: about
-    /// ten rendered either side).
+    /// ten rendered either side). Then five more neighbours at reading speed,
+    /// each pressed as the arrow key presses it (Commands.Run).
     static void SwapScenario(Window window, Dictionary<string, double> m) {
         var engine = EngineModel.Shared;
         var beat = new Heartbeat();
         int n = engine.Photos.Count;
+        if (n < 24) throw new InvalidOperationException($"swap needs the 24 or more photos tools/bench.py passes, not {n}");
         double Swap(Func<bool> step) {
             var sw = Stopwatch.StartNew();
             step();
@@ -223,8 +231,34 @@ sealed partial class App {
             jump.Add(Swap(() => engine.Open(target)));
             Rest(beat);
         }
+        // `ui` is the press's own work on this thread, as the drag counts it.
+        // `full` includes EngineModel.Rest's 300 ms before the rest render: the photographer waits through it.
+        var ui = new List<double>();
+        var full = new List<double>();
+        for (int i = 0; i < 5; i++) {
+            double drawn = CanvasPanel.DrawMilliseconds;
+            var sw = Stopwatch.StartNew();
+            Commands.Run("next-photo");
+            double call = sw.Elapsed.TotalMilliseconds;
+            bool kept = !engine.Opening;
+            Dispatcher.UIThread.RunJobs();
+            Heartbeat.Frame();
+            if (!kept) {
+                Console.Error.WriteLine($"bench swap: photo {engine.Current} was not kept at reading speed ({Kept})");
+                Rest(beat);
+                continue;
+            }
+            ui.Add(call + CanvasPanel.DrawMilliseconds - drawn);
+            if (beat.Until(PicturedFull, 60)) {
+                Heartbeat.Frame();
+                full.Add(sw.Elapsed.TotalMilliseconds);
+            } else Console.Error.WriteLine($"bench swap: no full picture in 60 s ({Describe()})");
+            Rest(beat);
+        }
         if (neighbour.Count > 0) m["swap_neighbour_ms"] = Median(neighbour);
         if (jump.Count > 0) m["swap_jump_ms"] = Median(jump);
+        if (ui.Count > 0) m["swap_neighbour_ui_ms"] = Median(ui);
+        if (full.Count > 0) m["swap_neighbour_full_ms"] = Median(full);
     }
 
     /// 60 ticks of a slider drag (exposure unless told), each the frame a hand would see: the
