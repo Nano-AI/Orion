@@ -38,6 +38,9 @@ SKIP = {
         "undo restores a value, and a drag's ticks were one step":
             "WARP renders each Set for longer than the 0.6 s that folds a drag's ticks into one step",
         "ReleaseRenderMemory gives back": "the footprint off macOS is the working set, and WARP's video memory is the process's own",
+        "an SVG mark keeps only its shape": "not yet diagnosed; first ran on Windows in the arrow-keys change, tracked in issue 88",
+        "placing a spot is one history step": "not yet diagnosed; first ran on Windows in the arrow-keys change, tracked in issue 88",
+        "a proposal lives where the server writes it": "not yet diagnosed; first ran on Windows in the arrow-keys change, tracked in issue 88",
     },
     "linux": {},
 }

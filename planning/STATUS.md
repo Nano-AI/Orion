@@ -62,7 +62,8 @@ A Metal command buffer dropped before its commit now ends its encoder, where Met
 - Homebrew's OpenCV 5.1 brought 27 more dylibs into the Mac bundle (PR 82, `planning/LICENSE-AUDIT.md`): GLib and libintl are LGPL-2.1+, so every release that ships them carries their source; the same duty is unmet for libquadmath; `opencv@4` or a GLib-free HarfBuzz would drop them.
 - A path-masked photo opened in alpha 2 shows the mask as empty, and an edit there drops the path.
 - Two wall-clock checks each failed once on GitHub's macOS runners on release day and passed on a re-run: the selftest's "four renders each 200 ms long" (`SelfTest.Layout.cs`) and orion-tests' "node times sum to within a factor of 3" on Dawn.
-- `ParityChecks`' photo half (31 checks) never runs: `SelfTest.Parity.cs:27` returns while the photo `MarksOffTheUiThread` reopened is still decoding.
+- `ParityChecks`' photo half (31 checks) runs in the gates since `FilteredSteps` waits for the photo it reopens; before that, `SelfTest.Parity.cs:27` returned while that photo was still decoding.
+  Three of its checks fail on Windows and are skipped there, issue 88.
 - `shell/bin-native/present_test` cannot open a RAW by a relative path, which is what `open-pr.sh` passes by default: set `ORION_SAMPLES` to an absolute folder.
 - `samples/_PIC8095.ARW` has people in the plaza at its base: fine as a test frame, never for a published render.
 - Most mask selftest checks need a lit sample: the radial, brush, path bulge and path feather checks want +10 of 255 at fixed points, which a dark subject never gives though the masks work (the bulge reads 9.6 on `underexposedsubject.ARW`).

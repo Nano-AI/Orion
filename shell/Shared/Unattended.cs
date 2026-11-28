@@ -182,8 +182,8 @@ sealed partial class App {
         Console.WriteLine($"bench list: {n} photos · settled at photo {engine.Current} · {Kept} · {Memory()}");
         // A neighbour after a pause long enough for the cache to fill: the arrow key at reading speed.
         var neighbour = new List<double>();
-        for (int i = 0; i < Math.Min(5, n - 1); i++) { neighbour.Add(Swap(engine.Next)); Settle(); }
-        Console.WriteLine($"bench neighbour swap (cached): {Ms(neighbour)} to laid out; Next returned in {Ms(returned)}; " +
+        for (int i = 0; i < Math.Min(5, n - 1); i++) { neighbour.Add(Swap(() => engine.Step(engine.Current + 1))); Settle(); }
+        Console.WriteLine($"bench neighbour swap (cached): {Ms(neighbour)} to laid out; Step returned in {Ms(returned)}; " +
                           $"last engine {engine.Last.Render:0.0} ms + copy {engine.Last.Copy:0.0} ms");
 
         // A jump past both tiers: nothing kept there.
@@ -200,7 +200,7 @@ sealed partial class App {
         var clock = Stopwatch.StartNew();
         for (int press = 0; press < 10; press++) {
             while (clock.Elapsed.TotalMilliseconds < press * 30) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(1); }
-            engine.Next();
+            engine.Step(engine.Current + 1);
             if (engine.Shown.Bitmap != null) pictured++;
         }
         double pressed = clock.Elapsed.TotalMilliseconds;
@@ -215,7 +215,7 @@ sealed partial class App {
         double peak = Footprint().Footprint;   // one photo browses nowhere: still a number
         foreach (int dir in new[] { 1, -1, 1, -1 })
             for (int i = 0; i < Math.Min(15, n - 1); i++) {
-                if (dir > 0) engine.Next(); else engine.Previous();
+                engine.Step(engine.Current + dir);
                 var until = Stopwatch.StartNew();
                 while (until.ElapsedMilliseconds < 60) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(1); }
                 peak = Math.Max(peak, Footprint().Footprint);

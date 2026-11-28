@@ -18,13 +18,4 @@ public sealed class PhotoList {
         Current = index;
         return true;
     }
-
-    /// Library.neighbor (Library.swift): clamps at both ends rather than
-    /// wrapping, and starts at the first photo when none is current.
-    public bool Next() => Go(Neighbor(1));
-    public bool Previous() => Go(Neighbor(-1));
-
-    int Neighbor(int offset) =>
-        Current < 0 ? (Paths.Count > 0 ? 0 : -1)
-                    : Current + offset is var i && i >= 0 && i < Paths.Count ? i : -1;
 }

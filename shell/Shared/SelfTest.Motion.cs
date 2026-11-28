@@ -252,7 +252,8 @@ static partial class SelfTest {
             Check(lit == 1 && dot.Transitions?.Count == 2 && dot.Transitions.OfType<TransitionBase>().All(t => t.Duration == Motion.Enter),
                   "an edit brings the section's dot in on the Enter transition (fade and grow)");
             bool moving = track.Moving;
-            bool stepped = engine.Next();
+            Commands.Run("next-photo");
+            bool stepped = engine.Current == 1;
             Settle(() => !engine.Opening);
             var tracks = window.GetVisualDescendants().OfType<AnalogTrack>().ToList();
             Check(moving && stepped && engine.Session != null && tracks.Count > 3 && tracks.All(t => !t.Moving && t.Shown == t.Value),

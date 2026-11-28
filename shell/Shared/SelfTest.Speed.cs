@@ -116,9 +116,9 @@ static partial class SelfTest {
         model.Load(spelt);
         model.Open(0);
         Settle(() => !model.Opening && !model.Cache.Busy);
-        model.Next();
+        model.Step(1);
         Check(model.Session != null && !model.Opening && model.Shown.Graph == Graph.Preview,
-              "a kept neighbour is open before Next returns, rendered at preview size");
+              "a kept neighbour is open before Step returns, rendered at preview size");
         model.Open(4);
         Check(model.Opening && model.Session == null && model.Shown.Bitmap != null,
               "a photo with a kept picture and no session shows the picture while it decodes");

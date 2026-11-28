@@ -72,7 +72,7 @@ static partial class SelfTest {
         var before = ToolColumn(window);
         bool full = Levels.Bins.Length > 0;
 
-        engine.Next();
+        Commands.Run("next-photo");
         var swapping = ToolColumn(window);
         var sw = Stopwatch.StartNew();
         while (engine.Opening && sw.ElapsedMilliseconds < 5000) Pump(2);
@@ -94,7 +94,7 @@ static partial class SelfTest {
 
         // Held past 500 ms (a drag holds the full render back): the pulse runs, then stops when the bins land.
         engine.BeginInteraction();
-        engine.Previous();
+        Commands.Run("previous-photo");
         sw.Restart();
         while (engine.Opening && sw.ElapsedMilliseconds < 5000) Pump(2);
         Pump(200);

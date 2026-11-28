@@ -165,6 +165,14 @@ public sealed class LibraryModel {
         _ => true,
     });
 
+    /// Where the arrow keys go from list position `from`: the nearest photo in view
+    /// past it, in the strip's order, which is the list's (Sort). From a photo the
+    /// filter hides, on from where it sits; from none, the first in view. Null at
+    /// either end, or with nothing in view.
+    public Photo? Neighbour(int from, int direction) =>
+        from < 0 ? Visible.FirstOrDefault()
+        : direction > 0 ? Visible.FirstOrDefault(p => p.Index > from) : Visible.LastOrDefault(p => p.Index < from);
+
     public int RejectedCount => Photos.Count(p => p.Rejected);
 
     public Order Sorted { get; private set; }
