@@ -180,6 +180,10 @@ def _checks() -> int:
           "a big shift the interval cannot confirm is flagged, not passed")
     check(verdict("photos", [3, 3], [3, 3])["verdict"] == "info", "a metric with no unit is a reading, never judged")
     check(abs(mad([1, 2, 3, 4, 100]) - MAD_TO_SIGMA) < 1e-12, "the MAD ignores the outlier")
+    import bench   # compare() is there, and imports this file
+    run = lambda metrics: {"scenarios": {"s": {"context": {}, "runs": {"this": [{"metrics": metrics}]}}}}
+    check([r["verdict"] for r in bench.compare(run({"a_ms": 1, "b_ms": 1}), run({"a_ms": 1}), "this", "this") if r["metric"] == "b_ms"] == ["MISSING"],
+          "a metric the baseline has and this run lacks is MISSING")
     return 1 if bad else 0
 
 
